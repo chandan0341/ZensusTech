@@ -131,14 +131,14 @@ export async function fetchRiskDistribution(
   }
 }
 
-export async function fetchUserDrilldown(
+export async function fetchUsers(
   clientId: string,
   clientSecret: string,
   tenantId: string,
   subscriptionId: string
 ): Promise<User[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/governance/users/drilldown`, {
+    const response = await fetch(`${API_BASE_URL}/governance/users`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

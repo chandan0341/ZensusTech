@@ -98,8 +98,8 @@ async def get_risk_distribution(request: GovernanceRequest) -> RiskDistribution:
         raise HTTPException(status_code=500, detail=f"Failed to fetch risk distribution: {str(e)}")
 
 
-@router.post("/users/drilldown")
-async def get_user_drilldown(request: GovernanceRequest) -> list[User]:
+@router.post("/users")
+async def get_users(request: GovernanceRequest) -> list[User]:
     """
     Get detailed user information for drill-down analysis.
     This is a demo endpoint that returns mock data.
@@ -107,52 +107,54 @@ async def get_user_drilldown(request: GovernanceRequest) -> list[User]:
     try:
         # TODO: Implement actual user data retrieval from Azure
         return [
-            User(
-                user="john.doe@contoso.com",
-                role="Owner",
-                subscription="Production",
-                mfa="Enabled",
-                lastLogin="2024-01-15",
-                status="Active",
-                risk="Low",
-            ),
-            User(
-                user="jane.smith@contoso.com",
-                role="Contributor",
-                subscription="Production",
-                mfa="Disabled",
-                lastLogin="2024-01-10",
-                status="Active",
-                risk="High",
-            ),
-            User(
-                user="bob.wilson@contoso.com",
-                role="Reader",
-                subscription="Production",
-                mfa="Enabled",
-                lastLogin="2024-01-18",
-                status="Active",
-                risk="Medium",
-            ),
-            User(
-                user="alice.johnson@contoso.com",
-                role="User Access Administrator",
-                subscription="Production",
-                mfa="Enabled",
-                lastLogin="2024-01-12",
-                status="Inactive",
-                risk="Low",
-            ),
-            User(
-                user="charlie.brown@contoso.com",
-                role="Security Admin",
-                subscription="Production",
-                mfa="Disabled",
-                lastLogin="2024-01-05",
-                status="Active",
-                risk="Medium",
-            ),
-        ]
+    User(user="Rajesh P", role="Owner", subscription="Prod-ERP", mfa="Disabled", lastLogin="N/A", status="Inactive", risk="High"),
+    User(user="Amit S", role="Contributor", subscription="Prod-ERP", mfa="Disabled", lastLogin="N/A", status="Active", risk="Medium"),
+    User(user="John D (Guest)", role="Reader", subscription="Prod-ERP", mfa="Disabled", lastLogin="N/A", status="Inactive", risk="High"),
+    User(user="Neha K", role="Owner", subscription="NonProd", mfa="Disabled", lastLogin="N/A", status="Active", risk="Low"),
+    User(user="Vendor-App-SP", role="Contributor", subscription="NonProd", mfa="Disabled", lastLogin="N/A", status="Active", risk="High"),
+    User(user="Sunil R", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="HR-Admin", role="Owner", subscription="Both", mfa="Disabled", lastLogin="N/A", status="Active", risk="High"),
+    User(user="TestUser01", role="Contributor", subscription="NonProd", mfa="Disabled", lastLogin="N/A", status="Dormant", risk="High"),
+    User(user="Vinayak S", role="Contributor", subscription="Prod-ERP", mfa="Disabled", lastLogin="N/A", status="Active", risk="Medium"),
+    User(user="Sachin P", role="Owner", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Active", risk="Low"),
+    User(user="Mahesh M", role="Owner", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Active", risk="Low"),
+    User(user="NileshM", role="Owner", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Active", risk="Low"),
+    User(user="Umesh S", role="Contributor", subscription="Prod-ERP", mfa="Enabled", lastLogin="N/A", status="Active", risk="Medium"),
+    User(user="Ramesh S", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Sidhant S", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Sidhi S", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Deepali S", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Ronin K", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Shaiendra Jain", role="Contributor", subscription="Prod-ERP", mfa="Enabled", lastLogin="N/A", status="Active", risk="Medium"),
+    User(user="Shubham P", role="Owner", subscription="Both", mfa="Enabled", lastLogin="N/A", status="Active", risk="High"),
+    User(user="Pooja A", role="Owner", subscription="Both", mfa="Enabled", lastLogin="N/A", status="Active", risk="High"),
+    User(user="Fieona F", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Anne Thomas", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Sandy P", role="Contributor", subscription="Prod-ERP", mfa="Disabled", lastLogin="N/A", status="Active", risk="Medium"),
+    User(user="Ramakant T", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Amitabh K", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Ankan K", role="Contributor", subscription="Prod-ERP", mfa="Disabled", lastLogin="N/A", status="Active", risk="Medium"),
+    User(user="Sudhant B", role="Owner", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Active", risk="Low"),
+    User(user="Rohit S", role="Owner", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Active", risk="Low"),
+    User(user="Sivakumar T", role="Owner", subscription="Prod-ERP", mfa="Disabled", lastLogin="N/A", status="Inactive", risk="High"),
+    User(user="Vivek l", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Rajanish G", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Mahendra P", role="Contributor", subscription="Prod-ERP", mfa="Disabled", lastLogin="N/A", status="Active", risk="Medium"),
+    User(user="Mosine M", role="Owner", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Active", risk="Low"),
+    User(user="Michele T", role="Owner", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Active", risk="Low"),
+    User(user="Rohan P", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Kush S", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="App_Admin", role="Owner", subscription="Prod-ERP", mfa="Disabled", lastLogin="N/A", status="Inactive", risk="High"),
+    User(user="DB_admin", role="Owner", subscription="Prod-ERP", mfa="Disabled", lastLogin="N/A", status="Inactive", risk="High"),
+    User(user="Testing_123", role="Owner", subscription="Prod-ERP", mfa="Disabled", lastLogin="N/A", status="Inactive", risk="High"),
+    User(user="Rest_users_30days", role="Owner", subscription="Prod-ERP", mfa="Disabled", lastLogin="N/A", status="Inactive", risk="High"),
+    User(user="Kunal P", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Jignesh T", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Ashish P", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Romy F", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Priya A", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+    User(user="Chandan S", role="Reader", subscription="NonProd", mfa="Enabled", lastLogin="N/A", status="Inactive", risk="Medium"),
+]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch user data: {str(e)}")
 
