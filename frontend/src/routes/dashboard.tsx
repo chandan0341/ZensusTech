@@ -1,7 +1,7 @@
             
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Card, Form, Select, Row, Col, Space, Spin, Alert, Typography, Modal } from "antd";
+import { Card, Form, Select, Row, Col, Space, Spin, Alert, Typography, Modal, Button } from "antd";
 import { TeamOutlined, UserOutlined, LockOutlined, ClockCircleOutlined, GlobalOutlined } from "@ant-design/icons";
 import { DashboardTiles } from "./DashboardTiles";
 import {
@@ -940,24 +940,30 @@ function Dashboard() {
     <div style={{ padding: "24px", background: "#f5f5f5", minHeight: "100vh" }}>
       <div style={{ maxWidth: "1400px", margin: "0 auto" }}>
         {/* Header */}
-        <div style={{ marginBottom: "32px", display: "flex", justifyContent: "flex-start", alignItems: "center", gap: "12px" }}>
-  <img 
-    src="/zensustech-logo.png" 
-    alt="ZensusTech Logo" 
-    style={{ 
-      height: "48px", 
-      width: "48px",
-      objectFit: "contain"
-    }} 
-  />
-        <span style={{ 
-          fontSize: "28px", 
-          fontWeight: "bold", 
-          color: "#1890ff",
-          margin: 0
-        }}>
-          ZensusTech
-        </span>
+        <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <img 
+              src="/zensustech-logo.png" 
+              alt="ZensusTech Logo" 
+              style={{ 
+                height: "48px", 
+                width: "48px",
+                objectFit: "contain"
+              }} 
+            />
+            <span style={{ 
+              fontSize: "28px", 
+              fontWeight: "bold", 
+              color: "#1890ff",
+              margin: 0
+            }}>
+              Managed Services Dashboard
+            </span>
+          </div>
+          <Button type="primary" danger onClick={() => { window.location.href = "/login"; }}>
+            Log Out
+          </Button>
+        </div>
       </div>
 
         {/* Selectors */}
@@ -2563,7 +2569,6 @@ function Dashboard() {
           )}
         </Modal>
       </div>
-    </div>
   );
 }
 
