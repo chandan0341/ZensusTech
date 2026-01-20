@@ -245,7 +245,7 @@ export const DashboardTiles: React.FC<DashboardTilesProps> = ({ selectedTile, se
           </div>
         </div>
       </Card>
-      {/* Microsoft 365 Managed Services Tile */}
+      {/* Microsoft 0365 Managed Services Tile */}
       <Card
         style={{
           borderRadius: '8px',
@@ -261,7 +261,7 @@ export const DashboardTiles: React.FC<DashboardTilesProps> = ({ selectedTile, se
           <TeamOutlined style={{ fontSize: '20px', color: '#722ed1' }} />
           <div>
             <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#722ed1' }}>
-              Microsoft 365
+              Microsoft O365
             </div>
             <div style={{ fontSize: '12px', color: '#666' }}>
               Managed Services

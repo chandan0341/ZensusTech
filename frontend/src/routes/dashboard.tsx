@@ -1607,6 +1607,8 @@ function Dashboard() {
                   </div>
                 </div>
               )}
+               {/* Domain Overview Tile Content */}
+              {selectedTile === 'domain-overview' && (
                 <div>
                   {/* Domain Overview Header */}
                   <Card
@@ -1762,6 +1764,7 @@ function Dashboard() {
                     />
                   </div>
                 </div>
+              )}
 
               {/* Microsoft 365 Managed Services Content */}
               {selectedTile === 'microsoft-365' && (
