@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Card, Form, Select, Row, Col, Space, Spin, Alert, Typography, Modal } from "antd";
 import { TeamOutlined, UserOutlined, LockOutlined, ClockCircleOutlined, GlobalOutlined } from "@ant-design/icons";
+import { DashboardTiles } from "./DashboardTiles";
 import {
   fetchDashboardStats,
   fetchUsers,
@@ -1015,97 +1016,7 @@ function Dashboard() {
           <Row gutter={24} style={{ marginTop: '24px' }}>
             {/* Tile Navigation Sidebar */}
             <Col xs={24} lg={6}>
-              <Card
-                style={{
-                  borderRadius: '12px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                  height: 'fit-content'
-                }}
-                bodyStyle={{ padding: '16px' }}
-              >
-                <div style={{ marginBottom: '16px' }}>
-                  <Typography.Title level={4} style={{ margin: 0, textAlign: 'center' }}>
-                    Dashboard Tiles
-                  </Typography.Title>
-                </div>
-
-                <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                  {/* Azure Identity Tile */}
-                  <Card
-                    style={{
-                      borderRadius: '8px',
-                      border: selectedTile === 'azure-identity' ? '2px solid #1890ff' : '1px solid #e8e8e8',
-                      background: selectedTile === 'azure-identity' ? '#f0f8ff' : 'white',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease'
-                    }}
-                    bodyStyle={{ padding: '12px' }}
-                    onClick={() => setSelectedTile('azure-identity')}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <LockOutlined style={{ fontSize: '20px', color: '#1890ff' }} />
-                      <div>
-                        <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#1890ff' }}>
-                          Azure Identity
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#666' }}>
-                          Access Governance
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Domain Overview Tile */}
-                  <Card
-                    style={{
-                      borderRadius: '8px',
-                      border: selectedTile === 'domain-overview' ? '2px solid #52c41a' : '1px solid #e8e8e8',
-                      background: selectedTile === 'domain-overview' ? '#f6ffed' : 'white',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease'
-                    }}
-                    bodyStyle={{ padding: '12px' }}
-                    onClick={() => setSelectedTile('domain-overview')}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <GlobalOutlined style={{ fontSize: '20px', color: '#52c41a' }} />
-                      <div>
-                        <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#52c41a' }}>
-                          Domain Overview
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#666' }}>
-                          Health & Security
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-
-                  {/* Microsoft 365 Managed Services Tile */}
-                  <Card
-                    style={{
-                      borderRadius: '8px',
-                      border: selectedTile === 'microsoft-365' ? '2px solid #722ed1' : '1px solid #e8e8e8',
-                      background: selectedTile === 'microsoft-365' ? '#f9f0ff' : 'white',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease'
-                    }}
-                    bodyStyle={{ padding: '12px' }}
-                    onClick={() => setSelectedTile('microsoft-365')}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <TeamOutlined style={{ fontSize: '20px', color: '#722ed1' }} />
-                      <div>
-                        <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#722ed1' }}>
-                          Microsoft 365
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#666' }}>
-                          Managed Services
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                </Space>
-              </Card>
+              <DashboardTiles selectedTile={selectedTile} setSelectedTile={setSelectedTile} />
             </Col>
 
             {/* Main Content Area */}
