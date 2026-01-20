@@ -1986,6 +1986,31 @@ function Dashboard() {
                       ]}
                     />
                   </div>
+                    {/* SSL Certificate Expiry Report */}
+                    <div style={{ marginBottom: '24px' }}>
+                      <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
+                        SSL Certificate Expiry Report
+                      </Typography.Title>
+                      <TableComponent
+                        title=""
+                        columns={[
+                          { key: 'num', label: '#', width: '5%' },
+                          { key: 'certName', label: 'Certificate Name', width: '15%' },
+                          { key: 'domain', label: 'Domain / Endpoint', width: '20%' },
+                          { key: 'issuer', label: 'Issuer', width: '12%' },
+                          { key: 'expiry', label: 'Expiry Date', width: '15%' },
+                          { key: 'days', label: 'Days to Expiry', width: '15%' },
+                          { key: 'status', label: 'Status', width: '18%' },
+                        ]}
+                        data={[
+                          { num: 1, certName: 'Prod-Web-SSL', domain: 'www.company.com', issuer: 'DigiCert', expiry: '27-Jan-26', days: '7 days', status: '🔴 Expiring in ≤7 days' },
+                          { num: 2, certName: 'API-Gateway-SSL', domain: 'api.company.com', issuer: 'Let’s Encrypt', expiry: '05-Feb-26', days: '16 days', status: '🔴 Expiring in ≤30 days' },
+                          { num: 3, certName: 'ERP-App-SSL', domain: 'erp.company.in', issuer: 'GlobalSign', expiry: '25-Feb-26', days: '36 days', status: '🔴 Expiring in >30 days' },
+                          { num: 4, certName: 'VPN-SSL', domain: 'vpn.company.com', issuer: 'DigiCert', expiry: '30-Apr-26', days: '100 days', status: '🔴 Expiring in >90 days' },
+                          { num: 5, certName: 'Internal-Portal-SSL', domain: 'intranet.company.local', issuer: 'Self-Signed', expiry: '15-Mar-26', days: '54 days', status: '🔴 Expiring in >30 days' },
+                        ]}
+                      />
+                    </div>
                 </div>
               )}
 
