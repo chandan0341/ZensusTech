@@ -1472,8 +1472,141 @@ function Dashboard() {
                 </div>
               )}
 
-              {/* Domain Overview Content */}
-              {selectedTile === 'domain-overview' && (
+              {/* Security Tile Content */}
+              {selectedTile === 'security' && (
+                <div>
+                  <Card
+                    style={{ borderRadius: '16px', border: '2px solid #fa541c', boxShadow: '0 4px 12px rgba(250,84,28,0.15)', overflow: 'hidden', marginBottom: '24px' }}
+                    bodyStyle={{ padding: '0' }}
+                  >
+                    <div style={{ background: 'linear-gradient(135deg, #fa541c 0%, #faad14 100%)', padding: '20px', color: 'white' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <LockOutlined style={{ fontSize: '32px' }} />
+                        <div>
+                          <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>Security Dashboard</h2>
+                          <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '14px' }}>Security Posture, VM, Network, Data & Identity</p>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                  <div style={{ padding: '24px' }}>
+                    <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>Virtual Machine Security Status</Typography.Title>
+                    <TableComponent
+                      title=""
+                      columns={[
+                        { key: 'vm', label: 'VM Name' },
+                        { key: 'os', label: 'OS' },
+                        { key: 'patch', label: 'Patch Status' },
+                        { key: 'defender', label: 'Defender Agent' },
+                        { key: 'encryption', label: 'Encryption' },
+                        { key: 'risk', label: 'Risk' },
+                      ]}
+                      data={[
+                        { vm: 'VM-Prod-01', os: 'Windows 2019', patch: '❌ Missing patches', defender: '❌ Not Installed', encryption: '❌ Disabled', risk: '🔴 High' },
+                        { vm: 'VM-Prod-02', os: 'Windows 2022', patch: '✅ Up to date', defender: '✅ Installed', encryption: '✅ Enabled', risk: '🟢 Low' },
+                        { vm: 'VM-Test-01', os: 'Windows 2016', patch: '❌ Missing patches', defender: '❌ Not Installed', encryption: '❌ Disabled', risk: '🔴 High' },
+                        { vm: 'VM-App-01', os: 'Ubuntu 20.04', patch: '⚠ Partial', defender: '✅ Installed', encryption: '✅ Enabled', risk: '🔴 Medium' },
+                      ]}
+                    />
+                    <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>Network Security Findings</Typography.Title>
+                    <TableComponent
+                      title=""
+                      columns={[
+                        { key: 'finding', label: 'Finding' },
+                        { key: 'count', label: 'Count' },
+                        { key: 'severity', label: 'Severity' },
+                      ]}
+                      data={[
+                        { finding: 'RDP open to Internet', count: 2, severity: '🔴 High' },
+                        { finding: 'SSH open to Internet', count: 1, severity: '🔴 High' },
+                        { finding: 'NSGs without flow logs', count: 3, severity: '🔴 Medium' },
+                        { finding: 'Firewall missing on subnet', count: 1, severity: '🔴 Medium' },
+                      ]}
+                    />
+                    <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>Data & Storage Security</Typography.Title>
+                    <TableComponent
+                      title=""
+                      columns={[
+                        { key: 'resource', label: 'Resource' },
+                        { key: 'issue', label: 'Issue' },
+                        { key: 'severity', label: 'Severity' },
+                      ]}
+                      data={[
+                        { resource: 'Storage-prod-01', issue: 'Public blob access enabled', severity: '🔴 Medium' },
+                        { resource: 'SQL-DB-01', issue: 'Auditing disabled', severity: '🔴 Medium' },
+                        { resource: 'SQL-DB-02', issue: 'TDE not enabled', severity: '🔴 High' },
+                      ]}
+                    />
+                    <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>Identity & Access Security</Typography.Title>
+                    <TableComponent
+                      title=""
+                      columns={[
+                        { key: 'control', label: 'Control' },
+                        { key: 'status', label: 'Status' },
+                      ]}
+                      data={[
+                        { control: 'MFA enforced for Global Admins', status: '❌ No' },
+                        { control: 'MFA enforced for Subscription Owners', status: '❌ No' },
+                        { control: 'Privileged users count', status: 6 },
+                        { control: 'Inactive users (>90 days)', status: 4 },
+                        { control: 'Legacy authentication blocked', status: '❌ No' },
+                      ]}
+                    />
+                    <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>Azure Security Posture</Typography.Title>
+                    <TableComponent
+                      title=""
+                      columns={[
+                        { key: 'kpi', label: 'KPI' },
+                        { key: 'value', label: 'Value' },
+                      ]}
+                      data={[
+                        { kpi: 'Secure Score', value: '62%' },
+                        { kpi: 'Total Recommendations', value: 24 },
+                        { kpi: 'High Severity Issues', value: 6 },
+                        { kpi: 'Medium Severity Issues', value: 11 },
+                        { kpi: 'Low Severity Issues', value: 7 },
+                        { kpi: 'Unhealthy Resources', value: 9 },
+                        { kpi: 'Subscription Admins without MFA', value: 2 },
+                      ]}
+                    />
+                    <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>Secure Score Breakdown</Typography.Title>
+                    <TableComponent
+                      title=""
+                      columns={[
+                        { key: 'category', label: 'Category' },
+                        { key: 'score', label: 'Score' },
+                        { key: 'max', label: 'Max' },
+                      ]}
+                      data={[
+                        { category: 'Identity & Access', score: 18, max: 30 },
+                        { category: 'Compute', score: 16, max: 25 },
+                        { category: 'Networking', score: 12, max: 20 },
+                        { category: 'Data & Storage', score: 10, max: 15 },
+                        { category: 'App & Containers', score: 6, max: 10 },
+                      ]}
+                    />
+                    <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>Top Security Recommendations</Typography.Title>
+                    <TableComponent
+                      title=""
+                      columns={[
+                        { key: 'num', label: '#' },
+                        { key: 'rec', label: 'Recommendation' },
+                        { key: 'severity', label: 'Severity' },
+                        { key: 'affected', label: 'Affected Resources' },
+                        { key: 'status', label: 'Status' },
+                      ]}
+                      data={[
+                        { num: 1, rec: 'Enable MFA for subscription owners', severity: 'High', affected: 'Subscription', status: 'Unhealthy' },
+                        { num: 2, rec: 'System updates should be installed on VMs', severity: 'High', affected: '3 VMs', status: 'Unhealthy' },
+                        { num: 3, rec: 'NSG allows inbound traffic on port 3389', severity: 'High', affected: '2 NSGs', status: 'Unhealthy' },
+                        { num: 4, rec: 'Disk encryption should be enabled', severity: 'Medium', affected: '1 VM', status: 'Unhealthy' },
+                        { num: 5, rec: 'Storage account public access enabled', severity: 'Medium', affected: '2 Storage Accounts', status: 'Unhealthy' },
+                        { num: 6, rec: 'Endpoint protection missing', severity: 'Medium', affected: '1 VM', status: 'Unhealthy' },
+                      ]}
+                    />
+                  </div>
+                </div>
+              )}
                 <div>
                   {/* Domain Overview Header */}
                   <Card
@@ -1629,7 +1762,6 @@ function Dashboard() {
                     />
                   </div>
                 </div>
-              )}
 
               {/* Microsoft 365 Managed Services Content */}
               {selectedTile === 'microsoft-365' && (
