@@ -198,6 +198,7 @@ const TableComponent: React.FC<TableProps> = ({ title, columns, data, onRowClick
         pagination={{ pageSize: 10 }}
         bordered={false}
         size="middle"
+        locale={{ emptyText: <span style={{ color: '#faad14', fontWeight: 500 }}>No data available for this report</span> }}
         onRow={onRowClick ? (record) => ({
           onClick: () => onRowClick(record),
           style: { cursor: 'pointer' }

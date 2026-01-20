@@ -1,3 +1,4 @@
+            
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Card, Form, Select, Row, Col, Space, Spin, Alert, Typography, Modal } from "antd";
@@ -1602,6 +1603,128 @@ function Dashboard() {
                         { num: 4, rec: 'Disk encryption should be enabled', severity: 'Medium', affected: '1 VM', status: 'Unhealthy' },
                         { num: 5, rec: 'Storage account public access enabled', severity: 'Medium', affected: '2 Storage Accounts', status: 'Unhealthy' },
                         { num: 6, rec: 'Endpoint protection missing', severity: 'Medium', affected: '1 VM', status: 'Unhealthy' },
+                      ]}
+                    />
+                  </div>
+                </div>
+              )}
+              {/* Cost Management Tile Content */}
+              {selectedTile === 'cost-management' && (
+                <div>
+                  {/* Cost Management Header */}
+                  <Card
+                    style={{
+                      borderRadius: '16px',
+                      border: '2px solid #faad14',
+                      boxShadow: '0 4px 12px rgba(250,173,20,0.15)',
+                      overflow: 'hidden',
+                      marginBottom: '24px'
+                    }}
+                    bodyStyle={{ padding: '0' }}
+                  >
+                    <div style={{
+                      background: 'linear-gradient(135deg, #faad14 0%, #ffd666 100%)',
+                      padding: '20px',
+                      color: 'black'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <LockOutlined style={{ fontSize: '32px', color: '#faad14' }} />
+                        <div>
+                          <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>
+                            Cost Management (FinOps)
+                          </h2>
+                          <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '14px' }}>
+                            Cloud Spend, Optimization & Savings
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <div style={{ padding: '24px' }}>
+                    {/* Cost KPIs */}
+                    <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
+                      Cost KPIs
+                    </Typography.Title>
+                    <TableComponent
+                      title="Cost KPIs"
+                      columns={[
+                        { key: 'kpi', label: 'KPI' },
+                        { key: 'value', label: 'Value' },
+                      ]}
+                      data={[
+                        { kpi: 'Total Monthly Spend', value: '₹ 4,85,000' },
+                        { kpi: 'MoM Cost Change', value: '12%' },
+                        { kpi: 'Forecast Next Month', value: '₹ 5,20,000' },
+                        { kpi: 'Potential Monthly Savings', value: '₹ 92,000' },
+                        { kpi: 'Idle / Underutilized Resources', value: '9' },
+                        { kpi: 'Budget Threshold Breached', value: '1 Subscription' },
+                      ]}
+                    />
+
+                    {/* Cost by Subscription */}
+                    <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>
+                      Cost by Subscription
+                    </Typography.Title>
+                    <TableComponent
+                      title="Cost by Subscription"
+                      columns={[
+                        { key: 'subscription', label: 'Subscription' },
+                        { key: 'monthlyCost', label: 'Monthly Cost (₹)' },
+                        { key: 'momChange', label: 'MoM Change' },
+                        { key: 'budget', label: 'Budget' },
+                        { key: 'status', label: 'Status' },
+                      ]}
+                      data={[
+                        { subscription: 'Prod-Subscription', monthlyCost: '3,45,000', momChange: '15%', budget: '3,50,000', status: '🔴 Near Limit' },
+                        { subscription: 'Dev-Test-Subscription', monthlyCost: '1,40,000', momChange: '5%', budget: '1,50,000', status: '🔴 Within Budget' },
+                      ]}
+                    />
+
+                    {/* Cost Optimization Opportunities */}
+                    <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>
+                      Cost Optimization Opportunities
+                    </Typography.Title>
+                    <TableComponent
+                      title="Cost Optimization Opportunities"
+                      columns={[
+                        { key: 'num', label: '#' },
+                        { key: 'resource', label: 'Resource Name' },
+                        { key: 'type', label: 'Resource Type' },
+                        { key: 'monthlyCost', label: 'Monthly Cost (₹)' },
+                        { key: 'issue', label: 'Issue Identified' },
+                        { key: 'recommendation', label: 'Recommendation' },
+                        { key: 'savings', label: 'Est. Savings (₹)' },
+                      ]}
+                      data={[
+                        { num: 1, resource: 'VM-Prod-DB-01', type: 'Virtual Machine', monthlyCost: '68,000', issue: 'Low CPU usage (<10%)', recommendation: 'Resize to lower SKU', savings: '22,000' },
+                        { num: 2, resource: 'VM-Test-App-02', type: 'Virtual Machine', monthlyCost: '42,000', issue: 'Running 24×7', recommendation: 'Schedule shutdown', savings: '18,000' },
+                        { num: 3, resource: 'SQL-Prod-DB', type: 'Azure SQL DB', monthlyCost: '55,000', issue: 'Overprovisioned DTUs', recommendation: 'Reduce DTUs', savings: '15,000' },
+                        { num: 4, resource: 'Storage-Logs-01', type: 'Storage Account', monthlyCost: '18,000', issue: 'Hot tier unused data', recommendation: 'Move to Cool tier', savings: '6,500' },
+                        { num: 5, resource: 'LB-Dev-01', type: 'Load Balancer', monthlyCost: '9,000', issue: 'No backend pool', recommendation: 'Remove resource', savings: '9,000' },
+                        { num: 6, resource: 'Disk-Orphan-03', type: 'Managed Disk', monthlyCost: '6,000', issue: 'Unattached disk', recommendation: 'Delete disk', savings: '6,000' },
+                        { num: 7, resource: 'AppGW-Prod', type: 'Application Gateway', monthlyCost: '62,000', issue: 'WAF always on (low traffic)', recommendation: 'Resize/WAF tuning', savings: '10,500' },
+                        { num: 8, resource: 'VM-Backup-Old', type: 'Recovery Services Vault', monthlyCost: '12,000', issue: 'Old backups retained', recommendation: 'Reduce retention', savings: '5,000' },
+                      ]}
+                    />
+
+                    {/* Cost by Service */}
+                    <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>
+                      Cost by Service
+                    </Typography.Title>
+                    <TableComponent
+                      title="Cost by Service"
+                      columns={[
+                        { key: 'service', label: 'Service' },
+                        { key: 'monthlyCost', label: 'Monthly Cost (₹)' },
+                        { key: 'percent', label: '% of Total' },
+                      ]}
+                      data={[
+                        { service: 'Virtual Machines', monthlyCost: '2,10,000', percent: '43%' },
+                        { service: 'Azure SQL', monthlyCost: '85,000', percent: '18%' },
+                        { service: 'Networking', monthlyCost: '70,000', percent: '14%' },
+                        { service: 'Storage', monthlyCost: '65,000', percent: '13%' },
+                        { service: 'Backup & DR', monthlyCost: '55,000', percent: '12%' },
                       ]}
                     />
                   </div>
