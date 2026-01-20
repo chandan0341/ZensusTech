@@ -27,9 +27,6 @@ export function AuthLayout({ children }: AuthLayoutProps) {
               ZensusTech
             </span>
           </div>
-          <p className="text-gray-600 text-sm max-w-xs leading-relaxed">
-            Secure cloud governance and identity management platform
-          </p>
         </div>
       </div>
       <div

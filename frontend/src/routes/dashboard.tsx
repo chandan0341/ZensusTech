@@ -1731,107 +1731,98 @@ function Dashboard() {
                 </div>
               )} 
 
-              {/* Backups & DR Tile Content */}
-              {selectedTile === 'backups-dr' && (
+              {/* Patch Management Tile Content */}
+              {selectedTile === 'patch-management' && (
                 <div>
                   <Card
                     style={{
                       borderRadius: '16px',
-                      border: '2px solid #722ed1',
-                      boxShadow: '0 4px 12px rgba(114,46,209,0.15)',
+                      border: '2px solid #1890ff',
+                      boxShadow: '0 4px 12px rgba(24,144,255,0.15)',
                       overflow: 'hidden',
                       marginBottom: '24px'
                     }}
                     bodyStyle={{ padding: '0' }}
                   >
                     <div style={{
-                      background: 'linear-gradient(135deg, #722ed1 0%, #f9f0ff 100%)',
+                      background: 'linear-gradient(135deg, #1890ff 0%, #e6f7ff 100%)',
                       padding: '20px',
                       color: 'black'
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <LockOutlined style={{ fontSize: '32px', color: '#722ed1' }} />
+                        <LockOutlined style={{ fontSize: '32px', color: '#1890ff' }} />
                         <div>
                           <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>
-                            Backups & DR
+                            Azure OS & Patch Management
                           </h2>
                           <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '14px' }}>
-                            Backup Status, DR, Restore & Test
+                            Patch Compliance, OS Support, Risks
                           </p>
                         </div>
                       </div>
                     </div>
                   </Card>
                   <div style={{ padding: '24px' }}>
-                    {/* Backup & DR Status – Detailed Records */}
+                    {/* KPI Table */}
                     <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>
-                      Backup & DR Status – Detailed Records
+                      Patch Management KPIs
                     </Typography.Title>
                     <TableComponent
-                      title="Backup & DR Status – Detailed Records"
+                      title="Patch Management KPIs"
+                      columns={[
+                        { key: 'kpi', label: 'KPI' },
+                        { key: 'value', label: 'Value' },
+                      ]}
+                      data={[
+                        { kpi: 'Total VMs', value: 5 },
+                        { kpi: 'Patch Compliance', value: '60%' },
+                        { kpi: 'VMs Missing Critical Patches', value: 2 },
+                        { kpi: 'Reboot Pending', value: 2 },
+                        { kpi: 'Unsupported OS', value: 1 },
+                        { kpi: 'Patch Failures (Last 7 Days)', value: 1 },
+                      ]}
+                    />
+
+                    {/* OS & Patch Status – Detailed Records */}
+                    <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>
+                      OS & Patch Status – Detailed Records
+                    </Typography.Title>
+                    <TableComponent
+                      title="OS & Patch Status – Detailed Records"
                       columns={[
                         { key: 'num', label: '#' },
-                        { key: 'resource', label: 'Resource Name' },
-                        { key: 'type', label: 'Resource Type' },
-                        { key: 'backupStatus', label: 'Backup Status' },
-                        { key: 'lastBackup', label: 'Last Backup' },
-                        { key: 'retention', label: 'Retention' },
-                        { key: 'drEnabled', label: 'DR Enabled' },
-                        { key: 'rpo', label: 'RPO' },
-                        { key: 'rto', label: 'RTO' },
+                        { key: 'vmName', label: 'VM Name' },
+                        { key: 'osVersion', label: 'OS Version' },
+                        { key: 'patchStatus', label: 'Patch Status' },
+                        { key: 'missingPatches', label: 'Missing Patches' },
+                        { key: 'rebootPending', label: 'Reboot Pending' },
+                        { key: 'lastPatchDate', label: 'Last Patch Date' },
+                        { key: 'osSupportStatus', label: 'OS Support Status' },
                         { key: 'risk', label: 'Risk' },
                       ]}
                       data={[
-                        { num: 1, resource: 'VM-Prod-DB-01', type: 'VM (Windows)', backupStatus: '❌ Failed', lastBackup: '19-Jan', retention: '30 days', drEnabled: '✅ Yes', rpo: '15 min', rto: '1 hr', risk: '🔴 High' },
-                        { num: 2, resource: 'VM-Prod-App-01', type: 'VM (Linux)', backupStatus: '✅ Success', lastBackup: '20-Jan', retention: '30 days', drEnabled: '✅ Yes', rpo: '30 min', rto: '2 hr', risk: '🟢 Low' },
-                        { num: 3, resource: 'VM-Prod-Web-01', type: 'VM (Windows)', backupStatus: '✅ Success', lastBackup: '20-Jan', retention: '14 days', drEnabled: '❌ No', rpo: 'N/A', rto: 'N/A', risk: '🟠 Medium' },
-                        { num: 4, resource: 'SQL-Prod-DB-01', type: 'Azure SQL DB', backupStatus: '✅ Success', lastBackup: '20-Jan', retention: '35 days', drEnabled: '❌ No', rpo: '5 min', rto: '30 min', risk: '🟠 Medium' },
-                        { num: 5, resource: 'FileShare-Finance', type: 'Azure File Share', backupStatus: '❌ Failed', lastBackup: '18-Jan', retention: '30 days', drEnabled: '❌ No', rpo: 'N/A', rto: 'N/A', risk: '🔴 High' },
-                        { num: 6, resource: 'VM-DR-ERP-01', type: 'VM (Windows)', backupStatus: '✅ Success', lastBackup: '20-Jan', retention: '60 days', drEnabled: '✅ Yes', rpo: '15 min', rto: '1 hr', risk: '🟢 Low' },
-                        { num: 7, resource: 'VM-Test-01', type: 'VM (Dev/Test)', backupStatus: '⚠ Partial', lastBackup: '20-Jan', retention: '7 days', drEnabled: '❌ No', rpo: 'N/A', rto: 'N/A', risk: '🟡 Low' },
-                        { num: 8, resource: 'Storage-Logs-01', type: 'Blob Storage', backupStatus: '✅ Success', lastBackup: '19-Jan', retention: '90 days', drEnabled: '❌ No', rpo: 'N/A', rto: 'N/A', risk: '🟢 Low' },
-                        { num: 9, resource: 'VM-Prod-API-01', type: 'VM (Linux)', backupStatus: '❌ Failed', lastBackup: '19-Jan', retention: '30 days', drEnabled: '✅ Yes', rpo: '30 min', rto: '2 hr', risk: '🔴 High' },
-                        { num: 10, resource: 'SQL-DR-Replica', type: 'Azure SQL Geo-Replica', backupStatus: '✅ Success', lastBackup: '20-Jan', retention: '30 days', drEnabled: '✅ Yes', rpo: '5 min', rto: '15 min', risk: '🟢 Low' },
+                        { num: 1, vmName: 'VM-Prod-DB-01', osVersion: 'Windows Server 2016', patchStatus: '❌ Non-Compliant', missingPatches: '6 (3 Critical)', rebootPending: '✅ Yes', lastPatchDate: '10-Jan-26', osSupportStatus: '❌ Out of Support', risk: '🔴 High' },
+                        { num: 2, vmName: 'VM-Prod-App-01', osVersion: 'Windows Server 2022', patchStatus: '✅ Compliant', missingPatches: '0', rebootPending: '❌ No', lastPatchDate: '18-Jan-26', osSupportStatus: '✅ Supported', risk: '🟢 Low' },
+                        { num: 3, vmName: 'VM-Prod-Web-01', osVersion: 'Windows Server 2019', patchStatus: '⚠ Partial', missingPatches: '2 (1 Critical)', rebootPending: '❌ No', lastPatchDate: '15-Jan-26', osSupportStatus: '✅ Supported', risk: '🟠 Medium' },
+                        { num: 4, vmName: 'VM-Test-01', osVersion: 'Ubuntu 20.04 LTS', patchStatus: '❌ Non-Compliant', missingPatches: '4 (2 Security)', rebootPending: '❌ No', lastPatchDate: '05-Jan-26', osSupportStatus: '⚠ Near EOS', risk: '🟠 Medium' },
+                        { num: 5, vmName: 'VM-Dev-01', osVersion: 'Windows Server 2012 R2', patchStatus: '❌ Non-Compliant', missingPatches: '9 (5 Critical)', rebootPending: '✅ Yes', lastPatchDate: '02-Jan-26', osSupportStatus: '❌ Out of Support', risk: '🔴 High' },
                       ]}
                     />
 
-                    {/* DR (Azure Site Recovery) Status */}
+                    {/* Key Risks Identified */}
                     <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>
-                      DR (Azure Site Recovery) Status
+                      Key Risks Identified
                     </Typography.Title>
                     <TableComponent
-                      title="DR (Azure Site Recovery) Status"
+                      title="Key Risks Identified"
                       columns={[
-                        { key: 'vmName', label: 'VM Name' },
-                        { key: 'replicationHealth', label: 'Replication Health' },
-                        { key: 'lastSync', label: 'Last Sync' },
-                        { key: 'failoverReady', label: 'Failover Ready' },
-                        { key: 'testFailover', label: 'Test Failover' },
+                        { key: 'risk', label: 'Risk' },
+                        { key: 'affectedVMs', label: 'Affected VMs' },
                       ]}
                       data={[
-                        { vmName: 'VM-Prod-DB-01', replicationHealth: '⚠ Warning', lastSync: '19-Jan', failoverReady: '❌ No', testFailover: '❌ Not Tested' },
-                        { vmName: 'VM-Prod-App-01', replicationHealth: '✅ Healthy', lastSync: '20-Jan', failoverReady: '✅ Yes', testFailover: '✅ Passed' },
-                        { vmName: 'VM-DR-ERP-01', replicationHealth: '✅ Healthy', lastSync: '20-Jan', failoverReady: '✅ Yes', testFailover: '✅ Passed' },
-                        { vmName: 'VM-Prod-API-01', replicationHealth: '❌ Critical', lastSync: '19-Jan', failoverReady: '❌ No', testFailover: '❌ Failed' },
-                      ]}
-                    />
-
-                    {/* Restore & DR Test Summary */}
-                    <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>
-                      Restore & DR Test Summary
-                    </Typography.Title>
-                    <TableComponent
-                      title="Restore & DR Test Summary"
-                      columns={[
-                        { key: 'testType', label: 'Test Type' },
-                        { key: 'lastRun', label: 'Last Run' },
-                        { key: 'status', label: 'Status' },
-                      ]}
-                      data={[
-                        { testType: 'VM Restore Test', lastRun: '15-Jan', status: '✅ Success' },
-                        { testType: 'SQL Point-in-Time Restore', lastRun: '10-Jan', status: '✅ Success' },
-                        { testType: 'DR Test Failover', lastRun: '12-Jan', status: '❌ Failed' },
-                        { testType: 'File Share Restore', lastRun: '08-Jan', status: '✅ Success' },
+                        { risk: 'Unsupported OS', affectedVMs: 'VM-Prod-DB-01, VM-Dev-01' },
+                        { risk: 'Critical patches missing', affectedVMs: 'VM-Prod-DB-01, VM-Dev-01' },
+                        { risk: 'Reboot pending', affectedVMs: 'VM-Prod-DB-01, VM-Dev-01' },
                       ]}
                     />
                   </div>
