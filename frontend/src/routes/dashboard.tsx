@@ -1790,7 +1790,161 @@ function Dashboard() {
                    </div>
                 </div>
               )} 
+              
+{selectedTile === 'backups-dr' && (
+  <div>
+    {/* Backup & DR Header */}
+    <Card
+      style={{
+        borderRadius: '16px',
+        border: '2px solid #1890ff',
+        boxShadow: '0 4px 12px rgba(24,144,255,0.15)',
+        overflow: 'hidden',
+        marginBottom: '24px'
+      }}
+      bodyStyle={{ padding: '0' }}
+    >
+      <div style={{
+        background: 'linear-gradient(135deg, #1890ff 0%, #69c0ff 100%)',
+        padding: '20px',
+        color: 'white'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ fontSize: '32px' }}>☁️</div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: 'white' }}>
+              Backup & Disaster Recovery
+            </h2>
+            <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '14px' }}>
+              Business Continuity, RPO/RTO & Replication Status
+            </p>
+          </div>
+        </div>
+      </div>
+    </Card>
 
+    <div style={{ padding: '24px' }}>
+      {/* 1. Backup & DR Status – Detailed Records */}
+<Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
+  Backup & DR Status – Detailed Records
+</Typography.Title>
+<TableComponent
+  title=""
+  columns={[
+    { key: 'num', label: '#' },
+    { key: 'resource', label: 'Resource Name' },
+    { key: 'type', label: 'Resource Type' },
+    { key: 'backup', label: 'Backup Status' },
+    { key: 'lastBackup', label: 'Last Backup' },
+    { key: 'retention', label: 'Retention' },
+    { key: 'dr', label: 'DR Enabled' },
+    { key: 'rpo', label: 'RPO' },
+    { key: 'rto', label: 'RTO' },
+    { key: 'risk', label: 'Risk' }
+  ]}
+  data={[
+    { num: 1, resource: 'VM-Prod-DB-01', type: 'VM (Windows)', backup: 'Failed', lastBackup: '19-Jan', retention: '30 days', dr: 'Yes', rpo: '15 min', rto: '1 hr', risk: 'High' },
+    { num: 2, resource: 'VM-Prod-App-01', type: 'VM (Linux)', backup: 'Success', lastBackup: '20-Jan', retention: '30 days', dr: 'Yes', rpo: '30 min', rto: '2 hr', risk: 'Low' },
+    { num: 3, resource: 'VM-Prod-Web-01', type: 'VM (Windows)', backup: 'Success', lastBackup: '20-Jan', retention: '14 days', dr: 'No', rpo: 'N/A', rto: 'N/A', risk: 'Medium' },
+    { num: 4, resource: 'SQL-Prod-DB-01', type: 'Azure SQL DB', backup: 'Success', lastBackup: '20-Jan', retention: '35 days', dr: 'No', rpo: '5 min', rto: '30 min', risk: 'Medium' },
+    { num: 5, resource: 'FileShare-Finance', type: 'Azure File Share', backup: 'Failed', lastBackup: '18-Jan', retention: '30 days', dr: 'No', rpo: 'N/A', rto: 'N/A', risk: 'High' },
+    { num: 6, resource: 'VM-DR-ERP-01', type: 'VM (Windows)', backup: 'Success', lastBackup: '20-Jan', retention: '60 days', dr: 'Yes', rpo: '15 min', rto: '1 hr', risk: 'Low' },
+    { num: 7, resource: 'VM-Test-01', type: 'VM (Dev/Test)', backup: 'Partial', lastBackup: '20-Jan', retention: '7 days', dr: 'No', rpo: 'N/A', rto: 'N/A', risk: 'Low' },
+    { num: 8, resource: 'Storage-Logs-01', type: 'Blob Storage', backup: 'Success', lastBackup: '19-Jan', retention: '90 days', dr: 'No', rpo: 'N/A', rto: 'N/A', risk: 'Low' },
+    { num: 9, resource: 'VM-Prod-API-01', type: 'VM (Linux)', backup: 'Failed', lastBackup: '19-Jan', retention: '30 days', dr: 'Yes', rpo: '30 min', rto: '2 hr', risk: 'High' },
+    { num: 10, resource: 'SQL-DR-Replica', type: 'Azure SQL Geo-Replica', backup: 'Success', lastBackup: '20-Jan', retention: '30 days', dr: 'Yes', rpo: '5 min', rto: '15 min', risk: 'Low' },
+  ].map(item => ({
+    ...item,
+    backup: (
+      <span style={{ color: item.backup === 'Success' ? '#16a34a' : item.backup === 'Failed' ? '#dc2626' : '#d97706', fontWeight: '600' }}>
+        {item.backup === 'Success' ? '✅ Success' : item.backup === 'Failed' ? '❌ Failed' : '⚠️ Partial'}
+      </span>
+    ),
+    dr: (
+      <span style={{ color: item.dr === 'Yes' ? '#16a34a' : '#64748b', fontWeight: '600' }}>
+        {item.dr === 'Yes' ? '✅ Yes' : '❌ No'}
+      </span>
+    ),
+    risk: (
+      <span style={{ color: item.risk === 'High' ? '#dc2626' : item.risk === 'Medium' ? '#d97706' : '#16a34a', fontWeight: 'bold' }}>
+        {item.risk === 'High' ? '🔴 High' : item.risk === 'Medium' ? '🟠 Medium' : '🟢 Low'}
+      </span>
+    )
+  }))}
+/>
+
+      {/* 2. DR (Azure Site Recovery) Status */}
+      <Typography.Title level={3} style={{ textAlign: 'center', margin: '48px 0 24px' }}>
+        DR (Azure Site Recovery) Status
+      </Typography.Title>
+      <TableComponent
+        title=""
+        columns={[
+          { key: 'vm', label: 'VM Name' },
+          { key: 'health', label: 'Replication Health' },
+          { key: 'sync', label: 'Last Sync' },
+          { key: 'ready', label: 'Failover Ready' },
+          { key: 'test', label: 'Test Failover' }
+        ]}
+        data={[
+          { vm: 'VM-Prod-DB-01', health: 'Warning', sync: '19-Jan', ready: 'No', test: 'Not Tested' },
+          { vm: 'VM-Prod-App-01', health: 'Healthy', sync: '20-Jan', ready: 'Yes', test: 'Passed' },
+          { vm: 'VM-Prod-API-01', health: 'Critical', sync: '19-Jan', ready: 'No', test: 'Failed' },
+        ].map(item => ({
+          ...item,
+          health: (
+            <span style={{ color: item.health === 'Healthy' ? '#16a34a' : '#dc2626', fontWeight: 'bold' }}>
+              {item.health === 'Healthy' ? '✅' : item.health === 'Warning' ? '⚠️' : '❌'} {item.health}
+            </span>
+          ),
+          ready: (
+            <span style={{ color: item.ready === 'Yes' ? '#16a34a' : '#dc2626', fontWeight: '600' }}>
+              {item.ready === 'Yes' ? '✅ Yes' : '❌ No'}
+            </span>
+          ),
+          test: (
+            <span style={{
+              backgroundColor: item.test === 'Passed' ? '#dcfce7' : '#f1f5f9',
+              color: item.test === 'Passed' ? '#166534' : '#475569',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              fontSize: '12px',
+              fontWeight: 'bold'
+            }}>
+              {item.test}
+            </span>
+          )
+        }))}
+      />
+
+      {/* 3. Restore & DR Test Summary */}
+      <Typography.Title level={3} style={{ textAlign: 'center', margin: '48px 0 24px' }}>
+        Restore & DR Test Summary
+      </Typography.Title>
+      <TableComponent
+        title=""
+        columns={[
+          { key: 'type', label: 'Test Type' },
+          { key: 'run', label: 'Last Run' },
+          { key: 'status', label: 'Status' }
+        ]}
+        data={[
+          { type: 'VM Restore Test', run: '15-Jan', status: 'Success' },
+          { type: 'SQL Point-in-Time Restore', run: '10-Jan', status: 'Success' },
+          { type: 'DR Test Failover', run: '12-Jan', status: 'Failed' },
+          { type: 'File Share Restore', run: '08-Jan', status: 'Success' },
+        ].map(item => ({
+          ...item,
+          status: (
+            <span style={{ color: item.status === 'Success' ? '#16a34a' : '#dc2626', fontWeight: 'bold' }}>
+              {item.status === 'Success' ? '✅ Success' : '❌ Failed'}
+            </span>
+          )
+        }))}
+      />
+    </div>
+  </div>
+)}
               {/* Patch Management Tile Content */}
               {selectedTile === 'patch-management' && (
                 <div>
