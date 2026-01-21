@@ -1,3 +1,4 @@
+
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Card, Form, Select, Row, Col, Space, Spin, Alert, Typography, Modal, Button } from "antd";
@@ -36,21 +37,54 @@ interface User {
   risk: "High" | "Medium" | "Low";
 }
 
-const mockTenants = [
-  { id: "tenant-1", name: "Default Organization" },
-  { id: "tenant-2", name: "Secondary Organization" },
-];
-
-const mockSubscriptions = [
-  { id: "sub-1", name: "Production" },
-  { id: "sub-2", name: "Development" },
-  { id: "sub-3", name: "Testing" },
-];
 
 function Dashboard() {
-  const { clientId, clientSecret } = useCredentials();
-  const [selectedTenant, setSelectedTenant] = useState<string>("tenant-1");
-  const [selectedSubscription, setSelectedSubscription] = useState<string>("sub-1");
+  const { clientId, clientSecret, tenantId } = useCredentials();
+  const [selectedTenant, setSelectedTenant] = useState<string>(tenantId || "tenant-1");
+  const [selectedSubscription, setSelectedSubscription] = useState<string>("");
+  const [azureSubscriptions, setAzureSubscriptions] = useState<Array<{ value: string; label: string }>>([]);
+    // Fetch Azure subscriptions from backend
+    useEffect(() => {
+      const fetchSubs = async () => {
+        if (!clientId || !clientSecret || !selectedTenant) return;
+        try {
+          // 1. Get token from backend
+          const tokenResp = await fetch("http://localhost:8000/api/v1/azure/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tenant_id: selectedTenant,
+              client_id: clientId,
+              client_secret: clientSecret,
+              scope: "https://management.azure.com/.default"
+            })
+          });
+          if (!tokenResp.ok) throw new Error("Failed to get Azure token");
+          const tokenData = await tokenResp.json();
+          const accessToken = tokenData.access_token;
+
+          // 2. Get subscriptions from backend
+          const subsResp = await fetch("http://localhost:8000/api/v1/azure/subscriptions", {
+            method: "GET",
+            headers: { "Authorization": `Bearer ${accessToken}` }
+          });
+          if (!subsResp.ok) throw new Error("Failed to fetch Azure subscriptions");
+          const subsData = await subsResp.json();
+          // 3. Filter enabled subscriptions and format for dropdown
+          const enabledSubs = (subsData.value || []).filter((sub: any) => sub.state === "Enabled");
+          const dropdownSubs = enabledSubs.map((sub: any) => ({
+            value: sub.subscriptionId,
+            label: `${sub.subscriptionId} - ${sub.displayName}`
+          }));
+          setAzureSubscriptions(dropdownSubs);
+          // Auto-select first enabled subscription
+          if (dropdownSubs.length > 0) setSelectedSubscription(dropdownSubs[0].value);
+        } catch (err: any) {
+          setAzureSubscriptions([]);
+        }
+      };
+      fetchSubs();
+    }, [clientId, clientSecret, selectedTenant]);
   const [selectedTile, setSelectedTile] = useState<string>("azure-identity");
   const [azureStats, setAzureStats] = useState<AzureStats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -159,7 +193,8 @@ function Dashboard() {
 
   const handleTenantChange = (tenantId: string) => {
     setSelectedTenant(tenantId);
-    setSelectedSubscription("sub-1");
+    setSelectedSubscription("");
+    setAzureSubscriptions([]);
   };
 
   const handleSubscriptionChange = async (subscriptionId: string) => {
@@ -995,7 +1030,9 @@ function Dashboard() {
                     value={selectedTenant}
                     onChange={handleTenantChange}
                     placeholder="Select a tenant"
-                    options={mockTenants.map((t) => ({ label: t.name, value: t.id }))}
+                    options={[
+        { value: tenantId!, label: tenantId! } // single tenant from context
+      ]}
                   />
                 </Form.Item>
               </Form>
@@ -1006,9 +1043,9 @@ function Dashboard() {
                   <Select
                     value={selectedSubscription}
                     onChange={handleSubscriptionChange}
-                    disabled={!selectedTenant}
-                    placeholder={selectedTenant ? "Select a subscription" : "Select a tenant first"}
-                    options={mockSubscriptions.map((s) => ({ label: s.name, value: s.id }))}
+                    disabled={azureSubscriptions.length === 0}
+                    placeholder={azureSubscriptions.length === 0 ? "No enabled subscriptions found" : "Select a subscription"}
+                    options={azureSubscriptions}
                   />
                 </Form.Item>
               </Form>
@@ -2812,6 +2849,8 @@ function Dashboard() {
       </div>
   );
 }
+
+
 
 export const Route = createFileRoute("/dashboard")({
   component: Dashboard,

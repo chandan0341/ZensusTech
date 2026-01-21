@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import requests
 import sys
+from ..services.azure_helpers import build_user_objects
+from .governance import  User
 
 router = APIRouter(tags=["azure"])
 bearer_scheme = HTTPBearer()
@@ -57,15 +59,10 @@ def get_subscriptions(credentials: HTTPAuthorizationCredentials = Depends(bearer
     return response.json()
 
 @router.get("/azure/users")
-def get_users(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
+async def get_users_info(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
     print('--- /azure/users endpoint called ---', file=sys.stdout, flush=True)
     print(f"Authorization header: {credentials.scheme} {credentials.credentials}", file=sys.stdout, flush=True)
 
-    url = "https://graph.microsoft.com/v1.0/users?$select=displayName,userPrincipalName,userType"
-    headers = {"Authorization": f"{credentials.scheme} {credentials.credentials}"}
-    response = requests.get(url, headers=headers)
-
-    if response.status_code != 200:
-        raise HTTPException(status_code=400, detail=response.json())
-
-    return response.json()
+    token = credentials.credentials
+    users = await build_user_objects(token)
+    return users

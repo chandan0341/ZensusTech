@@ -65,7 +65,7 @@ function ConnectionPage() {
   });
 
   const onSubmit = (data: CredentialsFormData) => {
-    setCredentials(data.clientId, data.clientSecret);
+    setCredentials(data.clientId, data.clientSecret, data.tenantId);
     navigate({
       to: "/dashboard",
       search: { from: "connection" }
