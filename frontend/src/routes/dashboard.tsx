@@ -41,6 +41,7 @@ interface User {
 function Dashboard() {
   const { clientId, clientSecret, tenantId } = useCredentials();
   const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedTenant, setSelectedTenant] = useState<string>(tenantId || "tenant-1");
   const [selectedSubscription, setSelectedSubscription] = useState<string>("");
   const [azureSubscriptions, setAzureSubscriptions] = useState<Array<{ value: string; label: string }>>([]);
@@ -107,6 +108,7 @@ function Dashboard() {
             const usersData = await usersResp.json();
 
             setUsers(usersData); // Update your users state
+            setLoading(false);
 
           } catch (err: any) {
             console.error("Fetch Error:", err.message);
@@ -233,6 +235,89 @@ function Dashboard() {
   const handleSubscriptionChange = async (subscriptionId: string) => {
     setSelectedSubscription(subscriptionId);
   };
+  const roleCounts = users.reduce<Record<string, number>>((result, user) => {
+    const role = user.role;
+
+    if (result[role]) {
+      result[role] += 1;
+    } else {
+      result[role] = 1;
+    }
+
+    return result;
+  }, {});
+
+  const mfaEnabledCount = users.filter(user => user.mfa === "Enabled").length;
+  const mfaDisabledCount = users.filter(user => user.mfa === "Disabled").length;
+
+ function getModalDataByRole(role: string, users: User[]) {
+  const filteredUsers = users.filter(u => u.role.toLowerCase() === role.toLowerCase());
+
+  return {
+    title: role,
+    columns: [
+      { key: 'user', label: 'User', width: '20%' },
+      { key: 'role', label: 'Role', width: '15%' },
+      { key: 'subscription', label: 'Subscription', width: '20%' },
+      { key: 'mfa', label: 'MFA Status', width: '22%' },
+      { key: 'status', label: 'Status', width: '15%' },
+      { key: 'risk', label: 'Risk', width: '8%' },
+    ],
+    data: filteredUsers.map(u => {
+      const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
+
+      return {
+        user: u.user,
+        role: u.role,
+        subscription: u.subscription,
+        mfa: (
+          <span style={{ color: u.mfa === 'Enabled' ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+            {u.mfa === 'Enabled' ? '✅ Enabled' : '❌ Disabled'}
+          </span>
+        ),
+        status: (
+          <span
+            style={{
+              backgroundColor: u.status === 'Active' ? '#dcfce7' : '#f1f5f9',
+              color: u.status === 'Active' ? '#166534' : '#475569',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              fontSize: '12px',
+              fontWeight: 'bold',
+            }}
+          >
+            {u.status}
+          </span>
+        ),
+        risk: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                height: '8px',
+                width: '8px',
+                backgroundColor: riskColor,
+                borderRadius: '50%',
+                display: 'inline-block',
+              }}
+            ></span>
+            <span style={{ color: riskColor, fontWeight: 500 }}>{u.risk}</span>
+          </div>
+        ),
+      };
+    }),
+  };
+}
+
+function handleCardClickForUserType(roleKey: string) {
+  if (!users || users.length === 0) return; // Safety check
+
+  const modalData = getModalDataByRole(roleKey, users);
+
+  if (modalData) {
+    setSelectedCardData(modalData);
+    setDetailModalVisible(true);
+  }
+}
 
   const handleCardClick = (cardType: string, currentTile: string) => {
     let modalData = null;
@@ -397,180 +482,6 @@ function Dashboard() {
       { key: 'risk', label: 'Risk', width: '08%' }
     ],
     data: users.filter(u => u.mfa === 'Disabled').map((u) => {
-      // 1. Declare variables inside the function body
-      const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
-      
-      // 2. Return the object
-      return {
-        user: u.user,
-        role: u.role,
-        subscription: u.subscription,
-        mfa: (
-          <span style={{ 
-            color: u.mfa === 'Enabled' ? '#16a34a' : '#dc2626',
-            fontWeight: '600'
-          }}>
-            {u.mfa === 'Enabled' ? '✅ Enabled' : '❌ Disabled'}
-          </span>
-        ),
-        status: (
-          <span style={{
-            backgroundColor: u.status === 'Active' ? '#dcfce7' : '#f1f5f9',
-            color: u.status === 'Active' ? '#166534' : '#475569',
-            padding: '2px 8px',
-            borderRadius: '12px',
-            fontSize: '12px',
-            fontWeight: 'bold'
-          }}>
-            {u.status}
-          </span>
-        ),
-        risk: (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{
-              height: '8px',
-              width: '8px',
-              backgroundColor: riskColor,
-              borderRadius: '50%',
-              display: 'inline-block'
-            }}></span>
-            <span style={{ color: riskColor, fontWeight: '500' }}>
-              {u.risk}
-            </span>
-          </div>
-        ),
-      };
-    }),
-  };
-  break;
-        case 'owners':
-          modalData = {
-            title: 'Owner',
-            columns: [
-      { key: 'user', label: 'User', width: '20%' },
-      { key: 'role', label: 'Role', width: '15%' },
-      { key: 'subscription', label: 'Subscription', width: '20%' },
-      { key: 'mfa', label: 'MFA Status', width: '22%' },
-      { key: 'status', label: 'Status', width: '15%' },
-      { key: 'risk', label: 'Risk', width: '08%' }
-    ],
-    data: users.filter(u => u.role === 'Owner').map((u) => {
-      // 1. Declare variables inside the function body
-      const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
-      
-      // 2. Return the object
-      return {
-        user: u.user,
-        role: u.role,
-        subscription: u.subscription,
-        mfa: (
-          <span style={{ 
-            color: u.mfa === 'Enabled' ? '#16a34a' : '#dc2626',
-            fontWeight: '600'
-          }}>
-            {u.mfa === 'Enabled' ? '✅ Enabled' : '❌ Disabled'}
-          </span>
-        ),
-        status: (
-          <span style={{
-            backgroundColor: u.status === 'Active' ? '#dcfce7' : '#f1f5f9',
-            color: u.status === 'Active' ? '#166534' : '#475569',
-            padding: '2px 8px',
-            borderRadius: '12px',
-            fontSize: '12px',
-            fontWeight: 'bold'
-          }}>
-            {u.status}
-          </span>
-        ),
-        risk: (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{
-              height: '8px',
-              width: '8px',
-              backgroundColor: riskColor,
-              borderRadius: '50%',
-              display: 'inline-block'
-            }}></span>
-            <span style={{ color: riskColor, fontWeight: '500' }}>
-              {u.risk}
-            </span>
-          </div>
-        ),
-      };
-    }),
-  };
-  break;
-        case 'contributors':
-          modalData = {
-            title: 'Contributor',
-            columns: [
-      { key: 'user', label: 'User', width: '20%' },
-      { key: 'role', label: 'Role', width: '15%' },
-      { key: 'subscription', label: 'Subscription', width: '20%' },
-      { key: 'mfa', label: 'MFA Status', width: '22%' },
-      { key: 'status', label: 'Status', width: '15%' },
-      { key: 'risk', label: 'Risk', width: '08%' }
-    ],
-    data: users.filter(u => u.role === 'Contributor').map((u) => {
-      // 1. Declare variables inside the function body
-      const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
-      
-      // 2. Return the object
-      return {
-        user: u.user,
-        role: u.role,
-        subscription: u.subscription,
-        mfa: (
-          <span style={{ 
-            color: u.mfa === 'Enabled' ? '#16a34a' : '#dc2626',
-            fontWeight: '600'
-          }}>
-            {u.mfa === 'Enabled' ? '✅ Enabled' : '❌ Disabled'}
-          </span>
-        ),
-        status: (
-          <span style={{
-            backgroundColor: u.status === 'Active' ? '#dcfce7' : '#f1f5f9',
-            color: u.status === 'Active' ? '#166534' : '#475569',
-            padding: '2px 8px',
-            borderRadius: '12px',
-            fontSize: '12px',
-            fontWeight: 'bold'
-          }}>
-            {u.status}
-          </span>
-        ),
-        risk: (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{
-              height: '8px',
-              width: '8px',
-              backgroundColor: riskColor,
-              borderRadius: '50%',
-              display: 'inline-block'
-            }}></span>
-            <span style={{ color: riskColor, fontWeight: '500' }}>
-              {u.risk}
-            </span>
-          </div>
-        ),
-      };
-    }),
-  };
-  break;
-        case 'readers':
-          modalData = {
-            title: 'Reader',
-            columns: [
-      { key: 'user', label: 'User', width: '20%' },
-      { key: 'role', label: 'Role', width: '15%' },
-      { key: 'subscription', label: 'Subscription', width: '20%' },
-      { key: 'mfa', label: 'MFA Status', width: '22%' },
-      { key: 'status', label: 'Status', width: '15%' },
-      { key: 'risk', label: 'Risk', width: '08%' }
-    ],
-    data: users.filter(u => u.role === 'Reader').map((u) => {
       // 1. Declare variables inside the function body
       const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
       
@@ -1152,31 +1063,7 @@ function Dashboard() {
 
                   <div style={{ padding: '24px' }}>
                     <Space direction="vertical" size={24} style={{ width: "100%" }}>
-                      {/* Stat Cards - Removed */}
-
-                      {/* Charts Section - Disabled */}
-                      {/* <Row gutter={16}>
-                        <Col xs={24} lg={12}>
-                          <LineChartComponent
-                            title="User Activity Trend"
-                            data={userActivityData}
-                            height={380}
-                          />
-                        </Col>
-                        <Col xs={24} lg={12}>
-                          <PieChartComponent
-                            title="Risk Distribution"
-                            data={[
-                              { name: "High Risk", value: riskDistribution.high, color: "#ff4d4f" },
-                              { name: "Medium Risk", value: riskDistribution.medium, color: "#faad14" },
-                              { name: "Low Risk", value: riskDistribution.low, color: "#52c41a" },
-                            ]}
-                            height={380}
-                          />
-                        </Col>
-                      </Row> */}
-
-                                      {/* Executive Summary Cards */}
+                     {/* Executive Summary Cards */}
                                                       <div style={{ marginBottom: '24px' }}>
                   <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '32px' }}>
                     Executive Summary
@@ -1200,7 +1087,7 @@ function Dashboard() {
                           <TeamOutlined style={{ fontSize: '32px', color: '#1890ff' }} />
                         </div>
                         <div style={{ fontSize: '36px', fontWeight: 'bold', color: '#1890ff' }}>
-                         {users?.length ?? 47}
+                         {loading ? '—' : users.length}
                         </div>
                         <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>
                           Total Users
@@ -1211,62 +1098,30 @@ function Dashboard() {
 
                   {/* --- Child Row (Slightly larger than before) --- */}
                   <Row gutter={[24, 24]} justify="center">
-                    {/* Child: Owner */}
-                    <Col xs={22} sm={10} lg={6}> 
-                      <Card
-                        hoverable
-                        style={{ 
-                          borderRadius: '12px', 
-                          borderTop: '4px solid #52c41a',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-                        }}
-                        bodyStyle={{ textAlign: 'center', padding: '24px' }} // Increased padding
-                         onClick={() => handleCardClick('owners', selectedTile)}
-                      >
-                        <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>
-                          Owner
-                        </div>
-                        <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a' }}>17</div>
-                      </Card>
-                    </Col>
+      {Object.entries(roleCounts).map(([role, count]) => (
+        <Col xs={22} sm={10} lg={6} key={role}>
+          <Card
+            hoverable
+            style={{
+              borderRadius: '12px',
+              borderTop: '4px solid #52c41a',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+            }}
+            bodyStyle={{ textAlign: 'center', padding: '24px' }}
+            onClick={() => handleCardClickForUserType(role.toLowerCase())}
+          >
+            <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>
+              {role}
+            </div>
 
-                    {/* Child: Contributor */}
-                    <Col xs={22} sm={10} lg={6}>
-                      <Card
-                        hoverable
-                        style={{ 
-                          borderRadius: '12px', 
-                          borderTop: '4px solid #52c41a',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-                        }}
-                        bodyStyle={{ textAlign: 'center', padding: '24px' }} // Increased padding
-                        onClick={() => handleCardClick('contributors', selectedTile)}
-                      >
-                        <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>
-                          Contributor
-                        </div>
-                        <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a' }}>9</div>
-                      </Card>
-                    </Col>
-                    {/* Child: Reader */}
-                    <Col xs={22} sm={10} lg={6}>
-                      <Card
-                        hoverable
-                        style={{ 
-                          borderRadius: '12px', 
-                          borderTop: '4px solid #52c41a',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-                        }}
-                        bodyStyle={{ textAlign: 'center', padding: '24px' }} // Increased padding
-                        onClick={() => handleCardClick('readers', selectedTile)}
-                      >
-                        <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>
-                          Reader
-                        </div>
-                        <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a' }}>21</div>
-                      </Card>
-                    </Col>
-                  </Row>
+            <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a' }}>
+              {count}
+            </div>
+          </Card>
+        </Col>
+      ))}
+</Row>
+
                 </div>
                       
 
@@ -1293,7 +1148,7 @@ function Dashboard() {
                                 <LockOutlined style={{ fontSize: '24px', color: '#52c41a' }} />
                               </div>
                               <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a', marginBottom: '4px' }}>
-                                31 users
+                                {mfaEnabledCount} users
                               </div>
                               <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
                                 MFA Coverage - Enabled
@@ -1314,7 +1169,7 @@ function Dashboard() {
                                 <LockOutlined style={{ fontSize: '24px', color: '#ff4d4f' }} />
                               </div>
                               <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#ff4d4f', marginBottom: '4px' }}>
-                                16 users
+                                {mfaDisabledCount} users
                               </div>
                               <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
                                 MFA Coverage - Disabled
