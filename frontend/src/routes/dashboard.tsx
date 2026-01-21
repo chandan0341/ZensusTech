@@ -318,6 +318,77 @@ function handleCardClickForUserType(roleKey: string) {
     setDetailModalVisible(true);
   }
 }
+function handleCardClickForMFADisabledRole(record: { role: string; count: number }, type: string) {
+ if (type === 'mfa-disabled-roles') {
+    // Filter users with this role and MFA disabled
+    const usersForRole = users.filter(u => u.role === record.role && u.mfa === 'Disabled');
+
+    // Open modal or set state
+    setSelectedCardData({
+      title: `MFA Disabled Users - ${record.role}`,
+      columns: [
+        { key: "user", label: "User" },
+        { key: "role", label: "Role" },
+        { key: "subscription", label: "Subscription" },
+        { key: "mfa", label: "MFA Status" },
+        { key: "status", label: "Status" },
+        { key: "risk", label: "Risk" },
+      ],
+      data: usersForRole.map(u => {
+      const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
+
+      return {
+        user: u.user,
+        role: u.role,
+        subscription: u.subscription,
+        mfa: (
+          <span style={{ color: u.mfa === 'Enabled' ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+            {u.mfa === 'Enabled' ? '✅ Enabled' : '❌ Disabled'}
+          </span>
+        ),
+        status: (
+          <span
+            style={{
+              backgroundColor: u.status === 'Active' ? '#dcfce7' : '#f1f5f9',
+              color: u.status === 'Active' ? '#166534' : '#475569',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              fontSize: '12px',
+              fontWeight: 'bold',
+            }}
+          >
+            {u.status}
+          </span>
+        ),
+        risk: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                height: '8px',
+                width: '8px',
+                backgroundColor: riskColor,
+                borderRadius: '50%',
+                display: 'inline-block',
+              }}
+            ></span>
+            <span style={{ color: riskColor, fontWeight: 500 }}>{u.risk}</span>
+          </div>
+        ),
+      };
+    }),
+    });
+    setDetailModalVisible(true);
+  }
+}
+// Count MFA Disabled per role dynamically
+const mfaDisabledByRole = Object.entries(
+  users.reduce((acc, user) => {
+    if (user.mfa === "Disabled") {
+      acc[user.role] = (acc[user.role] || 0) + 1;
+    }
+    return acc;
+  }, {} as Record<string, number>)
+).map(([role, count]) => ({ role, count }));
 
   const handleCardClick = (cardType: string, currentTile: string) => {
     let modalData = null;
@@ -1185,12 +1256,8 @@ function handleCardClickForUserType(roleKey: string) {
                             { key: "role", label: "Role" },
                             { key: "count", label: "Count" },
                           ]}
-                          data={[
-                            { role: "Owner", count: "3" },
-                            { role: "Contributor", count: "9" },
-                            { role: "Reader", count: "4" },
-                          ]}
-                          onRowClick={(record) => handleRowClick(record, 'mfa-disabled-roles')}
+                          data={mfaDisabledByRole} // dynamic data
+                          onRowClick={(record) => handleCardClickForMFADisabledRole(record, 'mfa-disabled-roles')}
                         />
                       </div>
                       {/* Subscription Tables */}
