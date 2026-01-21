@@ -40,54 +40,87 @@ interface User {
 
 function Dashboard() {
   const { clientId, clientSecret, tenantId } = useCredentials();
+  const [users, setUsers] = useState<User[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<string>(tenantId || "tenant-1");
   const [selectedSubscription, setSelectedSubscription] = useState<string>("");
   const [azureSubscriptions, setAzureSubscriptions] = useState<Array<{ value: string; label: string }>>([]);
     // Fetch Azure subscriptions from backend
     useEffect(() => {
-      const fetchSubs = async () => {
-        if (!clientId || !clientSecret || !selectedTenant) return;
-        try {
-          // 1. Get token from backend
-          const tokenResp = await fetch("http://localhost:8000/api/v1/azure/token", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              tenant_id: selectedTenant,
-              client_id: clientId,
-              client_secret: clientSecret,
-              scope: "https://management.azure.com/.default"
-            })
-          });
-          if (!tokenResp.ok) throw new Error("Failed to get Azure token");
-          const tokenData = await tokenResp.json();
-          const accessToken = tokenData.access_token;
+        const fetchAllAzureData = async () => {
+          // Prevent execution if credentials aren't provided
+          if (!clientId || !clientSecret || !selectedTenant) return;
 
-          // 2. Get subscriptions from backend
-          const subsResp = await fetch("http://localhost:8000/api/v1/azure/subscriptions", {
-            method: "GET",
-            headers: { "Authorization": `Bearer ${accessToken}` }
-          });
-          if (!subsResp.ok) throw new Error("Failed to fetch Azure subscriptions");
-          const subsData = await subsResp.json();
-          // 3. Filter enabled subscriptions and format for dropdown
-          const enabledSubs = (subsData.value || []).filter((sub: any) => sub.state === "Enabled");
-          const dropdownSubs = enabledSubs.map((sub: any) => ({
-            value: sub.subscriptionId,
-            label: `${sub.subscriptionId} - ${sub.displayName}`
-          }));
-          setAzureSubscriptions(dropdownSubs);
-          // Auto-select first enabled subscription
-          if (dropdownSubs.length > 0) setSelectedSubscription(dropdownSubs[0].value);
-        } catch (err: any) {
-          setAzureSubscriptions([]);
-        }
-      };
-      fetchSubs();
-    }, [clientId, clientSecret, selectedTenant]);
+          try {
+            // --- 1. FETCH SUBSCRIPTIONS (Scope: Management) ---
+            const subTokenResp = await fetch("http://localhost:8000/api/v1/azure/token", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                tenant_id: selectedTenant,
+                client_id: clientId,
+                client_secret: clientSecret,
+                scope: "https://management.azure.com/.default"
+              })
+            });
+
+            if (!subTokenResp.ok) throw new Error("Failed to get Management token");
+            const { access_token: managementToken } = await subTokenResp.json();
+
+            const subsResp = await fetch("http://localhost:8000/api/v1/azure/subscriptions", {
+              method: "GET",
+              headers: { "Authorization": `Bearer ${managementToken}` }
+            });
+            const subsData = await subsResp.json();
+            
+            const dropdownSubs = (subsData.value || [])
+              .filter((sub: any) => sub.state === "Enabled")
+              .map((sub: any) => ({
+                value: sub.subscriptionId,
+                label: `${sub.subscriptionId} - ${sub.displayName}`
+              }));
+
+            setAzureSubscriptions(dropdownSubs);
+            if (dropdownSubs.length > 0) setSelectedSubscription(dropdownSubs[0].value);
+
+
+            // --- 2. FETCH USERS & MFA (Scope: Graph) ---
+            const graphTokenResp = await fetch("http://localhost:8000/api/v1/azure/token", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                tenant_id: selectedTenant,
+                client_id: clientId,
+                client_secret: clientSecret,
+                scope: "https://graph.microsoft.com/.default"
+              })
+            });
+
+            if (!graphTokenResp.ok) throw new Error("Failed to get Graph token");
+            const { access_token: graphToken } = await graphTokenResp.json();
+
+            const usersResp = await fetch("http://localhost:8000/api/v1/azure/users", {
+              method: "GET",
+              headers: { "Authorization": `Bearer ${graphToken}` }
+            });
+            
+            if (!usersResp.ok) throw new Error("Failed to fetch User data");
+            const usersData = await usersResp.json();
+
+            setUsers(usersData); // Update your users state
+
+          } catch (err: any) {
+            console.error("Fetch Error:", err.message);
+            setAzureSubscriptions([]);
+            setUsers([]);
+          } finally {
+          }
+        };
+
+  fetchAllAzureData();
+}, [clientId, clientSecret, selectedTenant]);
+
   const [selectedTile, setSelectedTile] = useState<string>("azure-identity");
   const [azureStats, setAzureStats] = useState<AzureStats | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
   const [ukRoleCounts, setUkRoleCounts] = useState<Array<{ role: string; count: number }>>([]);
   const [usRoleCounts, setUsRoleCounts] = useState<Array<{ role: string; count: number }>>([]);
   const [inactivityData, setInactivityData] = useState<Array<{ period: string; count: number }>>([]);
@@ -1167,7 +1200,7 @@ function Dashboard() {
                           <TeamOutlined style={{ fontSize: '32px', color: '#1890ff' }} />
                         </div>
                         <div style={{ fontSize: '36px', fontWeight: 'bold', color: '#1890ff' }}>
-                          {azureStats?.totalUsers || 47}
+                         {users?.length ?? 47}
                         </div>
                         <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>
                           Total Users
