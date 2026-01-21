@@ -1611,25 +1611,60 @@ function Dashboard() {
                         { category: 'App & Containers', score: 6, max: 10 },
                       ]}
                     />
-                    <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>Top Security Recommendations</Typography.Title>
-                    <TableComponent
-                      title=""
-                      columns={[
-                        { key: 'num', label: '#' },
-                        { key: 'rec', label: 'Recommendation' },
-                        { key: 'severity', label: 'Severity' },
-                        { key: 'affected', label: 'Affected Resources' },
-                        { key: 'status', label: 'Status' },
-                      ]}
-                      data={[
-                        { num: 1, rec: 'Enable MFA for subscription owners', severity: 'High', affected: 'Subscription', status: 'Unhealthy' },
-                        { num: 2, rec: 'System updates should be installed on VMs', severity: 'High', affected: '3 VMs', status: 'Unhealthy' },
-                        { num: 3, rec: 'NSG allows inbound traffic on port 3389', severity: 'High', affected: '2 NSGs', status: 'Unhealthy' },
-                        { num: 4, rec: 'Disk encryption should be enabled', severity: 'Medium', affected: '1 VM', status: 'Unhealthy' },
-                        { num: 5, rec: 'Storage account public access enabled', severity: 'Medium', affected: '2 Storage Accounts', status: 'Unhealthy' },
-                        { num: 6, rec: 'Endpoint protection missing', severity: 'Medium', affected: '1 VM', status: 'Unhealthy' },
-                      ]}
-                    />
+                    <Typography.Title level={3} style={{ textAlign: 'center', margin: '32px 0 24px' }}>
+  Top Security Recommendations
+</Typography.Title>
+<TableComponent
+  title=""
+  columns={[
+    { key: 'num', label: '#', width: '5%' },
+    { key: 'rec', label: 'Recommendation', width: '40%' },
+    { key: 'severity', label: 'Severity', width: '15%' },
+    { key: 'affected', label: 'Affected Resources', width: '20%' },
+    { key: 'status', label: 'Status', width: '20%' },
+  ]}
+  data={[
+    { num: 1, rec: 'Enable MFA for subscription owners', severity: 'High', affected: 'Subscription', status: 'Unhealthy' },
+    { num: 2, rec: 'System updates should be installed on VMs', severity: 'High', affected: '3 VMs', status: 'Unhealthy' },
+    { num: 3, rec: 'NSG allows inbound traffic on port 3389', severity: 'High', affected: '2 NSGs', status: 'Unhealthy' },
+    { num: 4, rec: 'Disk encryption should be enabled', severity: 'Medium', affected: '1 VM', status: 'Unhealthy' },
+    { num: 5, rec: 'Storage account public access enabled', severity: 'Medium', affected: '2 Storage Accounts', status: 'Unhealthy' },
+    { num: 6, rec: 'Endpoint protection missing', severity: 'Medium', affected: '1 VM', status: 'Unhealthy' },
+  ].map((item) => {
+    // Determine Severity Color
+    const sevColor = item.severity === 'High' ? '#dc2626' : '#d97706';
+    
+    return {
+      ...item,
+      severity: (
+        <span style={{ 
+          color: sevColor, 
+          fontWeight: 'bold',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px'
+        }}>
+          <span style={{ height: '8px', width: '8px', borderRadius: '50%', backgroundColor: sevColor }}></span>
+          {item.severity}
+        </span>
+      ),
+      status: (
+        <span style={{
+          backgroundColor: item.status === 'Unhealthy' ? '#fee2e2' : '#dcfce7',
+          color: item.status === 'Unhealthy' ? '#dc2626' : '#166534',
+          padding: '4px 12px',
+          borderRadius: '12px',
+          fontSize: '12px',
+          fontWeight: 'bold',
+          display: 'inline-block',
+          border: `1px solid ${item.status === 'Unhealthy' ? '#f87171' : '#4ade80'}40`
+        }}>
+          {item.status === 'Unhealthy' ? '⚠️ Unhealthy' : '✅ Healthy'}
+        </span>
+      )
+    };
+  })}
+/>
                   </div>
                 </div>
               )}
