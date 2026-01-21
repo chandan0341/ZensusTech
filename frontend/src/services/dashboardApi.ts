@@ -1,3 +1,38 @@
+export interface SSLCertificate {
+  domain: string;
+  expiryDate: string;
+  daysToExpiry: number;
+}
+
+export async function fetchSSLCertificates(
+  clientId: string,
+  clientSecret: string,
+  tenantId: string,
+  subscriptionId: string
+): Promise<SSLCertificate[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/governance/ssl-certificates`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        clientId,
+        clientSecret,
+        tenantId,
+        subscriptionId,
+      } as GovernanceRequest),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching SSL certificates:", error);
+    throw error;
+  }
+}
 interface AzureStats {
   totalUsers: number
   inactiveUsers: number

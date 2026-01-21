@@ -1,4 +1,3 @@
-            
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Card, Form, Select, Row, Col, Space, Spin, Alert, Typography, Modal, Button } from "antd";
@@ -10,6 +9,8 @@ import {
   fetchRoleCounts,
   fetchInactivityAnalysis,
   fetchExternalUsers,
+  fetchSSLCertificates,
+  SSLCertificate,
 } from "@/services/dashboardApi";
 import {
   TableComponent
@@ -57,6 +58,7 @@ function Dashboard() {
   const [usRoleCounts, setUsRoleCounts] = useState<Array<{ role: string; count: number }>>([]);
   const [inactivityData, setInactivityData] = useState<Array<{ period: string; count: number }>>([]);
   const [externalUsers, setExternalUsers] = useState<Array<{ user: string; domain: string; role: string; lastLogin: string; risk: string }>>([]);
+  const [sslCertificates, setSslCertificates] = useState<SSLCertificate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -65,6 +67,7 @@ function Dashboard() {
     columns: any[];
     data: any[];
   } | null>(null);
+  const [sslError, setSslError] = useState<string | null>(null);
 
   // Check if credentials exist, if not redirect to login
   if (!clientId || !clientSecret) {
@@ -90,6 +93,7 @@ function Dashboard() {
     setUsRoleCounts([]);
     setInactivityData([]);
     setExternalUsers([]);
+    setSslCertificates([]);
     setError(null);
 
     if (clientId && clientSecret && selectedTenant && selectedSubscription) {
@@ -137,6 +141,21 @@ function Dashboard() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    const fetchSSL = async () => {
+      if (!clientId || !clientSecret || !selectedTenant || !selectedSubscription) return;
+      setSslError(null);
+      try {
+        const data = await fetchSSLCertificates(clientId, clientSecret, selectedTenant, selectedSubscription);
+        setSslCertificates(data);
+      } catch (err) {
+        setSslError("Failed to fetch SSL Certificate Expiry data");
+        setSslCertificates([]);
+      }
+    };
+    fetchSSL();
+  }, [clientId, clientSecret, selectedTenant, selectedSubscription]);
 
   const handleTenantChange = (tenantId: string) => {
     setSelectedTenant(tenantId);
@@ -1834,8 +1853,6 @@ function Dashboard() {
                   </div>
                 </div>
               )}
-                  
-              
                {/* Domain Overview Tile Content */}
               {selectedTile === 'domain-overview' && (
                 <div>
@@ -1993,30 +2010,65 @@ function Dashboard() {
                     />
                   </div>
                     {/* SSL Certificate Expiry Report */}
-                    <div style={{ marginBottom: '24px' }}>
-                      <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                        SSL Certificate Expiry Report
-                      </Typography.Title>
-                      <TableComponent
-                        title=""
-                        columns={[
-                          { key: 'num', label: '#', width: '5%' },
-                          { key: 'certName', label: 'Certificate Name', width: '15%' },
-                          { key: 'domain', label: 'Domain / Endpoint', width: '20%' },
-                          { key: 'issuer', label: 'Issuer', width: '12%' },
-                          { key: 'expiry', label: 'Expiry Date', width: '15%' },
-                          { key: 'days', label: 'Days to Expiry', width: '15%' },
-                          { key: 'status', label: 'Status', width: '18%' },
-                        ]}
-                        data={[
-                          { num: 1, certName: 'Prod-Web-SSL', domain: 'www.company.com', issuer: 'DigiCert', expiry: '27-Jan-26', days: '7 days', status: '🔴 Expiring in ≤7 days' },
-                          { num: 2, certName: 'API-Gateway-SSL', domain: 'api.company.com', issuer: 'Let’s Encrypt', expiry: '05-Feb-26', days: '16 days', status: '🔴 Expiring in ≤30 days' },
-                          { num: 3, certName: 'ERP-App-SSL', domain: 'erp.company.in', issuer: 'GlobalSign', expiry: '25-Feb-26', days: '36 days', status: '🔴 Expiring in >30 days' },
-                          { num: 4, certName: 'VPN-SSL', domain: 'vpn.company.com', issuer: 'DigiCert', expiry: '30-Apr-26', days: '100 days', status: '🔴 Expiring in >90 days' },
-                          { num: 5, certName: 'Internal-Portal-SSL', domain: 'intranet.company.local', issuer: 'Self-Signed', expiry: '15-Mar-26', days: '54 days', status: '🔴 Expiring in >30 days' },
-                        ]}
-                      />
-                    </div>
+<div style={{ marginBottom: '24px' }}>
+  <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
+    SSL Certificate Expiry Report
+  </Typography.Title>
+  <TableComponent
+    title=""
+    columns={[
+      { key: 'num', label: '#', width: '5%' },
+      { key: 'domain', label: 'Domain / Endpoint', width: '30%' },
+      { key: 'expiryDate', label: 'Expiry Date', width: '20%' },
+      { key: 'daysToExpiry', label: 'Days to Expiry', width: '15%' },
+      { key: 'status', label: 'Status', width: '30%' },
+    ]}
+    data={sslCertificates.map((cert, idx) => {
+      // 1. Ensure numeric evaluation
+      const days = Number(cert.daysToExpiry);
+
+      // 2. Define styles based on your logic
+      let statusLabel = '🟢 Expiring in >30 days';
+      let statusColor = '#16a34a'; // Green
+      let bgColor = '#dcfce7';
+
+      if (days <= 7) {
+        statusLabel = '🔴 Expiring in ≤7 days';
+        statusColor = '#dc2626'; // Red
+        bgColor = '#fee2e2';
+      } else if (days <= 30) {
+        statusLabel = '🟠 Expiring in ≤30 days';
+        statusColor = '#d97706'; // Amber
+        bgColor = '#fef3c7';
+      }
+
+      // 3. Return object formatted for TableComponent
+      return {
+        num: idx + 1,
+        domain: cert.domain,
+        expiryDate: cert.expiryDate,
+        daysToExpiry: <strong>{days} days</strong>,
+        status: (
+          <span style={{
+            backgroundColor: bgColor,
+            color: statusColor,
+            padding: '4px 12px',
+            borderRadius: '12px',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            display: 'inline-block',
+            border: `1px solid ${statusColor}40`,
+            minWidth: '160px',
+            textAlign: 'center'
+          }}>
+            {statusLabel}
+          </span>
+        ),
+      };
+    })}
+  />
+  {sslError && <Alert type="error" message={sslError} showIcon style={{ marginTop: 12 }} />}
+</div>
                 </div>
               )}
 

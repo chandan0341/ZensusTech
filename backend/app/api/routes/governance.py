@@ -266,3 +266,25 @@ async def get_external_users(request: GovernanceRequest) -> list[ExternalUser]:
         ]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch external users: {str(e)}")
+
+
+class SSLCertificate(BaseModel):
+    domain: str
+    expiryDate: str  # ISO date string
+    daysToExpiry: int
+
+@router.post("/ssl-certificates")
+async def get_ssl_certificates(request: GovernanceRequest) -> list[SSLCertificate]:
+    """
+    Get SSL certificate expiry data (mock).
+    """
+    try:
+        return [
+            SSLCertificate(domain="example.com", expiryDate="2026-02-20", daysToExpiry=30),
+            SSLCertificate(domain="company.net", expiryDate="2026-01-25", daysToExpiry=4),
+            SSLCertificate(domain="brand.org", expiryDate="2026-03-30", daysToExpiry=69),
+            SSLCertificate(domain="portal.io", expiryDate="2026-01-29", daysToExpiry=8),
+            SSLCertificate(domain="safe-site.com", expiryDate="2026-04-15", daysToExpiry=85),
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch SSL certificate data: {str(e)}")
