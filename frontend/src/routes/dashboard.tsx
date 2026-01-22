@@ -1010,25 +1010,45 @@ const mfaDisabledByRole = Object.entries(
       <div style={{ maxWidth: "1400px", margin: "0 auto" }}>
         {/* Header */}
         <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <img 
-              src="/zensustech-logo.png" 
-              alt="ZensusTech Logo" 
-              style={{ 
-                height: "48px", 
-                width: "48px",
-                objectFit: "contain"
-              }} 
-            />
-            <span style={{ 
-              fontSize: "28px", 
-              fontWeight: "bold", 
-              color: "#1890ff",
-              margin: 0
-            }}>
-              Managed Services Dashboard
-            </span>
-          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px", padding: "10px 0" }}>
+  {/* 1. The Logo - Scaled slightly for better impact */}
+  <img 
+    src="/zensustech-logo-2.png" 
+    alt="ZensusTech Logo" 
+    style={{ 
+      height: "56px", 
+      width: "56px",
+      objectFit: "contain"
+    }} 
+  />
+
+  {/* 2. The Text Stack */}
+  <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+    {/* Main Title - Darker and more authoritative */}
+    <h1 style={{ 
+      fontSize: "24px", 
+      fontWeight: "800", 
+      color: "#003a8c", // Deeper blue for better contrast
+      margin: 0,
+      lineHeight: "1.2",
+      letterSpacing: "-0.02em"
+    }}>
+      ZensusTech <span style={{ color: "#1890ff", fontWeight: "400" }}>ZenAIOps™</span>
+    </h1>
+    
+    {/* Tagline - Professional, clean, and smaller */}
+    <p style={{ 
+      fontSize: "13px", 
+      fontWeight: "500", 
+      color: "#595959", // Professional gray
+      margin: 0,
+      textTransform: "uppercase",
+      letterSpacing: "0.05em"
+    }}>
+      AI-Powered Azure Managed Services Dashboard
+    </p>
+  </div>
+</div>
           <Button type="primary" danger onClick={() => { window.location.href = "/login"; }}>
             Log Out
           </Button>
