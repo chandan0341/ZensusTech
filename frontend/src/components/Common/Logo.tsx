@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router"
 
 import { cn } from "@/lib/utils"
-import logoIcon from "/zensustech-logo.png"
+import logoIcon from "/zensustech-logo-2.png"
 
 interface LogoProps {
   variant?: "full" | "icon" | "responsive"

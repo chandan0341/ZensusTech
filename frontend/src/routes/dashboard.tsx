@@ -1,4 +1,3 @@
-
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Card, Form, Select, Row, Col, Space, Spin, Alert, Typography, Modal, Button } from "antd";
@@ -37,92 +36,24 @@ interface User {
   risk: "High" | "Medium" | "Low";
 }
 
+const mockTenants = [
+  { id: "tenant-1", name: "Default Organization" },
+  { id: "tenant-2", name: "Secondary Organization" },
+];
+
+const mockSubscriptions = [
+  { id: "sub-1", name: "Production" },
+  { id: "sub-2", name: "Development" },
+  { id: "sub-3", name: "Testing" },
+];
 
 function Dashboard() {
-  const { clientId, clientSecret, tenantId } = useCredentials();
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedTenant, setSelectedTenant] = useState<string>(tenantId || "tenant-1");
-  const [selectedSubscription, setSelectedSubscription] = useState<string>("");
-  const [azureSubscriptions, setAzureSubscriptions] = useState<Array<{ value: string; label: string }>>([]);
-    // Fetch Azure subscriptions from backend
-    useEffect(() => {
-        const fetchAllAzureData = async () => {
-          // Prevent execution if credentials aren't provided
-          if (!clientId || !clientSecret || !selectedTenant) return;
-
-          try {
-            // --- 1. FETCH SUBSCRIPTIONS (Scope: Management) ---
-            const subTokenResp = await fetch("http://localhost:8000/api/v1/azure/token", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                tenant_id: selectedTenant,
-                client_id: clientId,
-                client_secret: clientSecret,
-                scope: "https://management.azure.com/.default"
-              })
-            });
-
-            if (!subTokenResp.ok) throw new Error("Failed to get Management token");
-            const { access_token: managementToken } = await subTokenResp.json();
-
-            const subsResp = await fetch("http://localhost:8000/api/v1/azure/subscriptions", {
-              method: "GET",
-              headers: { "Authorization": `Bearer ${managementToken}` }
-            });
-            const subsData = await subsResp.json();
-            
-            const dropdownSubs = (subsData.value || [])
-              .filter((sub: any) => sub.state === "Enabled")
-              .map((sub: any) => ({
-                value: sub.subscriptionId,
-                label: `${sub.subscriptionId} - ${sub.displayName}`
-              }));
-
-            setAzureSubscriptions(dropdownSubs);
-            if (dropdownSubs.length > 0) setSelectedSubscription(dropdownSubs[0].value);
-
-
-            // --- 2. FETCH USERS & MFA (Scope: Graph) ---
-            const graphTokenResp = await fetch("http://localhost:8000/api/v1/azure/token", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                tenant_id: selectedTenant,
-                client_id: clientId,
-                client_secret: clientSecret,
-                scope: "https://graph.microsoft.com/.default"
-              })
-            });
-
-            if (!graphTokenResp.ok) throw new Error("Failed to get Graph token");
-            const { access_token: graphToken } = await graphTokenResp.json();
-
-            const usersResp = await fetch("http://localhost:8000/api/v1/azure/users", {
-              method: "GET",
-              headers: { "Authorization": `Bearer ${graphToken}` }
-            });
-            
-            if (!usersResp.ok) throw new Error("Failed to fetch User data");
-            const usersData = await usersResp.json();
-
-            setUsers(usersData); // Update your users state
-            setLoading(false);
-
-          } catch (err: any) {
-            console.error("Fetch Error:", err.message);
-            setAzureSubscriptions([]);
-            setUsers([]);
-          } finally {
-          }
-        };
-
-  fetchAllAzureData();
-}, [clientId, clientSecret, selectedTenant]);
-
+  const { clientId, clientSecret } = useCredentials();
+  const [selectedTenant, setSelectedTenant] = useState<string>("tenant-1");
+  const [selectedSubscription, setSelectedSubscription] = useState<string>("sub-1");
   const [selectedTile, setSelectedTile] = useState<string>("azure-identity");
   const [azureStats, setAzureStats] = useState<AzureStats | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
   const [ukRoleCounts, setUkRoleCounts] = useState<Array<{ role: string; count: number }>>([]);
   const [usRoleCounts, setUsRoleCounts] = useState<Array<{ role: string; count: number }>>([]);
   const [inactivityData, setInactivityData] = useState<Array<{ period: string; count: number }>>([]);
@@ -228,167 +159,12 @@ function Dashboard() {
 
   const handleTenantChange = (tenantId: string) => {
     setSelectedTenant(tenantId);
-    setSelectedSubscription("");
-    setAzureSubscriptions([]);
+    setSelectedSubscription("sub-1");
   };
 
   const handleSubscriptionChange = async (subscriptionId: string) => {
     setSelectedSubscription(subscriptionId);
   };
-  const roleCounts = users.reduce<Record<string, number>>((result, user) => {
-    const role = user.role;
-
-    if (result[role]) {
-      result[role] += 1;
-    } else {
-      result[role] = 1;
-    }
-
-    return result;
-  }, {});
-
-  const mfaEnabledCount = users.filter(user => user.mfa === "Enabled").length;
-  const mfaDisabledCount = users.filter(user => user.mfa === "Disabled").length;
-
- function getModalDataByRole(role: string, users: User[]) {
-  const filteredUsers = users.filter(u => u.role.toLowerCase() === role.toLowerCase());
-
-  return {
-    title: role,
-    columns: [
-      { key: 'user', label: 'User', width: '20%' },
-      { key: 'role', label: 'Role', width: '15%' },
-      { key: 'subscription', label: 'Subscription', width: '20%' },
-      { key: 'mfa', label: 'MFA Status', width: '22%' },
-      { key: 'status', label: 'Status', width: '15%' },
-      { key: 'risk', label: 'Risk', width: '8%' },
-    ],
-    data: filteredUsers.map(u => {
-      const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
-
-      return {
-        user: u.user,
-        role: u.role,
-        subscription: u.subscription,
-        mfa: (
-          <span style={{ color: u.mfa === 'Enabled' ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
-            {u.mfa === 'Enabled' ? '✅ Enabled' : '❌ Disabled'}
-          </span>
-        ),
-        status: (
-          <span
-            style={{
-              backgroundColor: u.status === 'Active' ? '#dcfce7' : '#f1f5f9',
-              color: u.status === 'Active' ? '#166534' : '#475569',
-              padding: '2px 8px',
-              borderRadius: '12px',
-              fontSize: '12px',
-              fontWeight: 'bold',
-            }}
-          >
-            {u.status}
-          </span>
-        ),
-        risk: (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span
-              style={{
-                height: '8px',
-                width: '8px',
-                backgroundColor: riskColor,
-                borderRadius: '50%',
-                display: 'inline-block',
-              }}
-            ></span>
-            <span style={{ color: riskColor, fontWeight: 500 }}>{u.risk}</span>
-          </div>
-        ),
-      };
-    }),
-  };
-}
-
-function handleCardClickForUserType(roleKey: string) {
-  if (!users || users.length === 0) return; // Safety check
-
-  const modalData = getModalDataByRole(roleKey, users);
-
-  if (modalData) {
-    setSelectedCardData(modalData);
-    setDetailModalVisible(true);
-  }
-}
-function handleCardClickForMFADisabledRole(record: { role: string; count: number }, type: string) {
- if (type === 'mfa-disabled-roles') {
-    // Filter users with this role and MFA disabled
-    const usersForRole = users.filter(u => u.role === record.role && u.mfa === 'Disabled');
-
-    // Open modal or set state
-    setSelectedCardData({
-      title: `MFA Disabled Users - ${record.role}`,
-      columns: [
-        { key: "user", label: "User" },
-        { key: "role", label: "Role" },
-        { key: "subscription", label: "Subscription" },
-        { key: "mfa", label: "MFA Status" },
-        { key: "status", label: "Status" },
-        { key: "risk", label: "Risk" },
-      ],
-      data: usersForRole.map(u => {
-      const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
-
-      return {
-        user: u.user,
-        role: u.role,
-        subscription: u.subscription,
-        mfa: (
-          <span style={{ color: u.mfa === 'Enabled' ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
-            {u.mfa === 'Enabled' ? '✅ Enabled' : '❌ Disabled'}
-          </span>
-        ),
-        status: (
-          <span
-            style={{
-              backgroundColor: u.status === 'Active' ? '#dcfce7' : '#f1f5f9',
-              color: u.status === 'Active' ? '#166534' : '#475569',
-              padding: '2px 8px',
-              borderRadius: '12px',
-              fontSize: '12px',
-              fontWeight: 'bold',
-            }}
-          >
-            {u.status}
-          </span>
-        ),
-        risk: (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span
-              style={{
-                height: '8px',
-                width: '8px',
-                backgroundColor: riskColor,
-                borderRadius: '50%',
-                display: 'inline-block',
-              }}
-            ></span>
-            <span style={{ color: riskColor, fontWeight: 500 }}>{u.risk}</span>
-          </div>
-        ),
-      };
-    }),
-    });
-    setDetailModalVisible(true);
-  }
-}
-// Count MFA Disabled per role dynamically
-const mfaDisabledByRole = Object.entries(
-  users.reduce((acc, user) => {
-    if (user.mfa === "Disabled") {
-      acc[user.role] = (acc[user.role] || 0) + 1;
-    }
-    return acc;
-  }, {} as Record<string, number>)
-).map(([role, count]) => ({ role, count }));
 
   const handleCardClick = (cardType: string, currentTile: string) => {
     let modalData = null;
@@ -553,6 +329,180 @@ const mfaDisabledByRole = Object.entries(
       { key: 'risk', label: 'Risk', width: '08%' }
     ],
     data: users.filter(u => u.mfa === 'Disabled').map((u) => {
+      // 1. Declare variables inside the function body
+      const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
+      
+      // 2. Return the object
+      return {
+        user: u.user,
+        role: u.role,
+        subscription: u.subscription,
+        mfa: (
+          <span style={{ 
+            color: u.mfa === 'Enabled' ? '#16a34a' : '#dc2626',
+            fontWeight: '600'
+          }}>
+            {u.mfa === 'Enabled' ? '✅ Enabled' : '❌ Disabled'}
+          </span>
+        ),
+        status: (
+          <span style={{
+            backgroundColor: u.status === 'Active' ? '#dcfce7' : '#f1f5f9',
+            color: u.status === 'Active' ? '#166534' : '#475569',
+            padding: '2px 8px',
+            borderRadius: '12px',
+            fontSize: '12px',
+            fontWeight: 'bold'
+          }}>
+            {u.status}
+          </span>
+        ),
+        risk: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{
+              height: '8px',
+              width: '8px',
+              backgroundColor: riskColor,
+              borderRadius: '50%',
+              display: 'inline-block'
+            }}></span>
+            <span style={{ color: riskColor, fontWeight: '500' }}>
+              {u.risk}
+            </span>
+          </div>
+        ),
+      };
+    }),
+  };
+  break;
+        case 'owners':
+          modalData = {
+            title: 'Owner',
+            columns: [
+      { key: 'user', label: 'User', width: '20%' },
+      { key: 'role', label: 'Role', width: '15%' },
+      { key: 'subscription', label: 'Subscription', width: '20%' },
+      { key: 'mfa', label: 'MFA Status', width: '22%' },
+      { key: 'status', label: 'Status', width: '15%' },
+      { key: 'risk', label: 'Risk', width: '08%' }
+    ],
+    data: users.filter(u => u.role === 'Owner').map((u) => {
+      // 1. Declare variables inside the function body
+      const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
+      
+      // 2. Return the object
+      return {
+        user: u.user,
+        role: u.role,
+        subscription: u.subscription,
+        mfa: (
+          <span style={{ 
+            color: u.mfa === 'Enabled' ? '#16a34a' : '#dc2626',
+            fontWeight: '600'
+          }}>
+            {u.mfa === 'Enabled' ? '✅ Enabled' : '❌ Disabled'}
+          </span>
+        ),
+        status: (
+          <span style={{
+            backgroundColor: u.status === 'Active' ? '#dcfce7' : '#f1f5f9',
+            color: u.status === 'Active' ? '#166534' : '#475569',
+            padding: '2px 8px',
+            borderRadius: '12px',
+            fontSize: '12px',
+            fontWeight: 'bold'
+          }}>
+            {u.status}
+          </span>
+        ),
+        risk: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{
+              height: '8px',
+              width: '8px',
+              backgroundColor: riskColor,
+              borderRadius: '50%',
+              display: 'inline-block'
+            }}></span>
+            <span style={{ color: riskColor, fontWeight: '500' }}>
+              {u.risk}
+            </span>
+          </div>
+        ),
+      };
+    }),
+  };
+  break;
+        case 'contributors':
+          modalData = {
+            title: 'Contributor',
+            columns: [
+      { key: 'user', label: 'User', width: '20%' },
+      { key: 'role', label: 'Role', width: '15%' },
+      { key: 'subscription', label: 'Subscription', width: '20%' },
+      { key: 'mfa', label: 'MFA Status', width: '22%' },
+      { key: 'status', label: 'Status', width: '15%' },
+      { key: 'risk', label: 'Risk', width: '08%' }
+    ],
+    data: users.filter(u => u.role === 'Contributor').map((u) => {
+      // 1. Declare variables inside the function body
+      const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
+      
+      // 2. Return the object
+      return {
+        user: u.user,
+        role: u.role,
+        subscription: u.subscription,
+        mfa: (
+          <span style={{ 
+            color: u.mfa === 'Enabled' ? '#16a34a' : '#dc2626',
+            fontWeight: '600'
+          }}>
+            {u.mfa === 'Enabled' ? '✅ Enabled' : '❌ Disabled'}
+          </span>
+        ),
+        status: (
+          <span style={{
+            backgroundColor: u.status === 'Active' ? '#dcfce7' : '#f1f5f9',
+            color: u.status === 'Active' ? '#166534' : '#475569',
+            padding: '2px 8px',
+            borderRadius: '12px',
+            fontSize: '12px',
+            fontWeight: 'bold'
+          }}>
+            {u.status}
+          </span>
+        ),
+        risk: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{
+              height: '8px',
+              width: '8px',
+              backgroundColor: riskColor,
+              borderRadius: '50%',
+              display: 'inline-block'
+            }}></span>
+            <span style={{ color: riskColor, fontWeight: '500' }}>
+              {u.risk}
+            </span>
+          </div>
+        ),
+      };
+    }),
+  };
+  break;
+        case 'readers':
+          modalData = {
+            title: 'Reader',
+            columns: [
+      { key: 'user', label: 'User', width: '20%' },
+      { key: 'role', label: 'Role', width: '15%' },
+      { key: 'subscription', label: 'Subscription', width: '20%' },
+      { key: 'mfa', label: 'MFA Status', width: '22%' },
+      { key: 'status', label: 'Status', width: '15%' },
+      { key: 'risk', label: 'Risk', width: '08%' }
+    ],
+    data: users.filter(u => u.role === 'Reader').map((u) => {
       // 1. Declare variables inside the function body
       const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
       
@@ -1010,25 +960,45 @@ const mfaDisabledByRole = Object.entries(
       <div style={{ maxWidth: "1400px", margin: "0 auto" }}>
         {/* Header */}
         <div style={{ marginBottom: "32px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <img 
-              src="/zensustech-logo.png" 
-              alt="ZensusTech Logo" 
-              style={{ 
-                height: "48px", 
-                width: "48px",
-                objectFit: "contain"
-              }} 
-            />
-            <span style={{ 
-              fontSize: "28px", 
-              fontWeight: "bold", 
-              color: "#1890ff",
-              margin: 0
-            }}>
-              Managed Services Dashboard
-            </span>
-          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px", padding: "10px 0" }}>
+  {/* 1. The Logo - Scaled slightly for better impact */}
+  <img 
+    src="/zensustech-logo-2.png" 
+    alt="ZensusTech Logo" 
+    style={{ 
+      height: "56px", 
+      width: "56px",
+      objectFit: "contain"
+    }} 
+  />
+
+  {/* 2. The Text Stack */}
+  <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+    {/* Main Title - Darker and more authoritative */}
+    <h1 style={{ 
+      fontSize: "24px", 
+      fontWeight: "800", 
+      color: "#003a8c", // Deeper blue for better contrast
+      margin: 0,
+      lineHeight: "1.2",
+      letterSpacing: "-0.02em"
+    }}>
+      ZensusTech <span style={{ color: "#1890ff", fontWeight: "400" }}>ZenAIOps™</span>
+    </h1>
+    
+    {/* Tagline - Professional, clean, and smaller */}
+    <p style={{ 
+      fontSize: "13px", 
+      fontWeight: "500", 
+      color: "#595959", // Professional gray
+      margin: 0,
+      textTransform: "uppercase",
+      letterSpacing: "0.05em"
+    }}>
+      AI-Powered Azure Managed Services Dashboard
+    </p>
+  </div>
+</div>
           <Button type="primary" danger onClick={() => { window.location.href = "/login"; }}>
             Log Out
           </Button>
@@ -1045,9 +1015,7 @@ const mfaDisabledByRole = Object.entries(
                     value={selectedTenant}
                     onChange={handleTenantChange}
                     placeholder="Select a tenant"
-                    options={[
-        { value: tenantId!, label: tenantId! } // single tenant from context
-      ]}
+                    options={mockTenants.map((t) => ({ label: t.name, value: t.id }))}
                   />
                 </Form.Item>
               </Form>
@@ -1058,9 +1026,9 @@ const mfaDisabledByRole = Object.entries(
                   <Select
                     value={selectedSubscription}
                     onChange={handleSubscriptionChange}
-                    disabled={azureSubscriptions.length === 0}
-                    placeholder={azureSubscriptions.length === 0 ? "No enabled subscriptions found" : "Select a subscription"}
-                    options={azureSubscriptions}
+                    disabled={!selectedTenant}
+                    placeholder={selectedTenant ? "Select a subscription" : "Select a tenant first"}
+                    options={mockSubscriptions.map((s) => ({ label: s.name, value: s.id }))}
                   />
                 </Form.Item>
               </Form>
@@ -1134,7 +1102,31 @@ const mfaDisabledByRole = Object.entries(
 
                   <div style={{ padding: '24px' }}>
                     <Space direction="vertical" size={24} style={{ width: "100%" }}>
-                     {/* Executive Summary Cards */}
+                      {/* Stat Cards - Removed */}
+
+                      {/* Charts Section - Disabled */}
+                      {/* <Row gutter={16}>
+                        <Col xs={24} lg={12}>
+                          <LineChartComponent
+                            title="User Activity Trend"
+                            data={userActivityData}
+                            height={380}
+                          />
+                        </Col>
+                        <Col xs={24} lg={12}>
+                          <PieChartComponent
+                            title="Risk Distribution"
+                            data={[
+                              { name: "High Risk", value: riskDistribution.high, color: "#ff4d4f" },
+                              { name: "Medium Risk", value: riskDistribution.medium, color: "#faad14" },
+                              { name: "Low Risk", value: riskDistribution.low, color: "#52c41a" },
+                            ]}
+                            height={380}
+                          />
+                        </Col>
+                      </Row> */}
+
+                                      {/* Executive Summary Cards */}
                                                       <div style={{ marginBottom: '24px' }}>
                   <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '32px' }}>
                     Executive Summary
@@ -1158,7 +1150,7 @@ const mfaDisabledByRole = Object.entries(
                           <TeamOutlined style={{ fontSize: '32px', color: '#1890ff' }} />
                         </div>
                         <div style={{ fontSize: '36px', fontWeight: 'bold', color: '#1890ff' }}>
-                         {loading ? '—' : users.length}
+                          {azureStats?.totalUsers || 47}
                         </div>
                         <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>
                           Total Users
@@ -1169,30 +1161,62 @@ const mfaDisabledByRole = Object.entries(
 
                   {/* --- Child Row (Slightly larger than before) --- */}
                   <Row gutter={[24, 24]} justify="center">
-      {Object.entries(roleCounts).map(([role, count]) => (
-        <Col xs={22} sm={10} lg={6} key={role}>
-          <Card
-            hoverable
-            style={{
-              borderRadius: '12px',
-              borderTop: '4px solid #52c41a',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-            }}
-            bodyStyle={{ textAlign: 'center', padding: '24px' }}
-            onClick={() => handleCardClickForUserType(role.toLowerCase())}
-          >
-            <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>
-              {role}
-            </div>
+                    {/* Child: Owner */}
+                    <Col xs={22} sm={10} lg={6}> 
+                      <Card
+                        hoverable
+                        style={{ 
+                          borderRadius: '12px', 
+                          borderTop: '4px solid #52c41a',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                        }}
+                        bodyStyle={{ textAlign: 'center', padding: '24px' }} // Increased padding
+                         onClick={() => handleCardClick('owners', selectedTile)}
+                      >
+                        <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>
+                          Owner
+                        </div>
+                        <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a' }}>17</div>
+                      </Card>
+                    </Col>
 
-            <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a' }}>
-              {count}
-            </div>
-          </Card>
-        </Col>
-      ))}
-</Row>
-
+                    {/* Child: Contributor */}
+                    <Col xs={22} sm={10} lg={6}>
+                      <Card
+                        hoverable
+                        style={{ 
+                          borderRadius: '12px', 
+                          borderTop: '4px solid #52c41a',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                        }}
+                        bodyStyle={{ textAlign: 'center', padding: '24px' }} // Increased padding
+                        onClick={() => handleCardClick('contributors', selectedTile)}
+                      >
+                        <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>
+                          Contributor
+                        </div>
+                        <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a' }}>9</div>
+                      </Card>
+                    </Col>
+                    {/* Child: Reader */}
+                    <Col xs={22} sm={10} lg={6}>
+                      <Card
+                        hoverable
+                        style={{ 
+                          borderRadius: '12px', 
+                          borderTop: '4px solid #52c41a',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                        }}
+                        bodyStyle={{ textAlign: 'center', padding: '24px' }} // Increased padding
+                        onClick={() => handleCardClick('readers', selectedTile)}
+                      >
+                        <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>
+                          Reader
+                        </div>
+                        <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a' }}>21</div>
+                      </Card>
+                    </Col>
+                  </Row>
                 </div>
                       
 
@@ -1219,7 +1243,7 @@ const mfaDisabledByRole = Object.entries(
                                 <LockOutlined style={{ fontSize: '24px', color: '#52c41a' }} />
                               </div>
                               <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a', marginBottom: '4px' }}>
-                                {mfaEnabledCount} users
+                                31 users
                               </div>
                               <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
                                 MFA Coverage - Enabled
@@ -1240,7 +1264,7 @@ const mfaDisabledByRole = Object.entries(
                                 <LockOutlined style={{ fontSize: '24px', color: '#ff4d4f' }} />
                               </div>
                               <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#ff4d4f', marginBottom: '4px' }}>
-                                {mfaDisabledCount} users
+                                16 users
                               </div>
                               <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
                                 MFA Coverage - Disabled
@@ -1256,8 +1280,12 @@ const mfaDisabledByRole = Object.entries(
                             { key: "role", label: "Role" },
                             { key: "count", label: "Count" },
                           ]}
-                          data={mfaDisabledByRole} // dynamic data
-                          onRowClick={(record) => handleCardClickForMFADisabledRole(record, 'mfa-disabled-roles')}
+                          data={[
+                            { role: "Owner", count: "3" },
+                            { role: "Contributor", count: "9" },
+                            { role: "Reader", count: "4" },
+                          ]}
+                          onRowClick={(record) => handleRowClick(record, 'mfa-disabled-roles')}
                         />
                       </div>
                       {/* Subscription Tables */}
@@ -2804,8 +2832,6 @@ const mfaDisabledByRole = Object.entries(
       </div>
   );
 }
-
-
 
 export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
