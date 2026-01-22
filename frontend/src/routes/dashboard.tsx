@@ -1,13 +1,13 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Card, Form, Select, Row, Col, Space, Spin, Alert, Typography, Modal, Button } from "antd";
-import { TeamOutlined, UserOutlined, LockOutlined, ClockCircleOutlined, GlobalOutlined } from "@ant-design/icons";
+import { Card, Form, Select, Row, Col, Space, Spin, Alert, Typography, Modal, Button ,Badge, // Add this
+  Tag} from "antd";
+import { TeamOutlined,  LockOutlined, ClockCircleOutlined, GlobalOutlined } from "@ant-design/icons";
 import { DashboardTiles } from "./DashboardTiles";
 import {
   fetchDashboardStats,
   fetchUsers,
-  fetchRoleCounts,
   fetchInactivityAnalysis,
   fetchExternalUsers,
   fetchSSLCertificates,
@@ -29,6 +29,7 @@ interface AzureStats {
 
 interface User {
   user: string;
+  principalType?: string;
   role: string;
   subscription: string;
   mfa: string;
@@ -37,7 +38,6 @@ interface User {
   risk: "High" | "Medium" | "Low";
 }
 
-
 function Dashboard() {
   const { clientId, clientSecret, tenantId } = useCredentials();
   const [users, setUsers] = useState<User[]>([]);
@@ -45,88 +45,126 @@ function Dashboard() {
   const [selectedTenant, setSelectedTenant] = useState<string>(tenantId || "tenant-1");
   const [selectedSubscription, setSelectedSubscription] = useState<string>("");
   const [azureSubscriptions, setAzureSubscriptions] = useState<Array<{ value: string; label: string }>>([]);
-    // Fetch Azure subscriptions from backend
-    useEffect(() => {
-        const fetchAllAzureData = async () => {
-          // Prevent execution if credentials aren't provided
-          if (!clientId || !clientSecret || !selectedTenant) return;
+  
+  // ADD THIS: Store the token so we don't have to fetch it every time the sub changes
+  const [mgtToken, setMgtToken] = useState<string>("");
+  const [subMetadata, setSubMetadata] = useState<{
+  state: string;
+  authorizationSource: string;
+  subscriptionId: string;
+  subscriptionPolicies: { spendingLimit: string };
+} | null>(null);
 
-          try {
-            // --- 1. FETCH SUBSCRIPTIONS (Scope: Management) ---
-            const subTokenResp = await fetch("http://localhost:8000/api/v1/azure/token", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                tenant_id: selectedTenant,
-                client_id: clientId,
-                client_secret: clientSecret,
-                scope: "https://management.azure.com/.default"
-              })
-            });
+  // --- 1. INITIAL FETCH: Token & Subscriptions ---
+  useEffect(() => {
+    const initializeAzureData = async () => {
+      if (!clientId || !clientSecret || !selectedTenant) return;
+      setLoading(true);
 
-            if (!subTokenResp.ok) throw new Error("Failed to get Management token");
-            const { access_token: managementToken } = await subTokenResp.json();
+      try {
+        // Fetch Management Token
+        const subTokenResp = await fetch("http://localhost:8000/api/v1/azure/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenant_id: selectedTenant,
+            client_id: clientId,
+            client_secret: clientSecret,
+            scope: "https://management.azure.com/.default"
+          })
+        });
 
-            const subsResp = await fetch("http://localhost:8000/api/v1/azure/subscriptions", {
-              method: "GET",
-              headers: { "Authorization": `Bearer ${managementToken}` }
-            });
-            const subsData = await subsResp.json();
-            
-            const dropdownSubs = (subsData.value || [])
-              .filter((sub: any) => sub.state === "Enabled")
-              .map((sub: any) => ({
-                value: sub.subscriptionId,
-                label: `${sub.subscriptionId} - ${sub.displayName}`
-              }));
+        const { access_token: managementToken } = await subTokenResp.json();
+        setMgtToken(managementToken); // Store for reuse
 
-            setAzureSubscriptions(dropdownSubs);
-            if (dropdownSubs.length > 0) setSelectedSubscription(dropdownSubs[0].value);
+        // Fetch Subscriptions
+        const subsResp = await fetch("http://localhost:8000/api/v1/azure/subscriptions", {
+          method: "GET",
+          headers: { "Authorization": `Bearer ${managementToken}` }
+        });
+        const subsData = await subsResp.json();
+        
+        const dropdownSubs = (subsData.value || [])
+          .filter((sub: any) => sub.state === "Enabled")
+          .map((sub: any) => ({
+            value: sub.subscriptionId,
+            label: `${sub.subscriptionId} - ${sub.displayName}`
+          }));
+
+        setAzureSubscriptions(dropdownSubs);
+        
+        // Setting this will trigger the SECOND useEffect below
+        if (dropdownSubs.length > 0) {
+          setSelectedSubscription(dropdownSubs[0].value);
+        }
+
+      } catch (err: any) {
+        console.error("Initialization Error:", err.message);
+      }
+    };
+
+    initializeAzureData();
+  }, [clientId, clientSecret, selectedTenant]);
 
 
-            // --- 2. FETCH USERS & MFA (Scope: Graph) ---
-            const graphTokenResp = await fetch("http://localhost:8000/api/v1/azure/token", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                tenant_id: selectedTenant,
-                client_id: clientId,
-                client_secret: clientSecret,
-                scope: "https://graph.microsoft.com/.default"
-              })
-            });
+  // --- 2. DYNAMIC FETCH: Users (Triggers when selectedSubscription changes) ---
+  useEffect(() => {
+  const fetchSubscriptionDetails = async () => {
+    if (!selectedSubscription || !mgtToken) return;
+    
+    setLoading(true);
+    try {
+      // 1. Fetch Users (Your existing Backend Call)
+      const usersPromise = fetch("http://localhost:8000/api/v1/azure/users", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${mgtToken}` 
+        },
+        body: JSON.stringify({
+          subscription_id: selectedSubscription,
+          tenant_id: selectedTenant,
+          client_id: clientId,
+          client_secret: clientSecret,
+        })
+      });
 
-            if (!graphTokenResp.ok) throw new Error("Failed to get Graph token");
-            const { access_token: graphToken } = await graphTokenResp.json();
+      // 2. Fetch Metadata (The NEW Azure Direct Call)
+      const metadataPromise = fetch(`https://management.azure.com/subscriptions/${selectedSubscription}?api-version=2020-01-01`, {
+        method: "GET",
+        headers: { 
+          "Authorization": `Bearer ${mgtToken}`,
+          "Content-Type": "application/json"
+        }
+      });
 
-            const usersResp = await fetch("http://localhost:8000/api/v1/azure/users", {
-              method: "GET",
-              headers: { "Authorization": `Bearer ${graphToken}` }
-            });
-            
-            if (!usersResp.ok) throw new Error("Failed to fetch User data");
-            const usersData = await usersResp.json();
+      // Execute both in parallel for better performance
+      const [usersResp, metaResp] = await Promise.all([usersPromise, metadataPromise]);
 
-            setUsers(usersData); // Update your users state
-            setLoading(false);
+      if (!usersResp.ok) throw new Error("Failed to fetch User data");
+      if (!metaResp.ok) throw new Error("Failed to fetch Metadata");
 
-          } catch (err: any) {
-            console.error("Fetch Error:", err.message);
-            setAzureSubscriptions([]);
-            setUsers([]);
-          } finally {
-          }
-        };
+      const usersData = await usersResp.json();
+      const metaData = await metaResp.json();
 
-  fetchAllAzureData();
-}, [clientId, clientSecret, selectedTenant]);
+      setUsers(usersData);
+      setSubMetadata(metaData); // Update the state for your Metadata Bar
+
+    } catch (err: any) {
+      console.error("Data Fetch Error:", err.message);
+      setUsers([]);
+      setSubMetadata(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchSubscriptionDetails();
+}, [selectedSubscription, mgtToken]);
 
   const [selectedTile, setSelectedTile] = useState<string>("azure-identity");
   const [azureStats, setAzureStats] = useState<AzureStats | null>(null);
-  const [ukRoleCounts, setUkRoleCounts] = useState<Array<{ role: string; count: number }>>([]);
-  const [usRoleCounts, setUsRoleCounts] = useState<Array<{ role: string; count: number }>>([]);
   const [inactivityData, setInactivityData] = useState<Array<{ period: string; count: number }>>([]);
-  const [externalUsers, setExternalUsers] = useState<Array<{ user: string; domain: string; role: string; lastLogin: string; risk: string }>>([]);
   const [sslCertificates, setSslCertificates] = useState<SSLCertificate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -158,10 +196,7 @@ function Dashboard() {
     // Clear existing data when credentials or selected options change
     setAzureStats(null);
     setUsers([]);
-    setUkRoleCounts([]);
-    setUsRoleCounts([]);
     setInactivityData([]);
-    setExternalUsers([]);
     setSslCertificates([]);
     setError(null);
 
@@ -180,11 +215,9 @@ function Dashboard() {
       setError(null);
 
       // Fetch all data from backend in parallel
-      const [stats, userList, ukRoles, usRoles, inactivity, external] = await Promise.all([
+      const [stats, userList, inactivity] = await Promise.all([
         fetchDashboardStats(clientId, clientSecret, selectedTenant, selectedSubscription),
         fetchUsers(clientId, clientSecret, selectedTenant, selectedSubscription),
-        fetchRoleCounts(clientId, clientSecret, selectedTenant, "Prod-ERP-Azure-UK"),
-        fetchRoleCounts(clientId, clientSecret, selectedTenant, "NonProd-Apps-India"),
         fetchInactivityAnalysis(clientId, clientSecret, selectedTenant, selectedSubscription),
         fetchExternalUsers(clientId, clientSecret, selectedTenant, selectedSubscription),
       ]);
@@ -192,20 +225,15 @@ function Dashboard() {
       // Update state with fetched data
       setAzureStats(stats);
       setUsers(userList);
-      setUkRoleCounts(ukRoles);
-      setUsRoleCounts(usRoles);
       setInactivityData(inactivity);
-      setExternalUsers(external);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to load governance data";
       console.error("Error fetching governance data:", err);
       setError(`Failed to fetch data from API: ${errorMessage}. Please check if the backend is running and accessible.`);
       setAzureStats(null);
       setUsers([]);
-      setUkRoleCounts([]);
-      setUsRoleCounts([]);
       setInactivityData([]);
-      setExternalUsers([]);
+
     } finally {
       setIsLoading(false);
     }
@@ -256,18 +284,24 @@ function Dashboard() {
   return {
     title: role,
     columns: [
-      { key: 'user', label: 'User', width: '20%' },
-      { key: 'role', label: 'Role', width: '15%' },
-      { key: 'subscription', label: 'Subscription', width: '20%' },
-      { key: 'mfa', label: 'MFA Status', width: '22%' },
-      { key: 'status', label: 'Status', width: '15%' },
-      { key: 'risk', label: 'Risk', width: '8%' },
+      { key: 'user', label: 'User', width: '18%' },
+      { key: 'principalType', label: 'Type', width: '12%' }, // New Column
+      { key: 'role', label: 'Role', width: '12%' },
+      { key: 'subscription', label: 'Subscription', width: '18%' },
+      { key: 'mfa', label: 'MFA Status', width: '18%' },
+      { key: 'status', label: 'Status', width: '12%' },
+      { key: 'risk', label: 'Risk', width: '10%' }
     ],
     data: filteredUsers.map(u => {
       const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
 
       return {
         user: u.user,
+         principalType: (
+          <span style={{ color: '#64748b', fontSize: '13px', fontWeight: '500' }}>
+            {u.principalType || 'User'} 
+          </span>
+        ),
         role: u.role,
         subscription: u.subscription,
         mfa: (
@@ -328,6 +362,7 @@ function handleCardClickForMFADisabledRole(record: { role: string; count: number
       title: `MFA Disabled Users - ${record.role}`,
       columns: [
         { key: "user", label: "User" },
+        { key: "principalType", label: "Type" }, // New Column
         { key: "role", label: "Role" },
         { key: "subscription", label: "Subscription" },
         { key: "mfa", label: "MFA Status" },
@@ -339,6 +374,11 @@ function handleCardClickForMFADisabledRole(record: { role: string; count: number
 
       return {
         user: u.user,
+           principalType: (
+          <span style={{ color: '#64748b', fontSize: '13px', fontWeight: '500' }}>
+            {u.principalType || 'User'} 
+          </span>
+        ),
         role: u.role,
         subscription: u.subscription,
         mfa: (
@@ -398,28 +438,31 @@ const mfaDisabledByRole = Object.entries(
         case 'total-users':
   modalData = {
     title: 'Total Users Details',
+    // Widths redistributed to include Principal Type
     columns: [
-      { key: 'user', label: 'User', width: '20%' },
-      { key: 'role', label: 'Role', width: '15%' },
-      { key: 'subscription', label: 'Subscription', width: '20%' },
-      { key: 'mfa', label: 'MFA Status', width: '22%' },
-      { key: 'status', label: 'Status', width: '15%' },
-      { key: 'risk', label: 'Risk', width: '08%' }
+      { key: 'user', label: 'User', width: '18%' },
+      { key: 'principalType', label: 'Type', width: '12%' }, // New Column
+      { key: 'role', label: 'Role', width: '12%' },
+      { key: 'subscription', label: 'Subscription', width: '18%' },
+      { key: 'mfa', label: 'MFA Status', width: '18%' },
+      { key: 'status', label: 'Status', width: '12%' },
+      { key: 'risk', label: 'Risk', width: '10%' }
     ],
     data: users.map((u) => {
-      // 1. Declare variables inside the function body
       const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
       
-      // 2. Return the object
       return {
         user: u.user,
+        // Added mapping for Principal Type
+        principalType: (
+          <span style={{ color: '#64748b', fontSize: '13px', fontWeight: '500' }}>
+            {u.principalType || 'User'} 
+          </span>
+        ),
         role: u.role,
         subscription: u.subscription,
         mfa: (
-          <span style={{ 
-            color: u.mfa === 'Enabled' ? '#16a34a' : '#dc2626',
-            fontWeight: '600'
-          }}>
+          <span style={{ color: u.mfa === 'Enabled' ? '#16a34a' : '#dc2626', fontWeight: '600' }}>
             {u.mfa === 'Enabled' ? '✅ Enabled' : '❌ Disabled'}
           </span>
         ),
@@ -438,15 +481,11 @@ const mfaDisabledByRole = Object.entries(
         risk: (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{
-              height: '8px',
-              width: '8px',
+              height: '8px', width: '8px',
               backgroundColor: riskColor,
-              borderRadius: '50%',
-              display: 'inline-block'
+              borderRadius: '50%', display: 'inline-block'
             }}></span>
-            <span style={{ color: riskColor, fontWeight: '500' }}>
-              {u.risk}
-            </span>
+            <span style={{ color: riskColor, fontWeight: '500' }}>{u.risk}</span>
           </div>
         ),
       };
@@ -1076,17 +1115,83 @@ const mfaDisabledByRole = Object.entries(
               <Form layout="vertical">
                 <Form.Item label="Subscription">
                   <Select
-                    value={selectedSubscription}
-                    onChange={handleSubscriptionChange}
-                    disabled={azureSubscriptions.length === 0}
-                    placeholder={azureSubscriptions.length === 0 ? "No enabled subscriptions found" : "Select a subscription"}
-                    options={azureSubscriptions}
-                  />
+  loading={loading} // Add this line
+  value={selectedSubscription}
+  onChange={handleSubscriptionChange}
+  disabled={azureSubscriptions.length === 0 || loading} // Disable while loading
+  placeholder={azureSubscriptions.length === 0 ? "No enabled subscriptions found" : "Select a subscription"}
+  options={azureSubscriptions}
+/>
                 </Form.Item>
               </Form>
             </Col>
           </Row>
         </Card>
+        {/* 2. Subscription Metadata Bar */}
+{selectedSubscription && subMetadata && !loading && (
+  <Card 
+    size="small" 
+    style={{ 
+      marginBottom: "24px", 
+      borderRadius: "8px", 
+      background: "#ffffff",
+      borderLeft: `4px solid ${subMetadata.state === 'Enabled' ? '#1890ff' : '#ff4d4f'}`,
+      boxShadow: "0 2px 4px rgba(0,0,0,0.02)"
+    }}
+  >
+    <Row align="middle" gutter={24}>
+      {/* Dynamic Status Badge */}
+      <Col>
+        <div style={{ color: "#8c8c8c", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Status</div>
+        <Badge 
+          status={subMetadata.state === "Enabled" ? "success" : "error"} 
+          text={<span style={{ fontWeight: "600" }}>{subMetadata.state}</span>} 
+        />
+      </Col>
+
+      <Col style={{ borderLeft: "1px solid #f0f0f0", height: "30px" }} />
+
+      {/* Dynamic Spending Limit Tag */}
+      <Col>
+        <div style={{ color: "#8c8c8c", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Spending Limit</div>
+        <Tag 
+          color={subMetadata.subscriptionPolicies?.spendingLimit === "Off" ? "green" : "orange"} 
+          style={{ borderRadius: "10px", fontWeight: "600", margin: 0 }}
+        >
+          {subMetadata.subscriptionPolicies?.spendingLimit || "Unknown"}
+        </Tag>
+      </Col>
+
+      <Col style={{ borderLeft: "1px solid #f0f0f0", height: "30px" }} />
+
+      {/* Dynamic Auth Source */}
+      <Col>
+        <div style={{ color: "#8c8c8c", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Auth Source</div>
+        <span style={{ fontSize: "13px", fontWeight: "600", color: "#262626" }}>
+          {subMetadata.authorizationSource}
+        </span>
+      </Col>
+
+      {/* Subscription ID with Typography Copyable */}
+      <Col flex="auto" style={{ textAlign: "right" }}>
+        <div style={{ color: "#8c8c8c", fontSize: "11px", fontWeight: "600", textTransform: "uppercase", marginBottom: "4px" }}>Subscription ID</div>
+        <Typography.Text 
+          copyable={{ text: subMetadata.subscriptionId }}
+          style={{ 
+            background: "#f5f5f5", 
+            padding: "4px 8px", 
+            borderRadius: "4px", 
+            fontSize: "12px", 
+            color: "#1890ff",
+            fontFamily: "monospace" 
+          }}
+        >
+          {subMetadata.subscriptionId}
+        </Typography.Text>
+      </Col>
+    </Row>
+  </Card>
+)}
 
         {/* Error Alert */}
         {error && (
@@ -1164,26 +1269,27 @@ const mfaDisabledByRole = Object.entries(
                   <Row justify="center" style={{ marginBottom: '32px' }}>
                     <Col xs={24} sm={12} lg={6}>
                       <Card
-                        hoverable
-                        style={{
-                          borderRadius: '12px',
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                          cursor: 'pointer',
-                          borderTop: '4px solid #1890ff' // Adding a blue top border to distinguish the parent
-                        }}
-                        bodyStyle={{ padding: '24px', textAlign: 'center' }}
-                        onClick={() => handleCardClick('total-users', selectedTile)}
-                      >
-                        <div style={{ marginBottom: '8px' }}>
-                          <TeamOutlined style={{ fontSize: '32px', color: '#1890ff' }} />
-                        </div>
-                        <div style={{ fontSize: '36px', fontWeight: 'bold', color: '#1890ff' }}>
-                         {loading ? '—' : users.length}
-                        </div>
-                        <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>
-                          Total Users
-                        </div>
-                      </Card>
+  hoverable
+  loading={loading} // This automatically shows a placeholder skeleton
+  style={{
+    borderRadius: '12px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+    cursor: loading ? 'not-allowed' : 'pointer', // Disable interaction while loading
+    borderTop: '4px solid #1890ff'
+  }}
+  bodyStyle={{ padding: '24px', textAlign: 'center' }}
+  onClick={() => !loading && handleCardClick('total-users', selectedTile)} // Prevent click while loading
+>
+  <div style={{ marginBottom: '8px' }}>
+    <TeamOutlined style={{ fontSize: '32px', color: '#1890ff' }} />
+  </div>
+  <div style={{ fontSize: '36px', fontWeight: 'bold', color: '#1890ff' }}>
+    {users.length}
+  </div>
+  <div style={{ fontSize: '16px', color: '#666', fontWeight: '600' }}>
+    Total Users
+  </div>
+</Card>
                     </Col>
                   </Row>
 
@@ -1192,23 +1298,25 @@ const mfaDisabledByRole = Object.entries(
       {Object.entries(roleCounts).map(([role, count]) => (
         <Col xs={22} sm={10} lg={6} key={role}>
           <Card
-            hoverable
-            style={{
-              borderRadius: '12px',
-              borderTop: '4px solid #52c41a',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-            }}
-            bodyStyle={{ textAlign: 'center', padding: '24px' }}
-            onClick={() => handleCardClickForUserType(role.toLowerCase())}
-          >
-            <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>
-              {role}
-            </div>
+  hoverable
+  loading={loading} // Automatically shows the skeleton UI
+  style={{
+    borderRadius: '12px',
+    borderTop: '4px solid #52c41a',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+    cursor: loading ? 'not-allowed' : 'pointer'
+  }}
+  bodyStyle={{ textAlign: 'center', padding: '24px' }}
+  onClick={() => !loading && handleCardClickForUserType(role.toLowerCase())}
+>
+  <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>
+    {role}
+  </div>
 
-            <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a' }}>
-              {count}
-            </div>
-          </Card>
+  <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a' }}>
+    {count}
+  </div>
+</Card>
         </Col>
       ))}
 </Row>
@@ -1226,6 +1334,7 @@ const mfaDisabledByRole = Object.entries(
                         <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
                           <Col xs={24} sm={12}>
                             <Card
+                             loading={loading}
                               style={{
                                 borderRadius: '12px',
                                 border: '1px solid #e8e8e8',
@@ -1248,6 +1357,7 @@ const mfaDisabledByRole = Object.entries(
                           </Col>
                           <Col xs={24} sm={12}>
                             <Card
+                             loading={loading}
                               style={{
                                 borderRadius: '12px',
                                 border: '1px solid #e8e8e8',
@@ -1278,231 +1388,6 @@ const mfaDisabledByRole = Object.entries(
                           ]}
                           data={mfaDisabledByRole} // dynamic data
                           onRowClick={(record) => handleCardClickForMFADisabledRole(record, 'mfa-disabled-roles')}
-                        />
-                      </div>
-                      {/* Subscription Tables */}
-                      <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                        Subscription-Wise Access Matrix
-                      </Typography.Title>
-                      <Row gutter={16}>
-                        <Col span={12}>
-                          <TableComponent
-                            title="Subscription:Prod-ERP-Azure-UK"
-                            columns={[
-                              { key: "role", label: "Role" },
-                              { key: "count", label: "Count" },
-                            ]}
-                            data={ukRoleCounts}
-                            onRowClick={(record) => handleRowClick(record, 'subscription-roles')}
-                          />
-                        </Col>
-                        <Col span={12}>
-                          <TableComponent
-                            title="Subscription:NonProd-Apps-India"
-                            columns={[
-                              { key: "role", label: "Role" },
-                              { key: "count", label: "Count" },
-                            ]}
-                            data={usRoleCounts}
-                            onRowClick={(record) => handleRowClick(record, 'subscription-roles')}
-                          />
-                        </Col>
-                      </Row>
-
-                      {/* Inactivity Analysis */}
-                      <div style={{ marginBottom: '24px' }}>
-                        <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                          Inactivity Analysis
-                        </Typography.Title>
-
-                        {/* Inactivity Period Summary Cards */}
-                        <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-                          <Col xs={24} sm={6}>
-                            <Card
-                              style={{
-                                borderRadius: '12px',
-                                border: '1px solid #e8e8e8',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                                cursor: 'pointer'
-                              }}
-                              bodyStyle={{ padding: '20px', textAlign: 'center' }}
-                              onClick={() => handleCardClick('inactivity-<30', selectedTile)}
-                            >
-                              <div style={{ marginBottom: '8px' }}>
-                                <UserOutlined style={{ fontSize: '24px', color: '#52c41a' }} />
-                              </div>
-                              <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a', marginBottom: '4px' }}>
-                                {inactivityData.find(item => item.period === "< 30 days")?.count || 0}
-                              </div>
-                              <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
-                                &lt; 30 days
-                              </div>
-                            </Card>
-                          </Col>
-                          <Col xs={24} sm={6}>
-                            <Card
-                              style={{
-                                borderRadius: '12px',
-                                border: '1px solid #e8e8e8',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                                cursor: 'pointer'
-                              }}
-                              bodyStyle={{ padding: '20px', textAlign: 'center' }}
-                              onClick={() => handleCardClick('inactivity-30-60', selectedTile)}
-                            >
-                              <div style={{ marginBottom: '8px' }}>
-                                <UserOutlined style={{ fontSize: '24px', color: '#faad14' }} />
-                              </div>
-                              <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#faad14', marginBottom: '4px' }}>
-                                {inactivityData.find(item => item.period === "30–60 days")?.count || 0}
-                              </div>
-                              <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
-                                30–60 days
-                              </div>
-                            </Card>
-                          </Col>
-                          <Col xs={24} sm={6}>
-                            <Card
-                              style={{
-                                borderRadius: '12px',
-                                border: '1px solid #e8e8e8',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                                cursor: 'pointer'
-                              }}
-                              bodyStyle={{ padding: '20px', textAlign: 'center' }}
-                              onClick={() => handleCardClick('inactivity-60-90', selectedTile)}
-                            >
-                              <div style={{ marginBottom: '8px' }}>
-                                <UserOutlined style={{ fontSize: '24px', color: '#ff4d4f' }} />
-                              </div>
-                              <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#ff4d4f', marginBottom: '4px' }}>
-                                {inactivityData.find(item => item.period === "60–90 days")?.count || 0}
-                              </div>
-                              <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
-                                60–90 days
-                              </div>
-                            </Card>
-                          </Col>
-                          <Col xs={24} sm={6}>
-                            <Card
-                              style={{
-                                borderRadius: '12px',
-                                border: '1px solid #e8e8e8',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                                cursor: 'pointer'
-                              }}
-                              bodyStyle={{ padding: '20px', textAlign: 'center' }}
-                              onClick={() => handleCardClick('inactivity->90', selectedTile)}
-                            >
-                              <div style={{ marginBottom: '8px' }}>
-                                <UserOutlined style={{ fontSize: '24px', color: '#722ed1' }} />
-                              </div>
-                              <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#722ed1', marginBottom: '4px' }}>
-                                {inactivityData.find(item => item.period === "> 90 days")?.count || 0}
-                              </div>
-                              <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
-                                &gt; 90 days
-                              </div>
-                            </Card>
-                          </Col>
-                        </Row>
-                      </div>
-
-                      {/* Guest & External Users */}
-                      <div style={{ marginBottom: '24px' }}>
-                        <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                          Guest & External Users
-                        </Typography.Title>
-
-                        <TableComponent
-                          title=""
-                          columns={[
-                            { key: "user", label: "User" },
-                            {
-                              key: "domain",
-                              label: "Domain",
-                              render: (value) => (
-                                <span style={{
-                                  color: value === "External" ? "#faad14" : "#1890ff",
-                                  fontWeight: "500"
-                                }}>
-                                  <UserOutlined style={{ marginRight: "6px" }} />
-                                  {value}
-                                </span>
-                              ),
-                            },
-                            {
-                              key: "role",
-                              label: "Role",
-                              render: (value) => {
-                                const colors: Record<string, string> = {
-                                  "Reader": "#52c41a",
-                                  "Contributor": "#1890ff",
-                                  "Owner": "#722ed1"
-                                };
-                                return (
-                                  <span style={{
-                                    color: colors[value as string] || "#666",
-                                    fontWeight: "500"
-                                  }}>
-                                    {value}
-                                  </span>
-                                );
-                              },
-                            },
-                            {
-                              key: "lastLogin",
-                              label: "Last Login",
-                              render: (value) => {
-                                const days = parseInt(value.split(' ')[0]);
-                                let color = "#52c41a"; // Green for recent
-
-                                if (days > 90) color = "#722ed1"; // Purple for very old
-                                else if (days > 60) color = "#ff4d4f"; // Red for old
-                                else if (days > 30) color = "#faad14"; // Amber for moderate
-
-                                return (
-                                  <span style={{
-                                    color: color,
-                                    fontWeight: "500",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "4px"
-                                  }}>
-                                    <ClockCircleOutlined />
-                                    {value}
-                                  </span>
-                                );
-                              },
-                            },
-                            {
-                              key: "risk",
-                              label: "Risk",
-                              render: (value) => {
-                                const colors: Record<string, string> = {
-                                  "Critical": "#ff4d4f",
-                                  "High": "#faad14",
-                                  "Medium": "#faad14",
-                                  "Low": "#52c41a"
-                                };
-
-                                return (
-                                  <span style={{
-                                    backgroundColor: colors[value as string] || "#666",
-                                    color: "white",
-                                    padding: "4px 8px",
-                                    borderRadius: "12px",
-                                    fontSize: "12px",
-                                    fontWeight: "500",
-                                    display: "inline-block"
-                                  }}>
-                                    {value}
-                                  </span>
-                                );
-                              },
-                            },
-                          ]}
-                          data={externalUsers}
                         />
                       </div>
                     </Space>

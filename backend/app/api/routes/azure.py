@@ -1,8 +1,12 @@
+import string
+from typing import List
 from fastapi import APIRouter, HTTPException, Header, Request, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import List, Optional
 import requests
 import logging
+import httpx
 import sys
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -26,11 +30,10 @@ class SubscriptionRequest(BaseModel):
     client_secret: str
 
 class UserRequest(BaseModel):
+    subscription_id: str
     tenant_id: str
     client_id: str
     client_secret: str
-
-
 
 @router.post("/azure/token")
 def get_token(req: TokenRequest):
@@ -47,6 +50,23 @@ def get_token(req: TokenRequest):
         raise HTTPException(status_code=400, detail=response.json())
     return response.json()
 
+async def get_graph_token(tenant_id: str, client_id: str, client_secret: str) -> str:
+    """Manual HTTP call to get a Graph Token without using the Azure SDK."""
+    url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+    
+    data = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "client_credentials",
+        "scope": "https://graph.microsoft.com/.default"
+    }
+    
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, data=data)
+        if resp.status_code != 200:
+            raise Exception(f"Failed to get Graph token: {resp.text}")
+        return resp.json().get("access_token")
+
 
 @router.get("/azure/subscriptions")
 def get_subscriptions(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
@@ -58,11 +78,26 @@ def get_subscriptions(credentials: HTTPAuthorizationCredentials = Depends(bearer
         raise HTTPException(status_code=400, detail=response.json())
     return response.json()
 
-@router.get("/azure/users")
-async def get_users_info(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
-    print('--- /azure/users endpoint called ---', file=sys.stdout, flush=True)
-    print(f"Authorization header: {credentials.scheme} {credentials.credentials}", file=sys.stdout, flush=True)
+@router.post("/azure/users")
+async def get_users_info(
+    request_data: UserRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
+):
+    try:
+        # 1. Use the Management Token from Header
+        mgmt_token = credentials.credentials
+        
+        # 2. Get a fresh Graph Token
+        graph_token = await get_graph_token(
+            request_data.tenant_id, 
+            request_data.client_id, 
+            request_data.client_secret
+        )
 
-    token = credentials.credentials
-    users = await build_user_objects(token)
-    return users
+        # 3. Build and return
+        return await build_user_objects(request_data.subscription_id, mgmt_token, graph_token)
+    
+    except Exception as e:
+        print(f"Critical Route Error: {str(e)}", flush=True)
+        raise HTTPException(status_code=500, detail="Failed to sync Azure users")
+ 
