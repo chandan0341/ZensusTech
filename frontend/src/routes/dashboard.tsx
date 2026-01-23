@@ -1,9 +1,9 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Card, Form, Select, Row, Col, Space, Spin, Alert, Typography, Modal, Button ,Badge, // Add this
+import { Card, Form, Select, Row, Col, Space, Spin, Alert, Typography, Modal, Button ,Badge,Tooltip, // Add this
   Tag} from "antd";
-import { TeamOutlined,  LockOutlined, ClockCircleOutlined, GlobalOutlined } from "@ant-design/icons";
+import { TeamOutlined,  LockOutlined, ClockCircleOutlined, GlobalOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
 import { DashboardTiles } from "./DashboardTiles";
 import {
   fetchUsers,
@@ -1207,33 +1207,84 @@ const mfaDisabledByRole = Object.entries(
                 Identity Type Distribution
               </Typography.Title>
               <Row gutter={[24, 24]} justify="center">
-                <Col xs={24} sm={12} lg={8}>
-                  <Card
-                    hoverable
-                    loading={isLoading}
-                    style={{ borderRadius: '12px', borderTop: '4px solid #722ed1', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-                    bodyStyle={{ textAlign: 'center', padding: '24px' }}
-                  >
-                    <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>Foreign Groups</div>
-                    <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#722ed1' }}>
-                      {foreignGroupsCount}
-                    </div>
-                  </Card>
-                </Col>
-                <Col xs={24} sm={12} lg={8}>
-                  <Card
-                    hoverable
-                    loading={isLoading}
-                    style={{ borderRadius: '12px', borderTop: '4px solid #eb2f96', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-                    bodyStyle={{ textAlign: 'center', padding: '24px' }}
-                  >
-                    <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>Service Principals</div>
-                    <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#eb2f96' }}>
-                      {servicePrincipalsCount}
-                    </div>
-                  </Card>
-                </Col>
-              </Row>
+  {/* Foreign Groups Card */}
+  <Col xs={24} sm={12} lg={8}>
+    <Card
+      hoverable
+      loading={isLoading || foreignGroupsCount === undefined}
+      style={{ 
+        borderRadius: '12px', 
+        borderTop: `4px solid ${foreignGroupsCount && foreignGroupsCount > 1 ? '#faad14' : '#52c41a'}`, 
+        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+        height: '160px', // Forces consistent height
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center'
+      }}
+      bodyStyle={{ padding: '0px' }} // Controlled by the flex container above
+    >
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>
+          Foreign Groups
+        </div>
+        <div style={{ 
+          fontSize: '32px', // Slightly larger for better impact
+          fontWeight: 'bold', 
+          color: foreignGroupsCount && foreignGroupsCount > 1 ? '#faad14' : '#52c41a',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          {foreignGroupsCount ?? 0}
+          {foreignGroupsCount && foreignGroupsCount > 1 && (
+            <Tooltip title="Multiple assignments detected for the same identity.">
+              <ExclamationCircleOutlined style={{ marginLeft: '8px', fontSize: '20px' }} />
+            </Tooltip>
+          )}
+        </div>
+      </div>
+    </Card>
+  </Col>
+
+  {/* Service Principals Card */}
+  <Col xs={24} sm={12} lg={8}>
+    <Card
+      hoverable
+      loading={isLoading || servicePrincipalsCount === undefined}
+      style={{ 
+        borderRadius: '12px', 
+        borderTop: `4px solid ${servicePrincipalsCount && servicePrincipalsCount > 1 ? '#faad14' : '#52c41a'}`, 
+        boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+        height: '160px', // Forces consistent height
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center'
+      }}
+      bodyStyle={{ padding: '0px' }} // Controlled by the flex container above
+    >
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>
+          Foreign Groups
+        </div>
+        <div style={{ 
+          fontSize: '32px', // Slightly larger for better impact
+          fontWeight: 'bold', 
+          color: servicePrincipalsCount && servicePrincipalsCount > 1 ? '#faad14' : '#52c41a',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          {servicePrincipalsCount ?? 0}
+          {servicePrincipalsCount && servicePrincipalsCount > 1 && (
+            <Tooltip title="Multiple assignments detected for the same identity.">
+              <ExclamationCircleOutlined style={{ marginLeft: '8px', fontSize: '20px' }} />
+            </Tooltip>
+          )}
+        </div>
+      </div>
+    </Card>
+  </Col>
+</Row>
             </div>
           )}</Space></div>
                   <div style={{ padding: '24px' }}>
