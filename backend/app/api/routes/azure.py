@@ -50,7 +50,7 @@ def get_token(req: TokenRequest):
         raise HTTPException(status_code=400, detail=response.json())
     return response.json()
 
-async def get_graph_token(tenant_id: str, client_id: str, client_secret: str) -> str:
+async def get_graph_token(tenant_id: str, client_id: str, client_secret: str,scope: str) -> str:
     """Manual HTTP call to get a Graph Token without using the Azure SDK."""
     url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
     
@@ -58,7 +58,7 @@ async def get_graph_token(tenant_id: str, client_id: str, client_secret: str) ->
         "client_id": client_id,
         "client_secret": client_secret,
         "grant_type": "client_credentials",
-        "scope": "https://graph.microsoft.com/.default"
+        "scope": scope
     }
     
     async with httpx.AsyncClient() as client:
@@ -80,19 +80,26 @@ def get_subscriptions(credentials: HTTPAuthorizationCredentials = Depends(bearer
 
 @router.post("/azure/users")
 async def get_users_info(
-    request_data: UserRequest,
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)
+    request_data: UserRequest
 ):
-    try:
-        # 1. Use the Management Token from Header
-        mgmt_token = credentials.credentials
-        
+    try:       
         # 2. Get a fresh Graph Token
         graph_token = await get_graph_token(
             request_data.tenant_id, 
             request_data.client_id, 
-            request_data.client_secret
+            request_data.client_secret,
+            "https://graph.microsoft.com/.default"
         )
+
+        mgmt_token = await get_graph_token(
+                request_data.tenant_id, 
+                request_data.client_id, 
+                request_data.client_secret,
+                "https://management.azure.com/.default"
+            )
+        print(f'--- Using Management Token: {mgmt_token}... ---', flush=True)    
+        print(f'--- Using Graph Token: {graph_token}... ---', flush=True)
+        print(f'subscription_id: {request_data.subscription_id}', flush=True)
 
         # 3. Build and return
         return await build_user_objects(request_data.subscription_id, mgmt_token, graph_token)
@@ -110,7 +117,8 @@ async def get_tenant_users_info(
         graph_token = await get_graph_token(
             request_data.tenant_id, 
             request_data.client_id, 
-            request_data.client_secret
+            request_data.client_secret,
+            "https://graph.microsoft.com/.default"
         )
 
         # 3. Build and return

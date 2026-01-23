@@ -68,6 +68,9 @@ async def execute_graph_batch(client, user_chunk, grouped_data, token):
 async def build_user_objects(subscription_id: str, mgmt_token: str, graph_token: str):
     """Main Orchestrator."""
     start_time = time.perf_counter()
+    print(f'--- Using Management Token: {mgmt_token}... ---', flush=True)    
+    print(f'--- Using Graph Token: {graph_token}... ---', flush=True)
+    print(f'subscription_id: {subscription_id}', flush=True)
     print('--- Starting Modular Execution ---', flush=True)
     
     async with httpx.AsyncClient(timeout=15.0) as client:
@@ -219,11 +222,11 @@ async def build_tenant_wide_user_dashboard(graph_token: str):
 
                     final_report.append({
                         "user": uid,
-                        "displayName": u.get("displayName") or "Unknown",
+                        "user": u.get("displayName") or "Unknown",
                         "email": u.get("userPrincipalName") or "N/A",
                         "status": status,
                         "mfa": mfa_text,
-                        "roles": roles_string,
+                        "role": roles_string,
                         "risk": risk
                     })
 

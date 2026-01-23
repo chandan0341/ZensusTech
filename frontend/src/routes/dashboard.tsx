@@ -6,10 +6,7 @@ import { Card, Form, Select, Row, Col, Space, Spin, Alert, Typography, Modal, Bu
 import { TeamOutlined,  LockOutlined, ClockCircleOutlined, GlobalOutlined } from "@ant-design/icons";
 import { DashboardTiles } from "./DashboardTiles";
 import {
-  fetchDashboardStats,
   fetchUsers,
-  fetchInactivityAnalysis,
-  fetchExternalUsers,
   fetchSSLCertificates,
   SSLCertificate,
 } from "@/services/dashboardApi";
@@ -17,15 +14,6 @@ import {
   TableComponent
 } from "@/components/TailAdminReports";
 import { useCredentials } from "@/context/CredentialsContext";
-
-interface AzureStats {
-  totalUsers: number;
-  inactiveUsers: number;
-  mfaDisabled: number;
-  owners: number;
-  guestUsers: number;
-  highRiskFindings: number;
-}
 
 interface User {
   user: string;
@@ -118,62 +106,70 @@ function Dashboard() {
 
   // --- 2. DYNAMIC FETCH: Users (Triggers when selectedSubscription changes) ---
   useEffect(() => {
-    if (!selectedSubscription || !mgtToken) return;
-  const fetchSubscriptionDetails = async () => {
-    
+  // 1. Guard: We need at least the Tenant and MgtToken to do anything
+  if (!selectedTenant || !mgtToken) return;
+
+  const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch Users (Your existing Backend Call)
-      const usersPromise = fetch("http://localhost:8000/api/v1/azure/users", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${mgtToken}` 
-        },
-        body: JSON.stringify({
-          subscription_id: selectedSubscription,
-          tenant_id: selectedTenant,
-          client_id: clientId,
-          client_secret: clientSecret,
-        })
-      });
+      // FLOW A: A Subscription is selected
+      if (selectedSubscription) {
+        console.log("Fetching Subscription-specific users + Metadata");
+        
+        const usersPromise = fetch("http://localhost:8000/api/v1/azure/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subscription_id: selectedSubscription,
+            tenant_id: selectedTenant,
+            client_id: clientId,
+            client_secret: clientSecret,
+          })
+        });
 
-      // 2. Fetch Metadata (The NEW Azure Direct Call)
-      const metadataPromise = fetch(`https://management.azure.com/subscriptions/${selectedSubscription}?api-version=2020-01-01`, {
-        method: "GET",
-        headers: { 
-          "Authorization": `Bearer ${mgtToken}`,
-          "Content-Type": "application/json"
-        }
-      });
+        const metadataPromise = fetch(`https://management.azure.com/subscriptions/${selectedSubscription}?api-version=2020-01-01`, {
+          method: "GET",
+          headers: { "Authorization": `Bearer ${mgtToken}` }
+        });
 
-      // Execute both in parallel for better performance
-      const [usersResp, metaResp] = await Promise.all([usersPromise, metadataPromise]);
+        const [usersResp, metaResp] = await Promise.all([usersPromise, metadataPromise]);
+        
+        setUsers(await usersResp.json());
+        setSubMetadata(await metaResp.json());
+      } 
+      
+      // FLOW B: Only Tenant is selected (No Subscription yet)
+      else {
+        console.log("Fetching all Tenant users (Initial View)");
+        
+        const response = await fetch("http://localhost:8000/api/v1/azure/tenant/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenant_id: selectedTenant,
+            client_id: clientId,
+            client_secret: clientSecret,
+          })
+        });
 
-      if (!usersResp.ok) throw new Error("Failed to fetch User data");
-      if (!metaResp.ok) throw new Error("Failed to fetch Metadata");
-
-      const usersData = await usersResp.json();
-      const metaData = await metaResp.json();
-
-      setUsers(usersData);
-      setSubMetadata(metaData); // Update the state for your Metadata Bar
+        const data = await response.json();
+        setUsers(data);
+        setSubMetadata(null); // Clear metadata since no sub is selected
+      }
 
     } catch (err: any) {
-      console.error("Data Fetch Error:", err.message);
+      console.error("Fetch Error:", err.message);
       setUsers([]);
-      setSubMetadata(null);
     } finally {
       setLoading(false);
     }
   };
 
-  fetchSubscriptionDetails();
-}, [selectedSubscription, mgtToken]);
+  fetchData();
+}, [selectedTenant, selectedSubscription, mgtToken]);
+
 
   const [selectedTile, setSelectedTile] = useState<string>("azure-identity");
-  const [azureStats, setAzureStats] = useState<AzureStats | null>(null);
-  const [inactivityData, setInactivityData] = useState<Array<{ period: string; count: number }>>([]);
   const [sslCertificates, setSslCertificates] = useState<SSLCertificate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -203,9 +199,7 @@ function Dashboard() {
 
   useEffect(() => {
     // Clear existing data when credentials or selected options change
-    setAzureStats(null);
     setUsers([]);
-    setInactivityData([]);
     setSslCertificates([]);
     setError(null);
 
@@ -224,24 +218,17 @@ function Dashboard() {
       setError(null);
 
       // Fetch all data from backend in parallel
-      const [stats, userList, inactivity] = await Promise.all([
-        fetchDashboardStats(clientId, clientSecret, selectedTenant, selectedSubscription),
-        fetchUsers(clientId, clientSecret, selectedTenant, selectedSubscription),
-        fetchInactivityAnalysis(clientId, clientSecret, selectedTenant, selectedSubscription),
-        fetchExternalUsers(clientId, clientSecret, selectedTenant, selectedSubscription),
-      ]);
+      const [userList] = await Promise.all([
+        fetchUsers(clientId, clientSecret, selectedTenant, selectedSubscription)      ]);
 
       // Update state with fetched data
-      setAzureStats(stats);
       setUsers(userList);
-      setInactivityData(inactivity);
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to load governance data";
       console.error("Error fetching governance data:", err);
       setError(`Failed to fetch data from API: ${errorMessage}. Please check if the backend is running and accessible.`);
-      setAzureStats(null);
       setUsers([]);
-      setInactivityData([]);
 
     } finally {
       setIsLoading(false);
@@ -643,74 +630,7 @@ const mfaDisabledByRole = Object.entries(
     }),
   };
   break;
-        case 'inactivity-<30':
-          modalData = {
-            title: 'Active Users (< 30 days)',
-            columns: [
-              { key: 'property', label: 'Property', width: '30%' },
-              { key: 'value', label: 'Value', width: '70%' },
-            ],
-            data: [
-              { property: 'Inactivity Period', value: '< 30 days' },
-              { property: 'User Count', value: inactivityData.find(item => item.period === "< 30 days")?.count || 0 },
-              { property: 'Status', value: 'Active' },
-              { property: 'Risk Level', value: 'Low' },
-              { property: 'Recommendation', value: 'Monitor regularly' },
-              { property: 'Last Activity', value: 'Within last month' },
-            ],
-          };
-          break;
-        case 'inactivity-30-60':
-          modalData = {
-            title: 'Moderately Inactive Users (30-60 days)',
-            columns: [
-              { key: 'property', label: 'Property', width: '30%' },
-              { key: 'value', label: 'Value', width: '70%' },
-            ],
-            data: [
-              { property: 'Inactivity Period', value: '30-60 days' },
-              { property: 'User Count', value: inactivityData.find(item => item.period === "30–60 days")?.count || 0 },
-              { property: 'Status', value: 'Moderately Inactive' },
-              { property: 'Risk Level', value: 'Medium' },
-              { property: 'Recommendation', value: 'Send reminder notifications' },
-              { property: 'Last Activity', value: '1-2 months ago' },
-            ],
-          };
-          break;
-        case 'inactivity-60-90':
-          modalData = {
-            title: 'Highly Inactive Users (60-90 days)',
-            columns: [
-              { key: 'property', label: 'Property', width: '30%' },
-              { key: 'value', label: 'Value', width: '70%' },
-            ],
-            data: [
-              { property: 'Inactivity Period', value: '60-90 days' },
-              { property: 'User Count', value: inactivityData.find(item => item.period === "60–90 days")?.count || 0 },
-              { property: 'Status', value: 'Highly Inactive' },
-              { property: 'Risk Level', value: 'High' },
-              { property: 'Recommendation', value: 'Immediate action required' },
-              { property: 'Last Activity', value: '2-3 months ago' },
-            ],
-          };
-          break;
-        case 'inactivity->90':
-          modalData = {
-            title: 'Critically Inactive Users (> 90 days)',
-            columns: [
-              { key: 'property', label: 'Property', width: '30%' },
-              { key: 'value', label: 'Value', width: '70%' },
-            ],
-            data: [
-              { property: 'Inactivity Period', value: '> 90 days' },
-              { property: 'User Count', value: inactivityData.find(item => item.period === "> 90 days")?.count || 0 },
-              { property: 'Status', value: 'Critically Inactive' },
-              { property: 'Risk Level', value: 'Critical' },
-              { property: 'Recommendation', value: 'Security review required' },
-              { property: 'Last Activity', value: 'Over 3 months ago' },
-            ],
-          };
-          break;
+       
       }
     } else if (currentTile === 'microsoft-365') {
       switch (cardType) {
@@ -1220,7 +1140,7 @@ const mfaDisabledByRole = Object.entries(
      
 
         {/* Dashboard Content */}
-        {!isLoading && azureStats && (
+        {!isLoading &&  users.length > 0 && (
           <Row gutter={24} style={{ marginTop: '24px' }}>
             {/* Tile Navigation Sidebar */}
             <Col xs={24} lg={6}>
