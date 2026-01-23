@@ -66,41 +66,48 @@ async def execute_graph_batch(client, user_chunk, grouped_data, token):
     return {res["id"]: res for res in resp.json().get("responses", [])} if resp.status_code == 200 else {}
 
 async def build_user_objects(subscription_id: str, mgmt_token: str, graph_token: str):
-    """Main Orchestrator."""
+    """Main Orchestrator - Counting Total Assignments to highlight issues."""
     start_time = time.perf_counter()
-    print(f'--- Using Management Token: {mgmt_token}... ---', flush=True)    
-    print(f'--- Using Graph Token: {graph_token}... ---', flush=True)
-    print(f'subscription_id: {subscription_id}', flush=True)
-    print('--- Starting Modular Execution ---', flush=True)
     
     async with httpx.AsyncClient(timeout=15.0) as client:
-        # 1. Fetch Assignments
+        # 1. Fetch Assignments (The JSON with duplicates)
         assignments = await fetch_role_assignments(client, subscription_id, mgmt_token)
         if not assignments:
-            return []
+            return {"users": [], "servicePrincipalsCount": 0, "foreignGroupsCount": 0}
 
-        # 2. Process/Group Data
+        # 2. Counters for Total Assignments
+        sp_count = 0
+        fg_count = 0
         grouped = {}
+
         for a in assignments:
             p = a["properties"]
             pid = p["principalId"]
-            role_name = AZURE_ROLES.get(p["roleDefinitionId"].split('/')[-1], "Custom Role")
             p_type = p.get("principalType", "User")
+            
+            # UPDATED: Increment every time it appears in the JSON
+            if p_type == "ForeignGroup":
+                fg_count += 1
+            elif p_type == "ServicePrincipal":
+                sp_count += 1
+
+            # Grouping logic for the Users Table
+            role_id = p["roleDefinitionId"].split('/')[-1]
+            role_name = AZURE_ROLES.get(role_id, "Custom Role")
             
             if pid not in grouped:
                 grouped[pid] = {"roles": {role_name}, "type": p_type}
             else:
                 grouped[pid]["roles"].add(role_name)
 
-        user_ids = list(grouped.keys())
-        final_results = []
+        # 3. Batch Processing for 'User' types
+        user_ids = [pid for pid, data in grouped.items() if data["type"] == "User"]
+        final_user_results = []
 
-        # 3. Batch Processing in chunks of 5
         for i in range(0, len(user_ids), 5):
             chunk = user_ids[i:i + 5]
             batch_data = await execute_graph_batch(client, chunk, grouped, graph_token)
 
-            # 4. Data Assembly
             for pid in chunk:
                 u_res = batch_data.get(f"u_{pid}", {})
                 m_res = batch_data.get(f"m_{pid}", {})
@@ -110,28 +117,27 @@ async def build_user_objects(subscription_id: str, mgmt_token: str, graph_token:
 
                 u_body = u_res.get("body", {})
                 is_active = u_body.get("accountEnabled", True)
-                p_type = grouped[pid]["type"]
-
-                mfa_status, risk = "N/A", "Low"
-
-                if p_type == "User":
-                    m_val = m_res.get("body", {}).get("value", []) if m_res.get("status") == 200 else []
-                    mfa_enabled = any(m.get("@odata.type") != "#microsoft.graph.passwordAuthenticationMethod" for m in m_val)
-                    mfa_status = "Enabled" if mfa_enabled else "Disabled"
-                    risk = "Low" if mfa_enabled else ("High" if not is_active else "Medium")
-
-                final_results.append({
+                
+                m_val = m_res.get("body", {}).get("value", []) if m_res.get("status") == 200 else []
+                mfa_enabled = any(m.get("@odata.type") != "#microsoft.graph.passwordAuthenticationMethod" for m in m_val)
+                
+                final_user_results.append({
                     "user": u_body.get("displayName", "Unknown"),
                     "email": u_body.get("userPrincipalName", "N/A"),
                     "role": ", ".join(sorted(list(grouped[pid]["roles"]))),
-                    "mfa": mfa_status,
+                    "mfa": "Enabled" if mfa_enabled else "Disabled",
                     "status": "Active" if is_active else "Inactive",
-                    "risk": risk,
-                    "principalType": p_type
+                    "risk": "Low" if mfa_enabled else "High",
+                    "principalType": "User"
                 })
 
-    print(f"--- Completed in {time.perf_counter() - start_time:.2f}s ---", flush=True)
-    return final_results
+    # RETURN THE RAW COUNTS
+    return {
+        "users": final_user_results,
+        "servicePrincipalsCount": sp_count, # Total assignments
+        "foreignGroupsCount": fg_count      # Total assignments (will be 2 for your example)
+    }
+    
 async def fetch_graph_batch(client: httpx.AsyncClient, batch_requests: List[Dict], token: str) -> List[Dict]:
     url = f"{GRAPH_BASE}/$batch"
     payload = {"requests": batch_requests}

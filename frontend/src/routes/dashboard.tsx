@@ -30,6 +30,8 @@ function Dashboard() {
   const { clientId, clientSecret, tenantId } = useCredentials();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [foreignGroupsCount, setForeignGroupsCount] = useState<number | null>(null);
+  const [servicePrincipalsCount, setServicePrincipalsCount] =  useState<number | null>(null);
   const [selectedTenant, setSelectedTenant] = useState<string>(tenantId || "tenant-1");
   const [selectedSubscription, setSelectedSubscription] = useState<string>("");
   const [azureSubscriptions, setAzureSubscriptions] = useState<Array<{ value: string; label: string }>>([]);
@@ -132,10 +134,22 @@ function Dashboard() {
           headers: { "Authorization": `Bearer ${mgtToken}` }
         });
 
-        const [usersResp, metaResp] = await Promise.all([usersPromise, metadataPromise]);
-        
-        setUsers(await usersResp.json());
-        setSubMetadata(await metaResp.json());
+        // 1. Wait for the fetch responses
+const [usersResp, metaResp] = await Promise.all([usersPromise, metadataPromise]);
+
+// 2. Parse the JSON body (this is an async operation)
+const data = await usersResp.json();
+
+// 3. Access properties using dot notation (or bracket notation)
+const usersData = data.users || [];
+const foreignGroupsCount = data.foreignGroupsCount || 0;
+const servicePrincipalsCount = data.servicePrincipalsCount || 0;
+setForeignGroupsCount(foreignGroupsCount);
+setServicePrincipalsCount(servicePrincipalsCount);
+
+
+setUsers(usersData);
+setSubMetadata(await metaResp.json());
       } 
       
       // FLOW B: Only Tenant is selected (No Subscription yet)
@@ -160,6 +174,8 @@ function Dashboard() {
     } catch (err: any) {
       console.error("Fetch Error:", err.message);
       setUsers([]);
+      setForeignGroupsCount(0);
+      setServicePrincipalsCount(0);
     } finally {
       setLoading(false);
     }
@@ -273,9 +289,6 @@ function Dashboard() {
 
   const mfaEnabledCount = users.filter(user => user.mfa === "Enabled").length;
   const mfaDisabledCount = users.filter(user => user.mfa === "Disabled").length;
-  // Add these inside your component function
-  const foreignGroupsCount = 5; // Static value for now
-  const servicePrincipalsCount = 12; // Static value for now
 
  function getModalDataByRole(role: string, users: User[]) {
   const filteredUsers = users.filter(u => u.role.toLowerCase() === role.toLowerCase());
@@ -1187,40 +1200,42 @@ const mfaDisabledByRole = Object.entries(
                   <div style={{ padding: '24px' }}>
                     <Space direction="vertical" size={24} style={{ width: "100%" }}>
           
-          {/* NEW STATIC SECTION: Identity Type Distribution */}
-          <div style={{ marginBottom: '24px' }}>
-            <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-              Identity Type Distribution
-            </Typography.Title>
-            <Row gutter={[24, 24]} justify="center">
-              <Col xs={24} sm={12} lg={8}>
-                <Card
-                  hoverable
-                  loading={isLoading}
-                  style={{ borderRadius: '12px', borderTop: '4px solid #722ed1', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-                  bodyStyle={{ textAlign: 'center', padding: '24px' }}
-                >
-                  <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>Foreign Groups</div>
-                  <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#722ed1' }}>
-                    {foreignGroupsCount}
-                  </div>
-                </Card>
-              </Col>
-              <Col xs={24} sm={12} lg={8}>
-                <Card
-                  hoverable
-                  loading={isLoading}
-                  style={{ borderRadius: '12px', borderTop: '4px solid #eb2f96', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-                  bodyStyle={{ textAlign: 'center', padding: '24px' }}
-                >
-                  <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>Service Principals</div>
-                  <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#eb2f96' }}>
-                    {servicePrincipalsCount}
-                  </div>
-                </Card>
-              </Col>
-            </Row>
-          </div></Space></div>
+          {/* NEW SECTION: Conditioned on selectedSubscription */}
+          {selectedSubscription && (
+            <div style={{ marginBottom: '24px' }}>
+              <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
+                Identity Type Distribution
+              </Typography.Title>
+              <Row gutter={[24, 24]} justify="center">
+                <Col xs={24} sm={12} lg={8}>
+                  <Card
+                    hoverable
+                    loading={isLoading}
+                    style={{ borderRadius: '12px', borderTop: '4px solid #722ed1', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                    bodyStyle={{ textAlign: 'center', padding: '24px' }}
+                  >
+                    <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>Foreign Groups</div>
+                    <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#722ed1' }}>
+                      {foreignGroupsCount}
+                    </div>
+                  </Card>
+                </Col>
+                <Col xs={24} sm={12} lg={8}>
+                  <Card
+                    hoverable
+                    loading={isLoading}
+                    style={{ borderRadius: '12px', borderTop: '4px solid #eb2f96', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                    bodyStyle={{ textAlign: 'center', padding: '24px' }}
+                  >
+                    <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>Service Principals</div>
+                    <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#eb2f96' }}>
+                      {servicePrincipalsCount}
+                    </div>
+                  </Card>
+                </Col>
+              </Row>
+            </div>
+          )}</Space></div>
                   <div style={{ padding: '24px' }}>
                     <Space direction="vertical" size={24} style={{ width: "100%" }}>
                      {/* Executive Summary Cards */}
