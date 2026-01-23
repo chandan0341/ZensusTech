@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import requests
 import sys
-from ..services.azure_helpers import build_user_objects
+from ..services.azure_helpers import build_tenant_wide_user_dashboard, build_user_objects
 from .governance import  User
 
 router = APIRouter(tags=["azure"])
@@ -100,4 +100,23 @@ async def get_users_info(
     except Exception as e:
         print(f"Critical Route Error: {str(e)}", flush=True)
         raise HTTPException(status_code=500, detail="Failed to sync Azure users")
+
+@router.post("/azure/tenant/users")
+async def get_tenant_users_info(
+    request_data: SubscriptionRequest
+):
+    try:        
+        # 2. Get a fresh Graph Token
+        graph_token = await get_graph_token(
+            request_data.tenant_id, 
+            request_data.client_id, 
+            request_data.client_secret
+        )
+
+        # 3. Build and return
+        return await build_tenant_wide_user_dashboard(graph_token)
+    
+    except Exception as e:
+        print(f"Critical Route Error: {str(e)}", flush=True)
+        raise HTTPException(status_code=500, detail="Failed to sync Azure users")    
  

@@ -58,8 +58,13 @@ function Dashboard() {
   // --- 1. INITIAL FETCH: Token & Subscriptions ---
   useEffect(() => {
     const initializeAzureData = async () => {
-      if (!clientId || !clientSecret || !selectedTenant) return;
-      setLoading(true);
+     // 1. Validation Check
+    if (!clientId || !clientSecret || !selectedTenant) {
+      setLoading(false); // Ensure loading is off if we can't even start
+      return;
+    }
+
+    setLoading(true);
 
       try {
         // Fetch Management Token
@@ -94,13 +99,17 @@ function Dashboard() {
         setAzureSubscriptions(dropdownSubs);
         
         // Setting this will trigger the SECOND useEffect below
-        if (dropdownSubs.length > 0) {
-          setSelectedSubscription(dropdownSubs[0].value);
-        }
+        // if (dropdownSubs.length > 0) {
+        //   setSelectedSubscription(dropdownSubs[0].value);
+        // }
 
       } catch (err: any) {
-        console.error("Initialization Error:", err.message);
-      }
+      console.error("Initialization Error:", err.message);
+      setError("Failed to load subscriptions. Check credentials.");
+    } finally {
+      // This is crucial: This unlocks the dropdown so you can actually click it
+      setLoading(false); 
+    }
     };
 
     initializeAzureData();
@@ -109,8 +118,8 @@ function Dashboard() {
 
   // --- 2. DYNAMIC FETCH: Users (Triggers when selectedSubscription changes) ---
   useEffect(() => {
-  const fetchSubscriptionDetails = async () => {
     if (!selectedSubscription || !mgtToken) return;
+  const fetchSubscriptionDetails = async () => {
     
     setLoading(true);
     try {
@@ -440,13 +449,13 @@ const mfaDisabledByRole = Object.entries(
     title: 'Total Users Details',
     // Widths redistributed to include Principal Type
     columns: [
-      { key: 'user', label: 'User', width: '18%' },
-      { key: 'principalType', label: 'Type', width: '12%' }, // New Column
-      { key: 'role', label: 'Role', width: '12%' },
+      { key: 'user', label: 'User', width: '17%' },
+      { key: 'principalType', label: 'Principal Type', width: '13%' }, // New Column
+      { key: 'role', label: 'Role', width: '10%' },
       { key: 'subscription', label: 'Subscription', width: '18%' },
-      { key: 'mfa', label: 'MFA Status', width: '18%' },
+      { key: 'mfa', label: 'MFA Status', width: '17%' },
       { key: 'status', label: 'Status', width: '12%' },
-      { key: 'risk', label: 'Risk', width: '10%' }
+      { key: 'risk', label: 'Risk', width: '11%' }
     ],
     data: users.map((u) => {
       const riskColor = u.risk === 'High' ? '#dc2626' : u.risk === 'Medium' ? '#d97706' : '#16a34a';
@@ -454,11 +463,7 @@ const mfaDisabledByRole = Object.entries(
       return {
         user: u.user,
         // Added mapping for Principal Type
-        principalType: (
-          <span style={{ color: '#64748b', fontSize: '13px', fontWeight: '500' }}>
-            {u.principalType || 'User'} 
-          </span>
-        ),
+        principalType: u.principalType,
         role: u.role,
         subscription: u.subscription,
         mfa: (
