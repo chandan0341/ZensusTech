@@ -79,11 +79,13 @@ async def build_user_objects(subscription_id: str, mgmt_token: str, graph_token:
         sp_count = 0
         fg_count = 0
         grouped = {}
+        subscription_id = ""
 
         for a in assignments:
             p = a["properties"]
             pid = p["principalId"]
             p_type = p.get("principalType", "User")
+            
             
             # UPDATED: Increment every time it appears in the JSON
             if p_type == "ForeignGroup":
@@ -94,6 +96,7 @@ async def build_user_objects(subscription_id: str, mgmt_token: str, graph_token:
             # Grouping logic for the Users Table
             role_id = p["roleDefinitionId"].split('/')[-1]
             role_name = AZURE_ROLES.get(role_id, "Custom Role")
+            subscription_id = p["roleDefinitionId"].split('/')[2]
             
             if pid not in grouped:
                 grouped[pid] = {"roles": {role_name}, "type": p_type}
@@ -128,7 +131,8 @@ async def build_user_objects(subscription_id: str, mgmt_token: str, graph_token:
                     "mfa": "Enabled" if mfa_enabled else "Disabled",
                     "status": "Active" if is_active else "Inactive",
                     "risk": "Low" if mfa_enabled else "High",
-                    "principalType": "User"
+                    "principalType": grouped[pid]["type"],
+                    "subscription": subscription_id
                 })
 
     # RETURN THE RAW COUNTS
@@ -152,7 +156,7 @@ async def build_tenant_wide_user_dashboard(graph_token: str):
             all_users = []
             
             # 1. FETCH ALL USERS
-            user_url = f"{GRAPH_BASE}/users?$select=displayName,userPrincipalName,id,accountEnabled&$top=999"
+            user_url = f"{GRAPH_BASE}/users?$select=displayName,userPrincipalName,id,userType,accountEnabled&$top=999"
             while user_url:
                 u_resp = await client.get(user_url, headers=headers)
                 u_data = u_resp.json()
@@ -233,7 +237,8 @@ async def build_tenant_wide_user_dashboard(graph_token: str):
                         "status": status,
                         "mfa": mfa_text,
                         "role": roles_string,
-                        "risk": risk
+                        "risk": risk,
+                        "principalType": u.get("userType", "User")
                     })
 
             print(f"DEBUG: Successfully processed {len(final_report)} user objects.")
