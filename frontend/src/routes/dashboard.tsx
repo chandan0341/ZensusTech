@@ -14,6 +14,7 @@ import {
   TableComponent
 } from "@/components/TailAdminReports";
 import { useCredentials } from "@/context/CredentialsContext";
+import { ENDPOINTS } from '../constants/api';
 
 interface User {
   user: string;
@@ -107,7 +108,7 @@ function Dashboard() {
 
       try {
         // Fetch Management Token
-        const subTokenResp = await fetch("http://localhost:8000/api/v1/azure/token", {
+        const subTokenResp = await fetch(`${ENDPOINTS.AZURE.TOKEN}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -122,7 +123,7 @@ function Dashboard() {
         setMgtToken(managementToken); // Store for reuse
 
         // Fetch Subscriptions
-        const subsResp = await fetch("http://localhost:8000/api/v1/azure/subscriptions", {
+        const subsResp = await fetch(`${ENDPOINTS.SUBSCRIPTIONS.LIST}`, {
           method: "GET",
           headers: { "Authorization": `Bearer ${managementToken}` }
         });
@@ -166,8 +167,8 @@ function Dashboard() {
       // FLOW A: A Subscription is selected
       if (selectedSubscription) {
         console.log("Fetching Subscription-specific users + Metadata");
-        
-        const usersPromise = fetch("http://localhost:8000/api/v1/azure/users", {
+
+        const usersPromise = fetch(`${ENDPOINTS.AZURE.USERS}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -205,7 +206,7 @@ setSubMetadata(await metaResp.json());
       else {
         console.log("Fetching all Tenant users (Initial View)");
         
-        const response = await fetch("http://localhost:8000/api/v1/azure/tenant/users", {
+        const response = await fetch(`${ENDPOINTS.AZURE.TANENT_USERS}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -328,7 +329,7 @@ setSubMetadata(await metaResp.json());
     const fetchLicenseData = async () => {
       try {
         setLoading(true);
-        const response = await fetch("http://localhost:8000/api/v1/microsoft0365/license_and_usage_details", {
+        const response = await fetch(`${ENDPOINTS.MICROSOFT.LICENSE_AND_USAGE_DETAILS}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -381,7 +382,7 @@ setSubMetadata(await metaResp.json());
     try {
       setLoading(true);
       
-      const response = await fetch("http://localhost:8000/api/v1/microsoft0365/identity/governance", {
+      const response = await fetch(`${ENDPOINTS.MICROSOFT.IDENTITY_GOVERNANCE}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

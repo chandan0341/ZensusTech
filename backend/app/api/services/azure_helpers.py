@@ -7,22 +7,14 @@ from typing import List, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-
+from app.core.config import settings # Import your settings object
 # --- CONFIGURATION ---
 router = APIRouter()
 bearer_scheme = HTTPBearer()
-
-GRAPH_BASE = "https://graph.microsoft.com/v1.0"
-BETA_BASE = "https://graph.microsoft.com/beta"
-ARM_BASE = "https://management.azure.com"
-
-# Universal Azure Role Mapping
-AZURE_ROLES = {
-    "8e3af657-a8ff-443c-a75c-2fe8c4bcb635": "Owner",
-    "b24988ac-6180-42a0-ab88-20f7382dd24c": "Contributor",
-    "acdd72a7-3385-48ef-bd42-f606fba81ae7": "Reader",
-    "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9": "User Access Administrator"
-}
+GRAPH_BASE = settings.GRAPH_BASE
+BETA_BASE = settings.BETA_BASE
+ARM_BASE = settings.ARM_BASE
+AZURE_ROLES = settings.AZURE_ROLES
 
 class UserRequest(BaseModel):
     subscription_id: str
@@ -32,7 +24,7 @@ class UserRequest(BaseModel):
 
 async def fetch_role_assignments(client, sub_id, token):
     """Step 1: Fetch all role assignments from Azure ARM."""
-    url = f"https://management.azure.com/subscriptions/{sub_id}/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01"
+    url = f"{ARM_BASE}/subscriptions/{sub_id}/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01"
     resp = await client.get(url, headers={"Authorization": f"Bearer {token}"})
     return resp.json().get("value", []) if resp.status_code == 200 else []
 
@@ -154,10 +146,10 @@ async def fetch_license_and_usage(access_token: str):
     headers = {"Authorization": f"Bearer {access_token}"}
     async with httpx.AsyncClient() as client:
         # 1. Fetch SKUs (Your purchased licenses)
-        sku_res = await client.get("https://graph.microsoft.com/v1.0/subscribedSkus", headers=headers)
+        sku_res = await client.get(f"{GRAPH_BASE}/subscribedSkus", headers=headers)
         
         # 2. Fetch Usage (Activity report for last 90 days)
-        usage_url = "https://graph.microsoft.com/v1.0/reports/getMicrosoft365AppUserDetail(period='D90')?$format=application/json"
+        usage_url = f"{GRAPH_BASE}/reports/getMicrosoft365AppUserDetail(period='D90')?$format=application/json"
         usage_res = await client.get(usage_url, headers=headers)
         
     skus = sku_res.json().get("value", []) if sku_res.status_code == 200 else []
@@ -172,7 +164,7 @@ async def get_secure_score(token: str):
     """Fetches the overall Microsoft Secure Score (Available in all tiers)."""
     headers = {"Authorization": f"Bearer {token}"}
     # This endpoint provides the 67/100 style score
-    url = "https://graph.microsoft.com/v1.0/security/secureScores?$top=1"
+    url = f"{GRAPH_BASE}/security/secureScores?$top=1"
     
     async with httpx.AsyncClient() as client:
         response = await client.get(url, headers=headers)
@@ -188,7 +180,7 @@ async def get_secure_score(token: str):
 async def fetch_email_security_status(token: str):
     headers = {"Authorization": f"Bearer {token}"}
     # Filter for unresolved Email category alerts
-    url = "https://graph.microsoft.com/v1.0/security/alerts?$filter=category eq 'Email' and status eq 'newActive'&$top=5"
+    url = f"{GRAPH_BASE}/security/alerts?$filter=category eq 'Email' and status eq 'newActive'&$top=5"
     
     async with httpx.AsyncClient() as client:
         try:
@@ -316,7 +308,7 @@ async def build_tenant_wide_user_dashboard(graph_token: str):
 async def fetch_identity_governance_data(token: str):
     headers = {"Authorization": f"Bearer {token}"}
     # We select specific fields to keep the response light
-    url = "https://graph.microsoft.com/v1.0/users?$select=id,displayName,userType,signInActivity,assignedLicenses"
+    url = f"{GRAPH_BASE}/users?$select=id,displayName,userType,signInActivity,assignedLicenses"
     
     async with httpx.AsyncClient() as client:
         response = await client.get(url, headers=headers)
@@ -362,7 +354,7 @@ async def fetch_privileged_user_count(token: str):
     """Counts users with Directory Roles (Global Admin, etc.)"""
     headers = {"Authorization": f"Bearer {token}"}
     # This endpoint gets all directory roles that have members assigned
-    url = "https://graph.microsoft.com/v1.0/directoryRoles?$expand=members"
+    url = f"{GRAPH_BASE}/directoryRoles?$expand=members"
     
     async with httpx.AsyncClient() as client:
         response = await client.get(url, headers=headers)

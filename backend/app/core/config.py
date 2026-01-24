@@ -1,6 +1,7 @@
 import secrets
 import warnings
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal,Dict
+
 
 from pydantic import (
     AnyUrl,
@@ -24,6 +25,22 @@ def parse_cors(v: Any) -> list[str] | str:
 
 
 class Settings(BaseSettings):
+    # API Endpoints
+    GRAPH_BASE: str = "https://graph.microsoft.com/v1.0"
+    BETA_BASE: str = "https://graph.microsoft.com/beta"
+    ARM_BASE: str = "https://management.azure.com"
+
+    # We keep the Role Mapping logic here
+    # (Mapping IDs to Names is usually static "Business Logic")
+    AZURE_ROLES: Dict[str, str] = {
+        "8e3af657-a8ff-443c-a75c-2fe8c4bcb635": "Owner",
+        "b24988ac-6180-42a0-ab88-20f7382dd24c": "Contributor",
+        "acdd72a7-3385-48ef-bd42-f606fba81ae7": "Reader",
+        "18d7d88d-d35e-4fb5-a5c3-7773c20a72d9": "User Access Administrator"
+    }
+    
+    
+    
     model_config = SettingsConfigDict(
         # Use top level .env file (one level above ./backend/)
         env_file="../.env",
