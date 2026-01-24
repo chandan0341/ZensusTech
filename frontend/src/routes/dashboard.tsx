@@ -33,6 +33,22 @@ interface LicenseUsageData {
   inactive: number | string;
   potentialSavings: string;
 }
+interface SummaryItem {
+  area: string;
+  status: string;
+  color: string;
+}
+
+interface LicenseUsageAPIResponse {
+  overallScore: number;
+  summaryItems: SummaryItem[];
+  tableData: LicenseUsageData[];
+}
+
+interface GovernanceItem {
+  category: string;
+  count: number | string;
+}
 
 function Dashboard() {
   const { clientId, clientSecret, tenantId } = useCredentials();
@@ -43,7 +59,7 @@ function Dashboard() {
   const [selectedTenant, setSelectedTenant] = useState<string>(tenantId || "tenant-1");
   const [selectedSubscription, setSelectedSubscription] = useState<string>("");
   const [azureSubscriptions, setAzureSubscriptions] = useState<Array<{ value: string; label: string }>>([]);
-  
+  const [adminRolesData, setAdminRolesData] = useState<any[]>([]); // <--- RIGHT HERE
   // ADD THIS: Store the token so we don't have to fetch it every time the sub changes
   const [mgtToken, setMgtToken] = useState<string>("");
   const [subMetadata, setSubMetadata] = useState<{
@@ -52,6 +68,31 @@ function Dashboard() {
   subscriptionId: string;
   subscriptionPolicies: { spendingLimit: string };
 } | null>(null);
+
+
+  const processAdminRoles = (users: User[]) => {
+  console.log("--- processAdminRoles Start ---");
+  console.log("Input Users:", users);
+  const rolesMap: Record<string, { total: number; mfaDisabled: number }> = {};
+
+  users.forEach((u: User) => {
+    const roleName = u.role || "Standard User";
+    if (!rolesMap[roleName]) {
+      rolesMap[roleName] = { total: 0, mfaDisabled: 0 };
+    }
+    rolesMap[roleName].total += 1;
+    if (u.mfa === "Disabled") {
+      rolesMap[roleName].mfaDisabled += 1;
+    }
+  });
+
+  return Object.entries(rolesMap).map(([role, stats]) => ({
+    role,
+    assignedUsers: stats.total.toString(),
+    // Format: "✅" if all enabled, "❌ 1" if one disabled
+    mfaEnabled: stats.mfaDisabled > 0 ? `❌ ${stats.mfaDisabled}` : "✅"
+  }));
+};
 
   // --- 1. INITIAL FETCH: Token & Subscriptions ---
   useEffect(() => {
@@ -177,6 +218,11 @@ setSubMetadata(await metaResp.json());
         const data = await response.json();
         setUsers(data);
         setSubMetadata(null); // Clear metadata since no sub is selected
+        console.log("About to process these users:", data);
+
+        const result = processAdminRoles(data);
+        setAdminRolesData(result);
+
       }
 
     } catch (err: any) {
@@ -275,12 +321,14 @@ setSubMetadata(await metaResp.json());
   }, [clientId, clientSecret, selectedTenant, selectedSubscription]);
 
   const [licenseUsageData, setLicenseUsageData] = useState<any[]>([]);
+  const [overallScore, setOverallScore] = useState<number>(0);
+  const [summaryItems, setSummaryItems] = useState<SummaryItem[]>([]);
 
   useEffect(() => {
     const fetchLicenseData = async () => {
       try {
         setLoading(true);
-        const response = await fetch("http://localhost:8000/api/v1/microsoft0365/license_and_usage_optimization", {
+        const response = await fetch("http://localhost:8000/api/v1/microsoft0365/license_and_usage_details", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -292,10 +340,17 @@ setSubMetadata(await metaResp.json());
 
         if (!response.ok) throw new Error('Failed to fetch data');
         
-        const data: LicenseUsageData[] = await response.json();
+      const data: LicenseUsageAPIResponse = await response.json();
+      const licenseData = data.tableData
+      
+      // 1. Update the Overall Security Score (67/100)
+      setOverallScore(data.overallScore);
+
+      // 2. Update the CXO Summary Items (Identity, Email, etc.)
+      setSummaryItems(data.summaryItems);
         
         // Map the API response to match your Table component keys
-        const formattedData = data.map((item, index) => ({
+        const formattedData = licenseData.map((item, index) => ({
           key: index, // Unique key for React list rendering
           licenseType: item.license,
           purchased: item.purchased,
@@ -315,7 +370,46 @@ setSubMetadata(await metaResp.json());
     };
 
     fetchLicenseData();
-  }, []);
+  },[selectedTenant, clientId, clientSecret]);
+
+  const [identityGovernanceData, setIdentityGovernanceData] = useState<GovernanceItem[]>([]);
+  useEffect(() => {
+  const fetchGovernanceReport = async () => {
+    // Only fetch if a tenant is actually selected
+    if (!selectedTenant) return;
+
+    try {
+      setLoading(true);
+      
+      const response = await fetch("http://localhost:8000/api/v1/microsoft0365/identity/governance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: selectedTenant,
+          client_id: clientId,
+          client_secret: clientSecret
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}`);
+      }
+
+      const data: GovernanceItem[] = await response.json();
+      
+      // Update the state which automatically refreshes the table rows
+      setIdentityGovernanceData(data);
+
+    } catch (error) {
+      console.error("Error fetching governance data:", error);
+      message.error("Failed to load Identity Governance report");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchGovernanceReport();
+}, [selectedTenant, clientId, clientSecret]); // Re-runs if the tenant selection changes
 
   const handleTenantChange = (tenantId: string) => {
     setSelectedTenant(tenantId);
@@ -799,23 +893,7 @@ const mfaDisabledByRole = Object.entries(
         };
         break;
 
-      case 'admin-roles':
-        modalData = {
-          title: `Admin Role Details: ${record.role}`,
-          columns: [
-            { key: 'property', label: 'Property', width: '30%' },
-            { key: 'value', label: 'Value', width: '70%' },
-          ],
-          data: [
-            { property: 'Role', value: record.role },
-            { property: 'Assigned Users', value: record.assignedUsers },
-            { property: 'MFA Status', value: record.mfaEnabled },
-            { property: 'Risk Level', value: record.mfaEnabled.includes('❌') ? 'High' : 'Low' },
-            { property: 'Last Audit', value: new Date().toLocaleDateString() },
-          ],
-        };
-        break;
-
+      
       case 'email-security':
         modalData = {
           title: `Email Security Details: ${record.metric}`,
@@ -2276,236 +2354,195 @@ const mfaDisabledByRole = Object.entries(
                   <div style={{ padding: '24px' }}>
 
                     {/* Executive Summary (CXO View) */}
-                    <div style={{ marginBottom: '24px' }}>
-                      <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                        Executive Summary (CXO View)
-                      </Typography.Title>
-                      <TableComponent
-                        title=""
-                        columns={[
-                          { key: "area", label: "Area", width: "60%" },
-                          {
-                            key: "status",
-                            label: "Status",
-                            width: "40%",
-                            render: (value) => {
-                              const statusColors: Record<string, string> = {
-                                "Needs Improvement": "#ff4d4f",
-                                "High Risk": "#ff4d4f",
-                                "Savings Possible": "#ff4d4f",
-                                "Good": "#52c41a",
-                                "Medium": "#faad14"
-                              };
-                              return (
-                                <span style={{
-                                  color: statusColors[value] || "#666",
-                                  fontWeight: "500",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "8px"
-                                }}>
-                                  🔴 {value}
-                                </span>
-                              );
-                            },
-                          },
-                        ]}
-                        data={[
-                          { area: "Identity Security", status: "Needs Improvement" },
-                          { area: "Email Security", status: "High Risk" },
-                          { area: "License Optimization", status: "Savings Possible" },
-                          { area: "Data Protection", status: "Good" },
-                          { area: "Compliance Readiness", status: "Medium" },
-                          { area: "Overall Security Score", status: "67 / 100" },
-                        ]}
-                        onRowClick={(record) => handleRowClick(record, 'executive-summary')}
-                      />
-                    </div>
+      <div style={{ marginBottom: '24px' }}>
+  <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
+    Executive Summary (CXO View)
+  </Typography.Title>
+  {/* Wrap in Spin or conditional if loading is needed, since TableComponent doesn't have a loading prop */}
+  <TableComponent
+    title=""
+    columns={[
+      { 
+        key: "area", 
+        label: "Area", 
+        width: "60%",
+        render: (value: string) => <span style={{ fontWeight: "600", color: "#1a3353" }}>{value}</span>
+      },
+      {
+        key: "status",
+        label: "Status",
+        width: "40%",
+        render: (value: string) => {
+          const statusMap: Record<string, { color: string; icon: string }> = {
+            "Needs Improvement": { color: "#ff4d4f", icon: "🔴" },
+            "High Risk": { color: "#ff4d4f", icon: "🔴" },
+            "Savings Possible": { color: "#ff4d4f", icon: "🔴" },
+            "Good": { color: "#52c41a", icon: "🟢" },
+            "Optimized": { color: "#52c41a", icon: "🟢" },
+            "Medium": { color: "#faad14", icon: "🟡" },
+          };
 
-                    {/* User & Identity Governance Report */}
+          // Logic to handle the score (e.g., "67 / 100")
+          const isScore = value.includes('/');
+          const config = statusMap[value] || { 
+            color: isScore ? (parseInt(value) > 70 ? "#52c41a" : "#ff4d4f") : "#1890ff", 
+            icon: isScore ? "📊" : "ℹ️" 
+          };
+
+          return (
+            <span style={{
+              color: config.color,
+              fontWeight: "700",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "14px"
+            }}>
+              {config.icon} {value}
+            </span>
+          );
+        },
+      },
+    ]}
+    // Fixed: Ensure the manual row matches the SummaryItem structure (area, status, color)
+    data={[
+      ...summaryItems,
+      { 
+        area: "Overall Security Score", 
+        status: `${overallScore} / 100`, 
+        color: overallScore > 70 ? "success" : "error" 
+      }
+    ]}
+    onRowClick={(record: any) => handleRowClick(record, 'executive-summary')}
+  />
+</div>
+
                     <div style={{ marginBottom: '24px' }}>
-                      <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                        User & Identity Governance Report
-                      </Typography.Title>
-                      <TableComponent
-                        title=""
-                        columns={[
-                          { key: "category", label: "Category", width: "60%" },
-                          {
-                            key: "count",
-                            label: "Count",
-                            width: "40%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                        ]}
-                        data={[
-                          { category: "Total Users", count: "48" },
-                          { category: "Active Users", count: "42" },
-                          { category: "Guest Users", count: "6" },
-                          { category: "Inactive Users (>30 days)", count: "7" },
-                          { category: "Privileged Users", count: "5" },
-                        ]}
-                        onRowClick={(record) => handleRowClick(record, 'user-identity-governance')}
-                      />
-                    </div>
+  <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
+    User & Identity Governance Report
+  </Typography.Title>
+  <TableComponent
+    title=""
+    /* Pass the dynamic state variable here */
+    data={identityGovernanceData} 
+    columns={[
+      { 
+        key: "category", 
+        label: "Category", 
+        width: "60%",
+        render: (text: string) => {
+          // Map icons to categories dynamically
+          const iconMap: Record<string, string> = {
+            "Total Users": "📊",
+            "Active Users": "👤",
+            "Guest Users": "🌐",
+            "Inactive Users (>30 days)": "⏳",
+            "Privileged Users": "🛡️"
+          };
+          return (
+            <span style={{ fontWeight: "600", color: "#1a3353", display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '16px' }}>{iconMap[text] || "🔹"}</span>
+              {text}
+            </span>
+          );
+        }
+      },
+      {
+        key: "count",
+        label: "Count",
+        width: "40%",
+        render: (value: any, record: any) => {
+          const numValue = parseInt(value) || 0;
+          
+          // Dynamic Styling Logic based on Governance Rules
+          let color = "#1890ff"; // Default Blue
+          let bgColor = "#e6f7ff";
+
+          if (record.category === "Privileged Users" && numValue > 5) {
+            color = "#ff4d4f"; // Red for too many admins
+            bgColor = "#fff1f0";
+          } else if (record.category === "Inactive Users (>30 days)" && numValue > 0) {
+            color = "#faad14"; // Orange for cleanup needed
+            bgColor = "#fffbe6";
+          } else if (record.category === "Active Users") {
+            color = "#52c41a"; // Green for healthy activity
+            bgColor = "#f6ffed";
+          }
+
+          return (
+            <div style={{
+              display: "inline-block",
+              padding: '4px 12px',
+              borderRadius: '6px',
+              backgroundColor: bgColor,
+              color: color,
+              fontWeight: "800",
+              border: `1px solid ${color}40`,
+              minWidth: '50px',
+              textAlign: 'center',
+              fontFamily: 'monospace',
+              fontSize: '14px'
+            }}>
+              {value}
+            </div>
+          );
+        },
+      },
+    ]}
+    onRowClick={(record) => handleRowClick(record, 'user-identity-governance')}
+  />
+</div>
 
                     {/* Admin Roles & Privileged Access */}
-                    <div style={{ marginBottom: '24px' }}>
-                      <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                        Admin Roles & Privileged Access
-                      </Typography.Title>
-                      <TableComponent
-                        title=""
-                        columns={[
-                          { key: "role", label: "Role", width: "40%" },
-                          { key: "assignedUsers", label: "Assigned Users", width: "30%" },
-                          {
-                            key: "mfaEnabled",
-                            label: "MFA Enabled",
-                            width: "30%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                        ]}
-                        data={[
-                          { role: "Global Admin", assignedUsers: "3", mfaEnabled: "❌ 1" },
-                          { role: "Exchange Admin", assignedUsers: "1", mfaEnabled: "✅" },
-                          { role: "Security Admin", assignedUsers: "1", mfaEnabled: "❌" },
-                        ]}
-                        onRowClick={(record) => handleRowClick(record, 'admin-roles')}
-                      />
-                    </div>
+                    <div style={{ marginBottom: '24px', padding: '16px', background: '#fff', borderRadius: '8px' }}>
+                      
+  <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
+    Admin Roles & Privileged Access
+  </Typography.Title>
 
-                    {/* Email Security & Threat Protection */}
-                    <div style={{ marginBottom: '24px' }}>
-                      <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                        Email Security & Threat Protection
-                      </Typography.Title>
-                      <TableComponent
-                        title=""
-                        columns={[
-                          { key: "metric", label: "Metric", width: "70%" },
-                          {
-                            key: "count",
-                            label: "Count",
-                            width: "30%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                        ]}
-                        data={[
-                          { metric: "Phishing Emails Blocked", count: "126" },
-                          { metric: "Malware Attachments Blocked", count: "18" },
-                          { metric: "Spam Emails Blocked", count: "1,450" },
-                          { metric: "User-reported Phishing", count: "7" },
-                        ]}
-                        onRowClick={(record) => handleRowClick(record, 'email-security')}
-                      />
-                    </div>
+  <TableComponent
+    title=""
+    /* Dynamically pass processed data */
+    data={adminRolesData} 
+    columns={[
+      { 
+        key: "role", 
+        label: "Role", 
+        width: "40%",
+        render: (text: string) => <span style={{ fontWeight: 600 }}>{text}</span>
+      },
+      { 
+        key: "assignedUsers", 
+        label: "Assigned Users", 
+        width: "30%" 
+      },
+      {
+        key: "mfaEnabled",
+        label: "MFA Status",
+        width: "30%",
+        render: (value: string) => {
+          const isIssue = value.includes('❌');
+          return (
+            <span style={{
+              fontWeight: "bold",
+              color: isIssue ? "#cf1322" : "#389e0d",
+              background: isIssue ? "#fff1f0" : "#f6ffed",
+              border: `1px solid ${isIssue ? "#ffa39e" : "#b7eb8f"}`,
+              padding: "4px 10px",
+              borderRadius: "4px",
+              display: "inline-flex",
+              alignItems: "center"
+            }}>
+              {value === "✅" ? "✅ All Enabled" : value}
+            </span>
+          );
+        },
+      },
+    ]}
+    onRowClick={(Record) => handleCardClickForUserType(Record.role)}
+  />
+</div>
 
-                    {/* Domain Email Authentication */}
-                    <div style={{ marginBottom: '24px' }}>
-                      <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                        Domain Email Authentication
-                      </Typography.Title>
-                      <TableComponent
-                        title=""
-                        columns={[
-                          { key: "domain", label: "Domain", width: "25%" },
-                          {
-                            key: "spf",
-                            label: "SPF",
-                            width: "15%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                          {
-                            key: "dkim",
-                            label: "DKIM",
-                            width: "15%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                          {
-                            key: "dmarc",
-                            label: "DMARC",
-                            width: "20%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                          {
-                            key: "risk",
-                            label: "Risk",
-                            width: "25%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start",
-                                gap: "8px"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                        ]}
-                        data={[
-                          { domain: "abcmfg.com", spf: "✅", dkim: "❌", dmarc: "❌", risk: "🔴 High" },
-                          { domain: "abcmfg.co.in", spf: "✅", dkim: "✅", dmarc: "🔴 Monitor", risk: "🔴 Medium" },
-                        ]}
-                        onRowClick={(record) => handleRowClick(record, 'domain-authentication')}
-                      />
-                    </div>
 
                     {/* License Usage & Cost Optimization */}
 <div style={{ marginBottom: '24px' }}>
@@ -2595,199 +2632,7 @@ const mfaDisabledByRole = Object.entries(
     onRowClick={(record) => handleRowClick(record, 'license-usage')}
   />
 </div>
-                    {/* Collaboration & Teams Governance */}
-                    <div style={{ marginBottom: '24px' }}>
-                      <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                        Collaboration & Teams Governance
-                      </Typography.Title>
-                      <TableComponent
-                        title=""
-                        columns={[
-                          { key: "metric", label: "Metric", width: "70%" },
-                          {
-                            key: "count",
-                            label: "Count",
-                            width: "30%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                        ]}
-                        data={[
-                          { metric: "Teams", count: "42" },
-                          { metric: "Inactive Teams (>90 days)", count: "9" },
-                          { metric: "External Sharing Enabled", count: "14 Teams" },
-                          { metric: "SharePoint Sites", count: "38" },
-                        ]}
-                        onRowClick={(record) => handleRowClick(record, 'teams-governance')}
-                      />
-                    </div>
 
-                    {/* Data Protection & Backup Status */}
-                    <div style={{ marginBottom: '24px' }}>
-                      <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                        Data Protection & Backup Status
-                      </Typography.Title>
-                      <TableComponent
-                        title=""
-                        columns={[
-                          { key: "workload", label: "Workload", width: "30%" },
-                          {
-                            key: "backupStatus",
-                            label: "Backup Status",
-                            width: "35%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                          {
-                            key: "lastRestoreTest",
-                            label: "Last Restore Test",
-                            width: "35%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                        ]}
-                        data={[
-                          { workload: "Exchange Online", backupStatus: "✅ Protected", lastRestoreTest: "10-Jan-26" },
-                          { workload: "SharePoint Online", backupStatus: "✅ Protected", lastRestoreTest: "12-Jan-26" },
-                          { workload: "OneDrive", backupStatus: "✅ Protected", lastRestoreTest: "12-Jan-26" },
-                          { workload: "Teams", backupStatus: "🔴 Partial", lastRestoreTest: "Pending" },
-                        ]}
-                        onRowClick={(record) => handleRowClick(record, 'data-protection')}
-                      />
-                    </div>
-
-                    {/* Compliance & Audit Readiness */}
-                    <div style={{ marginBottom: '24px' }}>
-                      <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                        Compliance & Audit Readiness
-                      </Typography.Title>
-                      <TableComponent
-                        title=""
-                        columns={[
-                          { key: "area", label: "Area", width: "70%" },
-                          {
-                            key: "status",
-                            label: "Status",
-                            width: "30%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start",
-                                gap: "8px"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                        ]}
-                        data={[
-                          { area: "Unified Audit Log", status: "✅ Enabled" },
-                          { area: "Retention Policies", status: "🔴 Partial" },
-                          { area: "DLP Policies", status: "❌ Not Configured" },
-                          { area: "Compliance Score", status: "62%" },
-                        ]}
-                        onRowClick={(record) => handleRowClick(record, 'compliance-readiness')}
-                      />
-                    </div>
-
-                    {/* Incidents & Support Summary */}
-                    <div style={{ marginBottom: '24px' }}>
-                      <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                        Incidents & Support Summary
-                      </Typography.Title>
-                      <TableComponent
-                        title=""
-                        columns={[
-                          { key: "category", label: "Category", width: "70%" },
-                          {
-                            key: "tickets",
-                            label: "Tickets",
-                            width: "30%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                        ]}
-                        data={[
-                          { category: "Password Reset", tickets: "12" },
-                          { category: "Mail Delivery Issues", tickets: "4" },
-                          { category: "MFA Support", tickets: "6" },
-                          { category: "Teams Issues", tickets: "3" },
-                          { category: "Total Tickets", tickets: "25" },
-                        ]}
-                        onRowClick={(record) => handleRowClick(record, 'incidents-support')}
-                      />
-                    </div>
-
-                    {/* MSP Action Plan (Next 30 Days) */}
-                    <div style={{ marginBottom: '24px' }}>
-                      <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                        MSP Action Plan (Next 30 Days)
-                      </Typography.Title>
-                      <TableComponent
-                        title=""
-                        columns={[
-                          { key: "priority", label: "Priority", width: "15%" },
-                          { key: "action", label: "Action", width: "60%" },
-                          {
-                            key: "owner",
-                            label: "Owner",
-                            width: "25%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                        ]}
-                        data={[
-                          { priority: "P1", action: "Enforce MFA on all admins", owner: "MSP" },
-                          { priority: "P1", action: "Configure DKIM & DMARC", owner: "MSP" },
-                          { priority: "P2", action: "License optimization execution", owner: "MSP" },
-                          { priority: "P2", action: "Teams lifecycle policy", owner: "MSP" },
-                          { priority: "P3", action: "Enable DLP policies", owner: "MSP" },
-                        ]}
-                        onRowClick={(record) => handleRowClick(record, 'msp-action-plan')}
-                      />
-                    </div>
                   </div>
                 </div>
               )}

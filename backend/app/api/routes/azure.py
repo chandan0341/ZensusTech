@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import requests
 import sys
-from ..services.azure_helpers import build_tenant_wide_user_dashboard, build_user_objects, fetch_license_and_usage
+from ..services.azure_helpers import build_tenant_wide_user_dashboard, build_user_objects, fetch_identity_governance_data, fetch_license_and_usage, fetch_privileged_user_count, get_secure_score, fetch_email_security_status
 from .governance import  User
 
 router = APIRouter(tags=["azure"])
@@ -136,7 +136,7 @@ PRICE_MAP = {
     "EXCHANGEONLINEPLAN1": 4.00
 }
 
-@router.post("/microsoft0365/license_and_usage_optimization")
+@router.post("/microsoft0365/license_and_usage_details")
 async def get_license_and_usage_details(request_data: SubscriptionRequest):
     graph_token = await get_graph_token(
             request_data.tenant_id, 
@@ -144,9 +144,13 @@ async def get_license_and_usage_details(request_data: SubscriptionRequest):
             request_data.client_secret,
             "https://graph.microsoft.com/.default"
         ) # Your existing token logic
+    score = await get_secure_score(graph_token)
+    email_sec = await fetch_email_security_status(graph_token)
+    
     skus, usage_data, usage_ok = await fetch_license_and_usage(graph_token)
 
-    report = []
+    license_list = []
+    total_unused = 0
 
     # Calculate Inactive globally if usage data is available
     # A user is "Inactive" if lastActivityDate is null/empty
@@ -180,7 +184,7 @@ async def get_license_and_usage_details(request_data: SubscriptionRequest):
             inactive_display = share_of_inactivity
             savings_display = f"${total_savings:,.2f}"
 
-        report.append({
+        license_list.append({
             "license": sku_name.replace("_", " "),
             "purchased": purchased,
             "assigned": assigned,
@@ -188,5 +192,53 @@ async def get_license_and_usage_details(request_data: SubscriptionRequest):
             "inactive": inactive_display,
             "potentialSavings": savings_display
         })
-        
-    return report
+        # 3. Construct the CXO Executive Summary
+    # Logic: Status changes based on data thresholds
+    executive_summary = [
+        {
+            "area": "Identity Security",
+            "status": "Needs Improvement" if score < 75 else "Good",
+            "color": "orange" if score < 75 else "green"
+        },
+        {
+            "area": "License Optimization",
+            "status": "Savings Possible" if total_unused > 0 else "Optimized",
+            "color": "red" if total_unused > 0 else "green"
+        },
+        {"area": "Email Security", "status": email_sec["status"]},
+    ]
+
+    return {
+        "overallScore": score,
+        "summaryItems": executive_summary,
+        "tableData": license_list
+    }
+
+@router.post("/microsoft0365/identity/governance")
+async def get_identity_report(request: SubscriptionRequest):
+    
+    token = await get_graph_token(
+        request.tenant_id, 
+        request.client_id, 
+        request.client_secret,
+        "https://graph.microsoft.com/.default"
+    )
+    
+    # Fetch base user data
+    user_stats = await fetch_identity_governance_data(token)
+    # Fetch privileged counts
+    privileged_count = await fetch_privileged_user_count(token)
+
+    if not user_stats:
+        return []
+
+    # Formatting for your React Table
+    report_data = [
+        {"category": "Total Users", "count": user_stats["total"]},
+        {"category": "Active Users", "count": user_stats["active"]},
+        {"category": "Guest Users", "count": user_stats["guests"]},
+        {"category": "Inactive Users (>30 days)", "count": user_stats["inactive"]},
+        {"category": "Privileged Users", "count": privileged_count},
+    ]
+
+    return report_data    

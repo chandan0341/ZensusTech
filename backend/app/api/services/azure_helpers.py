@@ -2,6 +2,7 @@ import asyncio
 import httpx
 import time
 import sys
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -167,6 +168,47 @@ async def fetch_license_and_usage(access_token: str):
     
     return skus, usage_data, usage_ok
 
+async def get_secure_score(token: str):
+    """Fetches the overall Microsoft Secure Score (Available in all tiers)."""
+    headers = {"Authorization": f"Bearer {token}"}
+    # This endpoint provides the 67/100 style score
+    url = "https://graph.microsoft.com/v1.0/security/secureScores?$top=1"
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json().get("value", [])
+            if data:
+                # Calculate percentage: (current / max) * 100
+                current = data[0].get("currentScore", 0)
+                max_score = data[0].get("maxScore", 1)
+                return round((current / max_score) * 100)
+        return 0
+    
+async def fetch_email_security_status(token: str):
+    headers = {"Authorization": f"Bearer {token}"}
+    # Filter for unresolved Email category alerts
+    url = "https://graph.microsoft.com/v1.0/security/alerts?$filter=category eq 'Email' and status eq 'newActive'&$top=5"
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200:
+                alerts = response.json().get("value", [])
+                
+                if not alerts:
+                    return {"status": "Good", "color": "green"}
+                
+                # Check if any alert is 'High' severity
+                has_high_risk = any(a.get("severity") == "high" for a in alerts)
+                if has_high_risk:
+                    return {"status": "High Risk", "color": "red"}
+                
+                return {"status": "Needs Improvement", "color": "orange"}
+            return {"status": "Good", "color": "green"}
+        except Exception:
+            return {"status": "Good", "color": "green"}    
+
 async def build_tenant_wide_user_dashboard(graph_token: str):
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
@@ -268,3 +310,68 @@ async def build_tenant_wide_user_dashboard(graph_token: str):
             print(f"ERROR: {str(e)}")
             traceback.print_exc()
             return []
+
+
+
+async def fetch_identity_governance_data(token: str):
+    headers = {"Authorization": f"Bearer {token}"}
+    # We select specific fields to keep the response light
+    url = "https://graph.microsoft.com/v1.0/users?$select=id,displayName,userType,signInActivity,assignedLicenses"
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers)
+        if response.status_code != 200:
+            return None
+        
+        users = response.json().get("value", [])
+        
+        # Threshold for Inactive Users (30 days ago)
+        threshold_date = datetime.now(timezone.utc) - timedelta(days=30)
+        
+        # Initialize counters
+        total_users = len(users)
+        guest_users = 0
+        inactive_users = 0
+        
+        for user in users:
+            # 1. Count Guests
+            if user.get("userType") == "Guest":
+                guest_users += 1
+            
+            # 2. Count Inactive (No login in 30 days)
+            # Note: signInActivity requires AuditLog.Read.All permission
+            activity = user.get("signInActivity")
+            if activity:
+                last_login_str = activity.get("lastSignInDateTime")
+                if last_login_str:
+                    last_login = datetime.fromisoformat(last_login_str.replace("Z", "+00:00"))
+                    if last_login < threshold_date:
+                        inactive_users += 1
+            else:
+                # If no activity record exists, they are likely inactive
+                inactive_users += 1
+
+        return {
+            "total": total_users,
+            "guests": guest_users,
+            "inactive": inactive_users,
+            "active": total_users - inactive_users
+        }
+
+async def fetch_privileged_user_count(token: str):
+    """Counts users with Directory Roles (Global Admin, etc.)"""
+    headers = {"Authorization": f"Bearer {token}"}
+    # This endpoint gets all directory roles that have members assigned
+    url = "https://graph.microsoft.com/v1.0/directoryRoles?$expand=members"
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers)
+        roles = response.json().get("value", [])
+        
+        # Use a set to count unique users across different roles
+        privileged_user_ids = set()
+        for role in roles:
+            for member in role.get("members", []):
+                privileged_user_ids.add(member.get("id"))
+                
+        return len(privileged_user_ids)        
