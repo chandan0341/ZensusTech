@@ -142,8 +142,8 @@ const data = await usersResp.json();
 
 // 3. Access properties using dot notation (or bracket notation)
 const usersData = data.users || [];
-const foreignGroupsCount = data.foreignGroupsCount || 0;
-const servicePrincipalsCount = data.servicePrincipalsCount || 0;
+const foreignGroupsCount = data.foreignGroupsCount || undefined;
+const servicePrincipalsCount = data.servicePrincipalsCount || undefined;
 setForeignGroupsCount(foreignGroupsCount);
 setServicePrincipalsCount(servicePrincipalsCount);
 
@@ -1225,7 +1225,7 @@ const mfaDisabledByRole = Object.entries(
     >
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>
-          Foreign Groups
+          Foreign Principal
         </div>
         <div style={{ 
           fontSize: '32px', // Slightly larger for better impact
@@ -1264,7 +1264,7 @@ const mfaDisabledByRole = Object.entries(
     >
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: '14px', color: '#8c8c8c', marginBottom: '8px', fontWeight: '500' }}>
-          Foreign Groups
+          Service Principal
         </div>
         <div style={{ 
           fontSize: '32px', // Slightly larger for better impact
