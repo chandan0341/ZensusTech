@@ -149,6 +149,24 @@ async def fetch_graph_batch(client: httpx.AsyncClient, batch_requests: List[Dict
     resp = await client.post(url, json=payload, headers=headers)
     return resp.json().get("responses", []) if resp.status_code == 200 else []
 
+async def fetch_license_and_usage(access_token: str):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    async with httpx.AsyncClient() as client:
+        # 1. Fetch SKUs (Your purchased licenses)
+        sku_res = await client.get("https://graph.microsoft.com/v1.0/subscribedSkus", headers=headers)
+        
+        # 2. Fetch Usage (Activity report for last 90 days)
+        usage_url = "https://graph.microsoft.com/v1.0/reports/getMicrosoft365AppUserDetail(period='D90')?$format=application/json"
+        usage_res = await client.get(usage_url, headers=headers)
+        
+    skus = sku_res.json().get("value", []) if sku_res.status_code == 200 else []
+    
+    # Check if we have permission for reports (Reports.Read.All)
+    usage_ok = usage_res.status_code == 200
+    usage_data = usage_res.json().get("value", []) if usage_ok else None
+    
+    return skus, usage_data, usage_ok
+
 async def build_tenant_wide_user_dashboard(graph_token: str):
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:

@@ -2,7 +2,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Card, Form, Select, Row, Col, Space, Spin, Alert, Typography, Modal, Button ,Badge,Tooltip, // Add this
-  Tag} from "antd";
+  Tag, message} from "antd";
 import { TeamOutlined,  LockOutlined, ClockCircleOutlined, GlobalOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
 import { DashboardTiles } from "./DashboardTiles";
 import {
@@ -24,6 +24,14 @@ interface User {
   lastLogin: string;
   status: string;
   risk: "High" | "Medium" | "Low";
+}
+interface LicenseUsageData {
+  license: string;
+  purchased: number;
+  assigned: number;
+  unused: number;
+  inactive: number | string;
+  potentialSavings: string;
 }
 
 function Dashboard() {
@@ -266,6 +274,49 @@ setSubMetadata(await metaResp.json());
     fetchSSL();
   }, [clientId, clientSecret, selectedTenant, selectedSubscription]);
 
+  const [licenseUsageData, setLicenseUsageData] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchLicenseData = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch("http://localhost:8000/api/v1/microsoft0365/license_and_usage_optimization", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenant_id: selectedTenant,
+            client_id: clientId,
+            client_secret: clientSecret
+          })
+        });
+
+        if (!response.ok) throw new Error('Failed to fetch data');
+        
+        const data: LicenseUsageData[] = await response.json();
+        
+        // Map the API response to match your Table component keys
+        const formattedData = data.map((item, index) => ({
+          key: index, // Unique key for React list rendering
+          licenseType: item.license,
+          purchased: item.purchased,
+          assigned: item.assigned,
+          unused: item.unused,
+          inactive: item.inactive,
+          potentialSavings: item.potentialSavings
+        }));
+
+        setLicenseUsageData(formattedData);
+      } catch (error) {
+        console.error("Error fetching optimization data:", error);
+        message.error("Could not load license optimization data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLicenseData();
+  }, []);
+
   const handleTenantChange = (tenantId: string) => {
     setSelectedTenant(tenantId);
     setSelectedSubscription("");
@@ -292,6 +343,7 @@ setSubMetadata(await metaResp.json());
 
  function getModalDataByRole(role: string, users: User[]) {
   const filteredUsers = users.filter(u => u.role.toLowerCase() === role.toLowerCase());
+
 
   return {
     title: role,
@@ -2456,69 +2508,93 @@ const mfaDisabledByRole = Object.entries(
                     </div>
 
                     {/* License Usage & Cost Optimization */}
-                    <div style={{ marginBottom: '24px' }}>
-                      <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-                        License Usage & Cost Optimization
-                      </Typography.Title>
-                      <TableComponent
-                        title=""
-                        columns={[
-                          { key: "licenseType", label: "License Type", width: "40%" },
-                          {
-                            key: "purchased",
-                            label: "Purchased",
-                            width: "20%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                          {
-                            key: "assigned",
-                            label: "Assigned",
-                            width: "20%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                          {
-                            key: "unused",
-                            label: "Unused",
-                            width: "20%",
-                            render: (value) => (
-                              <span style={{
-                                fontWeight: "500",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start"
-                              }}>
-                                {value}
-                              </span>
-                            ),
-                          },
-                        ]}
-                        data={[
-                          { licenseType: "Business Premium", purchased: "30", assigned: "26", unused: "4" },
-                          { licenseType: "E3", purchased: "15", assigned: "10", unused: "5" },
-                          { licenseType: "Exchange Online P1", purchased: "10", assigned: "8", unused: "2" },
-                        ]}
-                        onRowClick={(record) => handleRowClick(record, 'license-usage')}
-                      />
-                    </div>
-
+<div style={{ marginBottom: '24px' }}>
+  <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
+    License Usage & Cost Optimization
+  </Typography.Title>
+  <TableComponent
+    title=""
+    columns={[
+  { 
+    key: "licenseType", 
+    label: "License Type", 
+    width: "30%",
+    render: (value) => (
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <span style={{ fontWeight: "700", color: "#1a3353", fontSize: "14px" }}>
+          {value.replace(/_/g, ' ')}
+        </span>
+        <span style={{ fontSize: '11px', color: '#8c8c8c' }}>Microsoft O365</span>
+      </div>
+    )
+  },
+  { 
+    key: "purchased", 
+    label: "Purchased", 
+    width: "14%",
+    render: (value) => (
+      <Tag color="blue" style={{ borderRadius: '6px', border: 'none', fontWeight: '600', padding: '2px 10px' }}>
+        {value}
+      </Tag>
+    )
+  },
+  { 
+    key: "assigned", 
+    label: "Assigned", 
+    width: "14%",
+    render: (value) => <span style={{ color: "#595959", fontWeight: '500' }}>{value}</span>
+  },
+  { 
+    key: "unused", 
+    label: "Unused", 
+    width: "14%",
+    render: (value) => (
+      <span style={{ 
+        fontWeight: "bold", 
+        color: value > 0 ? "#faad14" : "#d9d9d9",
+        backgroundColor: value > 0 ? '#fffbe6' : 'transparent',
+        padding: '2px 8px',
+        borderRadius: '4px'
+      }}>
+        {value}
+      </span>
+    )
+  },
+  { 
+    key: "inactive", 
+    label: "Inactive", 
+    width: "14%",
+    render: (value) => (
+      value === "N/A" ? 
+      <Tooltip title="Requires Reports.Read.All Permission">
+        <Tag color="default" style={{ opacity: 0.6, fontStyle: 'italic' }}>N/A</Tag> 
+      </Tooltip> :
+      <Tag color={value > 0 ? "volcano" : "green"} style={{ borderRadius: '12px' }}>
+        {value > 0 ? `${value} Inactive` : 'Active'}
+      </Tag>
+    )
+  },
+  { 
+    key: "potentialSavings", 
+    label: "Potential Savings", 
+    width: "14%",
+    render: (value) => (
+      <div style={{ 
+        fontWeight: "800", 
+        color: (value !== "-" && value !== "$0.00") ? "#52c41a" : "#bfbfbf",
+        fontSize: "16px",
+        fontFamily: 'monospace'
+      }}>
+        {value === "-" ? "$0.00" : value}
+      </div>
+    )
+  },
+]}
+    // Replace this with your state variable from useEffect, e.g., licenseData
+    data={licenseUsageData} 
+    onRowClick={(record) => handleRowClick(record, 'license-usage')}
+  />
+</div>
                     {/* Collaboration & Teams Governance */}
                     <div style={{ marginBottom: '24px' }}>
                       <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
