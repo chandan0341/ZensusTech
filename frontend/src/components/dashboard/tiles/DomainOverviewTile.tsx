@@ -1,4 +1,4 @@
-import { Card, Row, Col, Typography, Alert } from "antd";
+import { Card, Row, Col, Typography, Alert, Divider } from "antd"; // Added Divider
 import { TeamOutlined, LockOutlined, ClockCircleOutlined, GlobalOutlined } from "@ant-design/icons";
 import { TableComponent } from "@/components/TailAdminReports";
 
@@ -43,6 +43,7 @@ export const DomainOverviewTile = ({ sslCertificates, sslError }: DomainOverview
         <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
           Domain Health Summary
         </Typography.Title>
+        
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={12} lg={6}>
             <Card
@@ -126,10 +127,15 @@ export const DomainOverviewTile = ({ sslCertificates, sslError }: DomainOverview
           </Col>
         </Row>
 
+        {/* --- ADDED SPACING SECTION START --- */}
+        <Divider style={{ margin: '64px 0 40px 0', borderTopColor: '#f0f0f0' }} />
+        
         <div style={{ marginBottom: '24px' }}>
-          <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '32px' }}>
             SSL Certificate Expiry Report
           </Typography.Title>
+        {/* --- ADDED SPACING SECTION END --- */}
+
           <TableComponent
             title=""
             columns={[

@@ -74,11 +74,19 @@ export const useDashboardData = ({
           });
 
           const data = await response.json();
-          setUsers(data);
-          setForeignGroupsCount(null);
-          setServicePrincipalsCount(null);
 
-          const result = processAdminRoles(data);
+          // 1. Extract the users array from the response object
+          const userList = data.users || [];
+
+          // 2. Update state with the extracted array
+          setUsers(userList);
+
+          // 3. Use the counts from the API response if available, otherwise null
+          setForeignGroupsCount(data.foreignGroupsCount ?? null);
+          setServicePrincipalsCount(data.servicePrincipalsCount ?? null);
+
+          // 4. Pass the specific user list to your processing function
+          const result = processAdminRoles(userList); 
           setAdminRolesData(result);
         }
       } catch (err: any) {

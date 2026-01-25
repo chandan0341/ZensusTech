@@ -12,9 +12,9 @@ class UserResponse(BaseModel):
     user: str
     principalType: Optional[str] = None
     role: str
-    subscription: str
+    subscription: Optional[str] = None
     mfa: str
-    lastLogin: str
+    lastLogin: Optional[str] = None
     status: str
     risk: str
 
