@@ -57,117 +57,77 @@ export const Microsoft365Tile = ({
       <div style={{ padding: '24px' }}>
         {/* Section 1: Executive Summary */}
         <div style={{ marginBottom: '24px' }}>
-          <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-            Executive Summary (CXO View)
-          </Typography.Title>
-          <TableComponent
-            title=""
-            columns={[
-              { 
-                key: "area", 
-                label: "Area", 
-                width: "60%",
-                render: (value: string) => <span style={{ fontWeight: "600", color: "#1a3353" }}>{value}</span>
-              },
-              {
-                key: "status",
-                label: "Status",
-                width: "40%",
-                render: (value: string) => {
-                  const statusMap: Record<string, { color: string; icon: string }> = {
-                    "Needs Improvement": { color: "#ff4d4f", icon: "🔴" },
-                    "High Risk": { color: "#ff4d4f", icon: "🔴" },
-                    "Savings Possible": { color: "#ff4d4f", icon: "🔴" },
-                    "Good": { color: "#52c41a", icon: "🟢" },
-                    "Optimized": { color: "#52c41a", icon: "🟢" },
-                    "Medium": { color: "#faad14", icon: "🟡" },
-                  };
+  <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
+    Executive Summary (CXO View)
+  </Typography.Title>
+  <TableComponent
+    title=""
+    columns={[
+      { 
+        key: "area", 
+        label: "Area", 
+        width: "60%",
+        render: (value: string) => <span style={{ fontWeight: "600", color: "#1a3353" }}>{value}</span>
+      },
+      {
+        key: "status",
+        label: "Status",
+        width: "40%",
+        render: (value: string) => {
+          // Check if the value is "N/A" to apply the specific badge styling from your image
+          if (value === "N/A") {
+            return (
+              <div style={{
+                backgroundColor: "#f5f5f5",
+                color: "#8c8c8c",
+                padding: "4px 12px",
+                borderRadius: "4px",
+                display: "inline-block",
+                fontSize: "12px",
+                fontWeight: "500",
+                fontStyle: "italic" // Matches the italicized 'N/A' in your screenshot
+              }}>
+                N/A
+              </div>
+            );
+          }
 
-                  const isScore = value.includes('/');
-                  const config = statusMap[value] || { 
-                    color: isScore ? (parseInt(value) > 70 ? "#52c41a" : "#ff4d4f") : "#1890ff", 
-                    icon: isScore ? "📊" : "ℹ️" 
-                  };
+          const statusMap: Record<string, { color: string; icon: string }> = {
+            "Needs Improvement": { color: "#ff4d4f", icon: "🔴" },
+            "High Risk": { color: "#ff4d4f", icon: "🔴" },
+            "Savings Possible": { color: "#faad14", icon: "🟡" },
+            "Good": { color: "#52c41a", icon: "🟢" },
+            "Optimized": { color: "#52c41a", icon: "🟢" },
+            "Medium": { color: "#faad14", icon: "🟡" },
+          };
 
-                  return (
-                    <span style={{ color: config.color, fontWeight: "700", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px" }}>
-                      {config.icon} {value}
-                    </span>
-                  );
-                },
-              },
-            ]}
-            data={[
-              ...summaryItems,
-              { 
-                area: "Overall Security Score", 
-                status: `${overallScore} / 100`, 
-                color: overallScore > 70 ? "success" : "error" 
-              }
-            ]}
-            onRowClick={(record: any) => onRowClick(record, 'executive-summary')}
-          />
-        </div>
+          const isScore = value.includes('/');
+          const config = statusMap[value] || { 
+            color: isScore ? (parseInt(value) > 70 ? "#52c41a" : "#ff4d4f") : "#1890ff", 
+            icon: isScore ? "📊" : "ℹ️" 
+          };
 
-        <Divider style={{ margin: '48px 0' }} />
-
-        {/* Section 2: Identity Governance */}
-        <div style={{ marginBottom: '24px' }}>
-          <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-            User & Identity Governance Report
-          </Typography.Title>
-          <TableComponent
-            title=""
-            data={identityGovernanceData} 
-            columns={[
-              { 
-                key: "category", 
-                label: "Category", 
-                width: "60%",
-                render: (text: string) => {
-                  const iconMap: Record<string, string> = {
-                    "Total Users": "📊",
-                    "Active Users": "👤",
-                    "Guest Users": "🌐",
-                    "Inactive Users (>30 days)": "⏳",
-                    "Privileged Users": "🛡️"
-                  };
-                  return (
-                    <span style={{ fontWeight: "600", color: "#1a3353", display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '16px' }}>{iconMap[text] || "🔹"}</span>
-                      {text}
-                    </span>
-                  );
-                }
-              },
-              {
-                key: "count",
-                label: "Count",
-                width: "40%",
-                render: (value: any, record: any) => {
-                  const numValue = parseInt(value) || 0;
-                  let color = "#1890ff";
-                  let bgColor = "#e6f7ff";
-
-                  if (record.category === "Privileged Users" && numValue > 5) {
-                    color = "#ff4d4f"; bgColor = "#fff1f0";
-                  } else if (record.category === "Inactive Users (>30 days)" && numValue > 0) {
-                    color = "#faad14"; bgColor = "#fffbe6";
-                  } else if (record.category === "Active Users") {
-                    color = "#52c41a"; bgColor = "#f6ffed";
-                  }
-
-                  return (
-                    <div style={{ display: "inline-block", padding: '4px 12px', borderRadius: '6px', backgroundColor: bgColor, color: color, fontWeight: "800", border: `1px solid ${color}40`, minWidth: '50px', textAlign: 'center', fontFamily: 'monospace', fontSize: '14px' }}>
-                      {value}
-                    </div>
-                  );
-                },
-              },
-            ]}
-            onRowClick={(record) => onRowClick(record, 'user-identity-governance')}
-          />
-        </div>
+          return (
+            <span style={{ color: config.color, fontWeight: "700", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px" }}>
+              {config.icon} {value}
+            </span>
+          );
+        },
+      },
+    ]}
+    data={[
+      ...summaryItems.map(item => ({
+        ...item,
+        status: item.area === "Email Security" ? "N/A" : item.status
+      })),
+      { 
+        area: "Overall Security Score", 
+        status: `${overallScore} / 100`
+      }
+    ]}
+    onRowClick={(record: any) => onRowClick(record, 'executive-summary')}
+  />
+</div>
 
         <Divider style={{ margin: '48px 0' }} />
 
@@ -218,6 +178,7 @@ export const Microsoft365Tile = ({
             onRowClick={(Record) => handleCardClickForMicrosoftUserType(Record.role)}
           />
         </div>
+                <Divider style={{ margin: '48px 0' }} />
         {/* License Usage & Cost Optimization */}
 <div style={{ marginBottom: '24px' }}>
   <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
@@ -307,6 +268,66 @@ export const Microsoft365Tile = ({
     onRowClick={(record) => onRowClick(record, 'license-usage')}
   />
 </div>
+
+        {/* Section 2: Identity Governance */}
+        <div style={{ marginBottom: '24px' }}>
+          <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
+            User & Identity Governance Report
+          </Typography.Title>
+          <TableComponent
+            title=""
+            data={identityGovernanceData} 
+            columns={[
+              { 
+                key: "category", 
+                label: "Category", 
+                width: "60%",
+                render: (text: string) => {
+                  const iconMap: Record<string, string> = {
+                    "Total Users": "📊",
+                    "Active Users": "👤",
+                    "Guest Users": "🌐",
+                    "Inactive Users (>30 days)": "⏳",
+                    "Privileged Users": "🛡️"
+                  };
+                  return (
+                    <span style={{ fontWeight: "600", color: "#1a3353", display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '16px' }}>{iconMap[text] || "🔹"}</span>
+                      {text}
+                    </span>
+                  );
+                }
+              },
+              {
+                key: "count",
+                label: "Count",
+                width: "40%",
+                render: (value: any, record: any) => {
+                  const numValue = parseInt(value) || 0;
+                  let color = "#1890ff";
+                  let bgColor = "#e6f7ff";
+
+                  if (record.category === "Privileged Users" && numValue > 5) {
+                    color = "#ff4d4f"; bgColor = "#fff1f0";
+                  } else if (record.category === "Inactive Users (>30 days)" && numValue > 0) {
+                    color = "#faad14"; bgColor = "#fffbe6";
+                  } else if (record.category === "Active Users") {
+                    color = "#52c41a"; bgColor = "#f6ffed";
+                  }
+
+                  return (
+                    <div style={{ display: "inline-block", padding: '4px 12px', borderRadius: '6px', backgroundColor: bgColor, color: color, fontWeight: "800", border: `1px solid ${color}40`, minWidth: '50px', textAlign: 'center', fontFamily: 'monospace', fontSize: '14px' }}>
+                      {value}
+                    </div>
+                  );
+                },
+              },
+            ]}
+            onRowClick={(record) => onRowClick(record, 'user-identity-governance')}
+          />
+        </div>
+
+
       </div>
     </div>
   );
