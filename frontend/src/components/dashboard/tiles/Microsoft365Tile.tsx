@@ -56,12 +56,12 @@ export const Microsoft365Tile = ({
 
       <div style={{ padding: '24px' }}>
         {/* Section 1: Executive Summary */}
-        <div style={{ marginBottom: '24px' }}>
+      <div style={{ marginBottom: '24px' }}>
   <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
     Executive Summary (CXO View)
   </Typography.Title>
   <TableComponent
-    title=""
+    title="" // Keeps the UI clean as per your screenshot
     columns={[
       { 
         key: "area", 
@@ -74,18 +74,18 @@ export const Microsoft365Tile = ({
         label: "Status",
         width: "40%",
         render: (value: string) => {
-          // Check if the value is "N/A" to apply the specific badge styling from your image
-          if (value === "N/A") {
+          // Renders the specific N/A badge from your image
+          if (value === "N/A" || !value) {
             return (
               <div style={{
                 backgroundColor: "#f5f5f5",
                 color: "#8c8c8c",
-                padding: "4px 12px",
+                padding: "2px 10px",
                 borderRadius: "4px",
                 display: "inline-block",
                 fontSize: "12px",
                 fontWeight: "500",
-                fontStyle: "italic" // Matches the italicized 'N/A' in your screenshot
+                fontStyle: "italic"
               }}>
                 N/A
               </div>
@@ -95,10 +95,9 @@ export const Microsoft365Tile = ({
           const statusMap: Record<string, { color: string; icon: string }> = {
             "Needs Improvement": { color: "#ff4d4f", icon: "🔴" },
             "High Risk": { color: "#ff4d4f", icon: "🔴" },
-            "Savings Possible": { color: "#faad14", icon: "🟡" },
+            "Savings Possible": { color: "#ff4d4f", icon: "🔴" },
             "Good": { color: "#52c41a", icon: "🟢" },
             "Optimized": { color: "#52c41a", icon: "🟢" },
-            "Medium": { color: "#faad14", icon: "🟡" },
           };
 
           const isScore = value.includes('/');
@@ -108,7 +107,14 @@ export const Microsoft365Tile = ({
           };
 
           return (
-            <span style={{ color: config.color, fontWeight: "700", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px" }}>
+            <span style={{ 
+              color: config.color, 
+              fontWeight: "700", 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "8px", 
+              fontSize: "14px" 
+            }}>
               {config.icon} {value}
             </span>
           );
@@ -116,13 +122,26 @@ export const Microsoft365Tile = ({
       },
     ]}
     data={[
-      ...summaryItems.map(item => ({
-        ...item,
-        status: item.area === "Email Security" ? "N/A" : item.status
-      })),
+      ...summaryItems.map((item: any) => {
+        // 1. Force N/A for Email Security
+        if (item.area === "Email Security") {
+          return { ...item, status: "N/A" };
+        }
+        
+        // 2. Fix: If License Optimization has no real status/data, show N/A instead of Green
+        if (item.area === "License Optimization") {
+          const hasNoStatus = !item.status || item.status === "" || item.status === "Optimized" && !item.hasRealData; 
+          // Note: item.hasRealData should be sent from backend if count is 0 but API actually ran
+          if (hasNoStatus && (!item.count || item.count === 0)) {
+            return { ...item, status: "N/A" };
+          }
+        }
+
+        return item;
+      }),
       { 
         area: "Overall Security Score", 
-        status: `${overallScore} / 100`
+        status: `${overallScore} / 100` 
       }
     ]}
     onRowClick={(record: any) => onRowClick(record, 'executive-summary')}
