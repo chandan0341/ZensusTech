@@ -1,4 +1,4 @@
-import { Card, Typography } from "antd";
+import { Card, Typography, Divider, Tag, Tooltip } from "antd";
 import { TeamOutlined } from "@ant-design/icons";
 import { TableComponent } from "@/components/TailAdminReports";
 import { SummaryItem, GovernanceItem } from "@/types/dashboard.types";
@@ -7,17 +7,24 @@ interface Microsoft365TileProps {
   overallScore: number;
   summaryItems: SummaryItem[];
   identityGovernanceData: GovernanceItem[];
+  adminRolesData: any[]; // Added missing prop to interface
+  licenseUsageData?: any[]; // Optional prop for license usage data
   onRowClick: (record: any, tableType: string) => void;
+  handleCardClickForMicrosoftUserType: (userType: string) => void;
 }
 
 export const Microsoft365Tile = ({
   overallScore,
   summaryItems,
   identityGovernanceData,
-  onRowClick,
+  adminRolesData, // Destructured here
+  licenseUsageData,
+  onRowClick,  
+  handleCardClickForMicrosoftUserType,
 }: Microsoft365TileProps) => {
   return (
     <div>
+      {/* Header Card */}
       <Card
         style={{
           borderRadius: '16px',
@@ -48,6 +55,7 @@ export const Microsoft365Tile = ({
       </Card>
 
       <div style={{ padding: '24px' }}>
+        {/* Section 1: Executive Summary */}
         <div style={{ marginBottom: '24px' }}>
           <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
             Executive Summary (CXO View)
@@ -82,14 +90,7 @@ export const Microsoft365Tile = ({
                   };
 
                   return (
-                    <span style={{
-                      color: config.color,
-                      fontWeight: "700",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      fontSize: "14px"
-                    }}>
+                    <span style={{ color: config.color, fontWeight: "700", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px" }}>
                       {config.icon} {value}
                     </span>
                   );
@@ -108,6 +109,9 @@ export const Microsoft365Tile = ({
           />
         </div>
 
+        <Divider style={{ margin: '48px 0' }} />
+
+        {/* Section 2: Identity Governance */}
         <div style={{ marginBottom: '24px' }}>
           <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
             User & Identity Governance Report
@@ -146,30 +150,15 @@ export const Microsoft365Tile = ({
                   let bgColor = "#e6f7ff";
 
                   if (record.category === "Privileged Users" && numValue > 5) {
-                    color = "#ff4d4f";
-                    bgColor = "#fff1f0";
+                    color = "#ff4d4f"; bgColor = "#fff1f0";
                   } else if (record.category === "Inactive Users (>30 days)" && numValue > 0) {
-                    color = "#faad14";
-                    bgColor = "#fffbe6";
+                    color = "#faad14"; bgColor = "#fffbe6";
                   } else if (record.category === "Active Users") {
-                    color = "#52c41a";
-                    bgColor = "#f6ffed";
+                    color = "#52c41a"; bgColor = "#f6ffed";
                   }
 
                   return (
-                    <div style={{
-                      display: "inline-block",
-                      padding: '4px 12px',
-                      borderRadius: '6px',
-                      backgroundColor: bgColor,
-                      color: color,
-                      fontWeight: "800",
-                      border: `1px solid ${color}40`,
-                      minWidth: '50px',
-                      textAlign: 'center',
-                      fontFamily: 'monospace',
-                      fontSize: '14px'
-                    }}>
+                    <div style={{ display: "inline-block", padding: '4px 12px', borderRadius: '6px', backgroundColor: bgColor, color: color, fontWeight: "800", border: `1px solid ${color}40`, minWidth: '50px', textAlign: 'center', fontFamily: 'monospace', fontSize: '14px' }}>
                       {value}
                     </div>
                   );
@@ -180,7 +169,144 @@ export const Microsoft365Tile = ({
           />
         </div>
 
-        {/* Add more sections as needed - License Usage, Admin Roles, etc. */}
+        <Divider style={{ margin: '48px 0' }} />
+
+        {/* Section 3: Admin Roles */}
+        <div style={{ marginBottom: '24px' }}>
+          <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
+            Admin Roles & Privileged Access
+          </Typography.Title>
+
+          <TableComponent
+            title=""
+            data={adminRolesData || []} 
+            columns={[
+              { 
+                key: "role", 
+                label: "Role", 
+                width: "40%",
+                render: (text: string) => <span style={{ fontWeight: 600 }}>{text}</span>
+              },
+              { 
+                key: "assignedUsers", 
+                label: "Assigned Users", 
+                width: "30%" 
+              },
+              {
+                key: "mfaEnabled",
+                label: "MFA Status",
+                width: "30%",
+                render: (value: string) => {
+                  const isIssue = value?.includes('❌');
+                  return (
+                    <span style={{
+                      fontWeight: "bold",
+                      color: isIssue ? "#cf1322" : "#389e0d",
+                      background: isIssue ? "#fff1f0" : "#f6ffed",
+                      border: `1px solid ${isIssue ? "#ffa39e" : "#b7eb8f"}`,
+                      padding: "4px 10px",
+                      borderRadius: "4px",
+                      display: "inline-flex",
+                      alignItems: "center"
+                    }}>
+                      {value === "✅" ? "✅ All Enabled" : value}
+                    </span>
+                  );
+                },
+              },
+            ]}
+            onRowClick={(Record) => handleCardClickForMicrosoftUserType(Record.role)}
+          />
+        </div>
+        {/* License Usage & Cost Optimization */}
+<div style={{ marginBottom: '24px' }}>
+  <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
+    License Usage & Cost Optimization
+  </Typography.Title>
+  <TableComponent
+    title=""
+    columns={[
+      { 
+        key: "licenseType", 
+        label: "License Type", 
+        width: "30%",
+        render: (value) => (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontWeight: "700", color: "#1a3353", fontSize: "14px" }}>
+              {value?.replace(/_/g, ' ') || "N/A"}
+            </span>
+            <span style={{ fontSize: '11px', color: '#8c8c8c' }}>Microsoft O365</span>
+          </div>
+        )
+      },
+      { 
+        key: "purchased", 
+        label: "Purchased", 
+        width: "14%",
+        render: (value) => (
+          <Tag color="blue" style={{ borderRadius: '6px', border: 'none', fontWeight: '600', padding: '2px 10px' }}>
+            {value}
+          </Tag>
+        )
+      },
+      { 
+        key: "assigned", 
+        label: "Assigned", 
+        width: "14%",
+        render: (value) => <span style={{ color: "#595959", fontWeight: '500' }}>{value}</span>
+      },
+      { 
+        key: "unused", 
+        label: "Unused", 
+        width: "14%",
+        render: (value) => (
+          <span style={{ 
+            fontWeight: "bold", 
+            color: value > 0 ? "#faad14" : "#d9d9d9",
+            backgroundColor: value > 0 ? '#fffbe6' : 'transparent',
+            padding: '2px 8px',
+            borderRadius: '4px'
+          }}>
+            {value}
+          </span>
+        )
+      },
+      { 
+        key: "inactive", 
+        label: "Inactive", 
+        width: "14%",
+        render: (value) => (
+          value === "N/A" ? 
+          <Tooltip title="Requires Reports.Read.All Permission">
+            <Tag color="default" style={{ opacity: 0.6, fontStyle: 'italic' }}>N/A</Tag> 
+          </Tooltip> :
+          <Tag color={value > 0 ? "volcano" : "green"} style={{ borderRadius: '12px' }}>
+            {value > 0 ? `${value} Inactive` : 'Active'}
+          </Tag>
+        )
+      },
+      { 
+        key: "potentialSavings", 
+        label: "Potential Savings", 
+        width: "14%",
+        render: (value) => (
+          <div style={{ 
+            fontWeight: "800", 
+            color: (value !== "-" && value !== "$0.00") ? "#52c41a" : "#bfbfbf",
+            fontSize: "16px",
+            fontFamily: 'monospace'
+          }}>
+            {value === "-" ? "$0.00" : value}
+          </div>
+        )
+      },
+    ]}
+    // FIX 1: Provide an empty array fallback to prevent TS2322
+    data={licenseUsageData || []} 
+    // FIX 2: Use onRowClick (the prop name) instead of handleRowClick
+    onRowClick={(record) => onRowClick(record, 'license-usage')}
+  />
+</div>
       </div>
     </div>
   );

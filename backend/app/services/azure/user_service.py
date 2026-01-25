@@ -185,17 +185,19 @@ class UserService:
             List of user dictionaries
         """
         try:
+    # 1. Fetch initial user list
             all_users = await self.graph_service.get_users(
                 select_fields=["id", "displayName", "userPrincipalName", "userType", "accountEnabled"]
             )
 
             if not all_users:
+                logger.warning("No users found in the tenant.")
                 return []
 
             final_report = []
 
-            # Process users in batches of 10
             async with httpx.AsyncClient(timeout=60.0) as client:
+                # Process users in batches of 10
                 for i in range(0, len(all_users), 10):
                     chunk = all_users[i : i + 10]
                     batch_requests = []
@@ -205,49 +207,66 @@ class UserService:
                         batch_requests.append({
                             "id": f"roles-{uid}",
                             "method": "GET",
-                            "url": f"/users/{uid}/memberOf?$select=displayName",
+                            "url": f"users/{uid}/memberOf?$select=displayName,id"
                         })
                         batch_requests.append({
                             "id": f"mfa-{uid}",
                             "method": "GET",
-                            "url": f"/users/{uid}/authentication/methods",
+                            "url": f"users/{uid}/authentication/methods"
                         })
 
-                    batch_map = await self.graph_service._execute_batch_request(
-                        client, batch_requests
-                    )
+                    # 2. Execute Batch
+                    batch_result = await self.graph_service._execute_batch_request(client, batch_requests)
+                    
+                    # 3. Standardize the Map
+                    # Based on your logs, batch_result is already the keyed dictionary
+                    batch_map = batch_result if isinstance(batch_result, dict) else {}
 
+                    # 4. Process each user in the chunk
                     for user in chunk:
                         uid = user["id"]
+                        display_name = user.get("displayName", "Unknown")
+                        
+                        # --- ROLE DATA EXTRACTION ---
+                        # Path: batch_map -> roles-id -> body -> value
+                        role_res = batch_map.get(f"roles-{uid}", {})
+                        role_body = role_res.get("body", {})
+                        member_of_data = role_body.get("value", [])
 
-                        # Get roles
-                        member_of_data = batch_map.get(f"roles-{uid}", {}).get("value", [])
-                        priv_roles_list = [
-                            item.get("displayName")
-                            for item in member_of_data
-                            if item.get("@odata.type") == "#microsoft.graph.directoryRole"
-                            and item.get("displayName") is not None
-                        ]
+                        priv_roles_list = []
+                        for item in member_of_data:
+                            role_name = item.get("displayName")
+                            o_type = str(item.get("@odata.type", "")).lower()
+
+                            if "directoryrole" in o_type and role_name:
+                                priv_roles_list.append(role_name)
+                        
                         roles_string = ", ".join(priv_roles_list) if priv_roles_list else "Standard User"
 
-                        # Get MFA status
-                        mfa_data = batch_map.get(f"mfa-{uid}", {}).get("value", [])
+                        # --- MFA DATA EXTRACTION ---
+                        # Path: batch_map -> mfa-id -> body -> value
+                        mfa_res = batch_map.get(f"mfa-{uid}", {})
+                        mfa_body = mfa_res.get("body", {})
+                        mfa_data = mfa_body.get("value", [])
+                        
+                        # Logic: Is there any method that isn't just a standard password?
                         mfa_enabled = any(
-                            m.get("@odata.type") != "#microsoft.graph.passwordAuthenticationMethod"
+                            "passwordauthenticationmethod" not in str(m.get("@odata.type", "")).lower()
                             for m in mfa_data
                         )
 
+                        # --- REPORT ASSEMBLY ---
                         account_enabled = user.get("accountEnabled", True)
                         status = "Active" if account_enabled else "Inactive"
                         mfa_text = "Enabled" if mfa_enabled else "Disabled"
 
-                        # Calculate risk
+                        # Risk Logic
                         risk = "Low"
                         if not mfa_enabled:
                             risk = "High" if not account_enabled else "Medium"
 
                         final_report.append({
-                            "user": user.get("displayName") or "Unknown",
+                            "user": display_name,
                             "email": user.get("userPrincipalName") or "N/A",
                             "status": status,
                             "mfa": mfa_text,
@@ -256,9 +275,9 @@ class UserService:
                             "principalType": user.get("userType", "User"),
                         })
 
-            logger.info(f"Successfully processed {len(final_report)} tenant users")
+            logger.info(f"Successfully processed {len(final_report)} users.")
             return final_report
 
         except Exception as e:
-            logger.error(f"Error processing tenant users: {str(e)}", exc_info=True)
-            raise AzureAPIError(f"Failed to process tenant users: {str(e)}")
+            logger.error(f"Critical error in user processing: {str(e)}", exc_info=True)
+            return []

@@ -21,6 +21,7 @@ export const useDashboardData = ({
   mgtToken,
 }: UseDashboardDataProps) => {
   const [users, setUsers] = useState<User[]>([]);
+  const [allTenantUsers, setAllTenantUsers] = useState<User[]>([]); // ADD THIS: Permanent store
   const [loading, setLoading] = useState(true);
   const [foreignGroupsCount, setForeignGroupsCount] = useState<number | null>(null);
   const [servicePrincipalsCount, setServicePrincipalsCount] = useState<number | null>(null);
@@ -32,76 +33,73 @@ export const useDashboardData = ({
   const [summaryItems, setSummaryItems] = useState<SummaryItem[]>([]);
   const [identityGovernanceData, setIdentityGovernanceData] = useState<GovernanceItem[]>([]);
 
-  // Fetch users data
-  useEffect(() => {
-    if (!selectedTenant || !mgtToken) return;
+  // 1. EFFECT FOR TENANT-LEVEL DATA (M365, Governance, Global Admin Roles)
+// This only re-runs if the Tenant ID changes.
+useEffect(() => {
+  if (!selectedTenant || !mgtToken) return;
 
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        if (selectedSubscription) {
-          // Fetch subscription-specific users
-          const usersPromise = fetch(`${ENDPOINTS.AZURE.USERS}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              subscription_id: selectedSubscription,
-              tenant_id: selectedTenant,
-              client_id: clientId,
-              client_secret: clientSecret,
-            })
-          });
+  const fetchTenantData = async () => {
+    try {
+      const response = await fetch(`${ENDPOINTS.AZURE.TANENT_USERS}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: selectedTenant,
+          client_id: clientId,
+          client_secret: clientSecret,
+        })
+      });
 
-          const [usersResp] = await Promise.all([usersPromise]);
-          const data = await usersResp.json();
-          const usersData = data.users || [];
-          const foreignGroupsCount = data.foreignGroupsCount || undefined;
-          const servicePrincipalsCount = data.servicePrincipalsCount || undefined;
+      const data = await response.json();
+      const tenantUserList = data.users || [];
+      setAllTenantUsers(tenantUserList); // Save here permanently
+      setUsers(tenantUserList); // Also set to users for initial display
 
-          setUsers(usersData);
-          setForeignGroupsCount(foreignGroupsCount);
-          setServicePrincipalsCount(servicePrincipalsCount);
-        } else {
-          // Fetch tenant users
-          const response = await fetch(`${ENDPOINTS.AZURE.TANENT_USERS}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              tenant_id: selectedTenant,
-              client_id: clientId,
-              client_secret: clientSecret,
-            })
-          });
+      // Update M365 specific states
+      const adminRoles = processAdminRoles(tenantUserList); 
+      setAdminRolesData(adminRoles);
+      
+    } catch (err) {
+      console.error("Tenant Fetch Error:", err);
+    }
+  };
 
-          const data = await response.json();
+  fetchTenantData();
+}, [selectedTenant, mgtToken, clientId, clientSecret]); // Removed selectedSubscription here
 
-          // 1. Extract the users array from the response object
-          const userList = data.users || [];
 
-          // 2. Update state with the extracted array
-          setUsers(userList);
+// 2. EFFECT FOR SUBSCRIPTION-LEVEL DATA (Azure Users, Resource Counts)
+// This re-runs every time a new subscription is picked.
+useEffect(() => {
+  if (!selectedTenant || !selectedSubscription) return;
 
-          // 3. Use the counts from the API response if available, otherwise null
-          setForeignGroupsCount(data.foreignGroupsCount ?? null);
-          setServicePrincipalsCount(data.servicePrincipalsCount ?? null);
+  const fetchSubscriptionData = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${ENDPOINTS.AZURE.USERS}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subscription_id: selectedSubscription,
+          tenant_id: selectedTenant,
+          client_id: clientId,
+          client_secret: clientSecret,
+        })
+      });
 
-          // 4. Pass the specific user list to your processing function
-          const result = processAdminRoles(userList); 
-          setAdminRolesData(result);
-        }
-      } catch (err: any) {
-        console.error("Fetch Error:", err.message);
-        setUsers([]);
-        setForeignGroupsCount(null);
-        setServicePrincipalsCount(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+      const data = await response.json();
+      setUsers(data.users || []); // Update the user list for the Azure Identity tile
+      setForeignGroupsCount(data.foreignGroupsCount ?? null);
+      setServicePrincipalsCount(data.servicePrincipalsCount ?? null);
+    } catch (err) {
+      console.error("Subscription Fetch Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchData();
-  }, [selectedTenant, selectedSubscription, mgtToken, clientId, clientSecret]);
-
+  fetchSubscriptionData();
+}, [selectedSubscription, selectedTenant]); // Only runs on Sub change
   // Fetch SSL certificates
   useEffect(() => {
     const fetchSSL = async () => {
@@ -200,6 +198,7 @@ export const useDashboardData = ({
 
   return {
     users,
+    allTenantUsers, // RETURN THIS TOO
     loading,
     foreignGroupsCount,
     servicePrincipalsCount,

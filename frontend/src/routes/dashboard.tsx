@@ -71,6 +71,7 @@ function Dashboard() {
   // Dashboard data hook
   const {
     users,
+    allTenantUsers, // <--- Add this here
     loading: dataLoading,
     foreignGroupsCount,
     servicePrincipalsCount,
@@ -80,6 +81,7 @@ function Dashboard() {
     overallScore,
     summaryItems,
     identityGovernanceData,
+    licenseUsageData,
   } = useDashboardData({
     clientId,
     clientSecret,
@@ -111,7 +113,7 @@ function Dashboard() {
     if (currentTile === 'azure-identity') {
       modalData = getAzureIdentityModalData(cardType, users);
     } else if (currentTile === 'microsoft-365') {
-      modalData = getMicrosoft365ModalData(cardType);
+      modalData = getMicrosoft365ModalData(cardType); // Use allTenantUsers here
     } else if (currentTile === 'domain-overview') {
       modalData = getDomainOverviewModalData(cardType);
     }
@@ -125,6 +127,14 @@ function Dashboard() {
   const handleCardClickForUserType = (roleKey: string) => {
     if (!users || users.length === 0) return;
     const modalData = getModalDataByRole(roleKey, users);
+    if (modalData) {
+      setSelectedCardData(modalData);
+      setDetailModalVisible(true);
+    }
+  };
+  const handleCardClickForMicrosoftUserType = (roleKey: string) => {
+    if (!allTenantUsers || allTenantUsers.length === 0) return;
+    const modalData = getModalDataByRole(roleKey, allTenantUsers);
     if (modalData) {
       setSelectedCardData(modalData);
       setDetailModalVisible(true);
@@ -241,10 +251,13 @@ function Dashboard() {
 
               {selectedTile === 'microsoft-365' && (
                 <Microsoft365Tile
-                  overallScore={overallScore}
-                  summaryItems={summaryItems}
-                  identityGovernanceData={identityGovernanceData}
-                  onRowClick={handleRowClick}
+                 overallScore={overallScore}
+                summaryItems={summaryItems}
+                identityGovernanceData={identityGovernanceData}
+                adminRolesData={adminRolesData} // <--- This line is the fix
+                licenseUsageData={licenseUsageData} // Placeholder, implement fetching if needed
+                onRowClick={handleRowClick}
+                handleCardClickForMicrosoftUserType={handleCardClickForMicrosoftUserType}
                 />
               )}
             </Col>
