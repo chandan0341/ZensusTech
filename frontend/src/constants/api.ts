@@ -24,5 +24,6 @@ export const ENDPOINTS = {
     MICROSOFT:{
         LICENSE_AND_USAGE_DETAILS: `${BASE_URL}/microsoft0365/license_and_usage_details`,
         IDENTITY_GOVERNANCE: `${BASE_URL}/microsoft0365/identity/governance`,
+        SECURE_SCORE_DETAILS: `${BASE_URL}/microsoft0365/secure/score`,
     }
 };

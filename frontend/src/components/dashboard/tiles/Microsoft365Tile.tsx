@@ -56,92 +56,89 @@ export const Microsoft365Tile = ({
 
       <div style={{ padding: '24px' }}>
         {/* Section 1: Executive Summary */}
-      <div style={{ marginBottom: '24px' }}>
+     <div style={{ marginBottom: '24px' }}>
   <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
     Executive Summary (CXO View)
   </Typography.Title>
   <TableComponent
-    title="" // Keeps the UI clean as per your screenshot
+    title="" 
     columns={[
       { 
         key: "area", 
         label: "Area", 
-        width: "60%",
-        render: (value: string) => <span style={{ fontWeight: "600", color: "#1a3353" }}>{value}</span>
+        width: "40%",
+        render: (value: string, record: any) => (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontWeight: "600", color: "#1a3353" }}>{value}</span>
+            {record.note && (
+              <span style={{ fontSize: '11px', color: '#8c8c8c', fontWeight: '400' }}>
+                {record.note}
+              </span>
+            )}
+          </div>
+        )
       },
       {
         key: "status",
-        label: "Status",
-        width: "40%",
-        render: (value: string) => {
-          // Renders the specific N/A badge from your image
+        label: "Result / Status",
+        width: "60%",
+        render: (value: string, record: any) => {
+          // 1. Handle N/A or Missing Data
           if (value === "N/A" || !value) {
             return (
-              <div style={{
-                backgroundColor: "#f5f5f5",
-                color: "#8c8c8c",
-                padding: "2px 10px",
-                borderRadius: "4px",
-                display: "inline-block",
-                fontSize: "12px",
-                fontWeight: "500",
-                fontStyle: "italic"
-              }}>
+              <div style={{ backgroundColor: "#f5f5f5", color: "#8c8c8c", padding: "2px 10px", borderRadius: "4px", display: "inline-block", fontSize: "12px", fontStyle: "italic" }}>
                 N/A
               </div>
             );
           }
 
-          const statusMap: Record<string, { color: string; icon: string }> = {
-            "Needs Improvement": { color: "#ff4d4f", icon: "🔴" },
-            "High Risk": { color: "#ff4d4f", icon: "🔴" },
-            "Savings Possible": { color: "#ff4d4f", icon: "🔴" },
-            "Good": { color: "#52c41a", icon: "🟢" },
-            "Optimized": { color: "#52c41a", icon: "🟢" },
-          };
-
-          const isScore = value.includes('/');
-          const config = statusMap[value] || { 
-            color: isScore ? (parseInt(value) > 70 ? "#52c41a" : "#ff4d4f") : "#1890ff", 
-            icon: isScore ? "📊" : "ℹ️" 
-          };
+          // 2. Determine Color and Icon based on Backend provided color or value
+          const statusColor = record.color === 'red' ? '#ff4d4f' : 
+                             record.color === 'orange' ? '#faad14' : 
+                             record.color === 'green' ? '#52c41a' : '#1890ff';
+          
+          const icon = record.color === 'red' ? "🛑" : 
+                       record.color === 'orange' ? "⚠️" : 
+                       record.color === 'green' ? "✅" : "📊";
 
           return (
-            <span style={{ 
-              color: config.color, 
-              fontWeight: "700", 
-              display: "flex", 
-              alignItems: "center", 
-              gap: "8px", 
-              fontSize: "14px" 
-            }}>
-              {config.icon} {value}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {/* Display the Number (e.g., 0/3 or 6/7) in a badge format */}
+              {record.number && (
+                <span style={{ 
+                  backgroundColor: '#f0f2f5', 
+                  padding: '2px 8px', 
+                  borderRadius: '12px', 
+                  fontSize: '12px', 
+                  fontWeight: 'bold',
+                  color: '#595959',
+                  border: '1px solid #d9d9d9'
+                }}>
+                  {record.number}
+                </span>
+              )}
+              
+              {/* Display the Status Text */}
+              <span style={{ color: statusColor, fontWeight: "700", fontSize: "14px" }}>
+                {icon} {value}
+              </span>
+            </div>
           );
         },
       },
     ]}
     data={[
-      ...summaryItems.map((item: any) => {
-        // 1. Force N/A for Email Security
-        if (item.area === "Email Security") {
-          return { ...item, status: "N/A" };
-        }
-        
-        // 2. Fix: If License Optimization has no real status/data, show N/A instead of Green
-        if (item.area === "License Optimization") {
-          const hasNoStatus = !item.status || item.status === "" || item.status === "Optimized" && !item.hasRealData; 
-          // Note: item.hasRealData should be sent from backend if count is 0 but API actually ran
-          if (hasNoStatus && (!item.count || item.count === 0)) {
-            return { ...item, status: "N/A" };
-          }
-        }
-
-        return item;
-      }),
+      ...summaryItems.map((item: any) => ({
+        ...item,
+        // Ensure we show the status exactly as backend sends it
+        status: item.status || "N/A",
+      })),
       { 
         area: "Overall Security Score", 
-        status: `${overallScore} / 100` 
+        status: `${overallScore} %`, 
+        number: `${overallScore}/100`,
+        color: overallScore > 70 ? 'green' : overallScore > 40 ? 'orange' : 'red',
+        note: "Consolidated security posture across all audited modules."
       }
     ]}
     onRowClick={(record: any) => onRowClick(record, 'executive-summary')}

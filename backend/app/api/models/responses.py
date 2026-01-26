@@ -46,9 +46,6 @@ class LicenseUsageData(BaseModel):
     purchased: int
     assigned: int
     unused: int
-    inactive: int | str
-    potentialSavings: str
-
 
 class SummaryItem(BaseModel):
     """Executive summary item model."""

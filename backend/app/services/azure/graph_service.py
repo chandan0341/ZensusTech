@@ -1,9 +1,11 @@
 """
 Microsoft Graph API service for user and identity operations.
 """
+import io
 import httpx
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional,Any
+import json
 
 from app.core.config import settings
 from app.core.exceptions import AzureAPIError
@@ -295,42 +297,6 @@ class GraphService:
                 logger.error(f"Error fetching secure score: {str(e)}")
                 return 0
 
-    async def get_email_security_status(self) -> Dict[str, str]:
-        """
-        Get email security status.
-
-        Returns:
-            Dictionary with status and color
-        """
-        url = (
-            f"{self.base_url}/security/alerts"
-            "?$filter=category eq 'Email' and status eq 'newActive'&$top=5"
-        )
-
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            try:
-                response = await client.get(url, headers=self.headers)
-                response.raise_for_status()
-
-                alerts = response.json().get("value", [])
-
-                if not alerts:
-                    return {"status": "Good", "color": "green"}
-
-                has_high_risk = any(a.get("severity") == "high" for a in alerts)
-                if has_high_risk:
-                    return {"status": "High Risk", "color": "red"}
-
-                return {"status": "Needs Improvement", "color": "orange"}
-
-            except httpx.HTTPStatusError:
-                logger.warning("Could not fetch email security status")
-                return {"status": "Good", "color": "green"}
-
-            except Exception as e:
-                logger.error(f"Error fetching email security status: {str(e)}")
-                return {"status": "Good", "color": "green"}
-
     async def get_license_and_usage(self) -> tuple[List[Dict], Optional[List[Dict]], bool]:
         """
         Get license SKUs and usage data.
@@ -350,19 +316,60 @@ class GraphService:
                 skus = []
 
             # Fetch usage data (requires Reports.Read.All permission)
-            usage_url = (
-                f"{self.base_url}/reports/getMicrosoft365AppUserDetail(period='D90')"
-                "?$format=application/json"
-            )
-            try:
-                usage_response = await client.get(usage_url, headers=self.headers)
-                usage_ok = usage_response.status_code == 200
-                usage_data = (
-                    usage_response.json().get("value", []) if usage_ok else None
-                )
-            except Exception as e:
-                logger.warning(f"Could not fetch usage data (may require Reports.Read.All): {str(e)}")
-                usage_ok = False
-                usage_data = None
+            # usage_url = (
+            #     f"{self.base_url}/reports/getMicrosoft365AppUserDetail(period='D90')"
+            #     "?$format=application/json"
+            # )
+            # try:
+            #     usage_response = await client.get(usage_url, headers=self.headers)
+            #     usage_ok = usage_response.status_code == 200
+            #     usage_data = (
+            #         usage_response.json().get("value", []) if usage_ok else None
+            #     )
+            # except Exception as e:
+            #     logger.warning(f"Could not fetch usage data (may require Reports.Read.All): {str(e)}")
+            #     usage_ok = False
+            #     usage_data = None
 
-            return skus, usage_data, usage_ok
+            return skus
+        
+    async def get_microsoft0365_secure_score(self) -> Dict[str, Any]:
+            # Define the batch requests
+            # Note: Reports API is called separately if it requires follow_redirects 
+            # but most tenants support basic batching for metadata.
+            payload = {
+                "requests": [
+                    {
+                        "id": "1",
+                        "method": "GET",
+                        "url": "/security/secureScores?$top=1"
+                    }
+                ]
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"{self.base_url}/$batch", headers=self.headers, json=payload)
+                
+                if response.status_code != 200:
+                    return {"error": "Batch request failed", "details": response.text}
+
+                batch_responses = response.json().get("responses", [])
+                
+                # Use a helper to safely parse each response body
+                def safe_parse(resp_obj):
+                    body = resp_obj.get("body", {})
+                    # If body is a string (common batch issue), convert to dict
+                    if isinstance(body, str):
+                        try:
+                            return json.loads(body)
+                        except:
+                            return {}
+                    return body
+
+                results = {res["id"]: safe_parse(res) for res in batch_responses}
+
+                # Secure Score is returned as a list in the 'value' key
+                score_body = results.get("1", {})
+                score_value = score_body.get("value", [{}])[0] if isinstance(score_body, dict) else {}   
+
+                return score_value

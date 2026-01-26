@@ -118,48 +118,107 @@ useEffect(() => {
 
   // Fetch license usage data
   useEffect(() => {
-    const fetchLicenseData = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`${ENDPOINTS.MICROSOFT.LICENSE_AND_USAGE_DETAILS}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tenant_id: selectedTenant,
-            client_id: clientId,
-            client_secret: clientSecret
-          })
-        });
+    const fetchDashboardData = async () => {
+        try {
+            setLoading(true);
+            
+            // 1. Fetch License Data
+            const response = await fetch(`${ENDPOINTS.MICROSOFT.LICENSE_AND_USAGE_DETAILS}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    tenant_id: selectedTenant,
+                    client_id: clientId,
+                    client_secret: clientSecret
+                })
+            });
 
-        if (!response.ok) throw new Error('Failed to fetch data');
-        
-        const data = await response.json();
-        setOverallScore(data.overallScore);
-        setSummaryItems(data.summaryItems);
-        
-        const formattedData = data.tableData.map((item: any, index: number) => ({
-          key: index,
-          licenseType: item.license,
-          purchased: item.purchased,
-          assigned: item.assigned,
-          unused: item.unused,
-          inactive: item.inactive,
-          potentialSavings: item.potentialSavings
-        }));
+            if (!response.ok) throw new Error('License API failed');
+            const data = await response.json();
 
-        setLicenseUsageData(formattedData);
-      } catch (error) {
-        console.error("Error fetching optimization data:", error);
-        message.error("Could not load license optimization data");
-      } finally {
-        setLoading(false);
-      }
+            // Store License summary items temporarily
+            const licenseSummary = data.summaryItems || [];
+            
+            setOverallScore(data.overallScore);
+
+            // Safety check for table mapping
+            if (data.tableData) {
+                const formattedData = data.tableData.map((item: any, index: number) => ({
+                    key: index,
+                    licenseType: item.license,
+                    purchased: item.purchased,
+                    assigned: item.assigned,
+                    unused: item.unused
+                }));
+                setLicenseUsageData(formattedData);
+            }
+
+            // 2. Fetch Secure Score Data
+            const response_ss = await fetch(`${ENDPOINTS.MICROSOFT.SECURE_SCORE_DETAILS}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    tenant_id: selectedTenant,
+                    client_id: clientId,
+                    client_secret: clientSecret
+                })
+            });
+
+            if (!response_ss.ok) throw new Error('Secure Score API failed');
+            const data_ss = await response_ss.json();
+
+            // --- THE MERGE LOGIC ---
+            // Take the cards from Secure Score and add them to the summary list
+            const secureCards = data_ss.cards || [];
+            const response_users = await fetch(`${ENDPOINTS.AZURE.TANENT_USERS}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                tenant_id: selectedTenant,
+                client_id: clientId,
+                client_secret: clientSecret,
+              })
+            });
+
+            const userDataResponse = await response_users.json();
+
+            // FIX: Extract the actual array from the response object
+            const actualUsers = userDataResponse.users || []; 
+
+            const total = actualUsers.length;
+            const mfaEnabled = actualUsers.filter((u: User) => u.mfa === "Enabled").length;
+            const missingMfa = actualUsers.filter((u: User) => u.mfa === "Disabled").map((u: User) => u.user);
+
+            const identity = {
+                area: "Identity Security",
+                status: total > 0 && mfaEnabled === total ? "Secure" : "Attention Required",
+                color: total > 0 && mfaEnabled === total ? "green" : "orange",
+                number: `${mfaEnabled}/${total}`,
+                note: total === 0 ? "No users detected." : 
+                      mfaEnabled === total ? "All users verified with MFA." : 
+                      `MFA disabled for: ${missingMfa.join(", ")}`
+            };
+            // --- ADD THESE LOGS HERE ---
+            console.log("1. Total Users Found:", total);
+            console.log("2. Identity Object Created:", identity);
+            console.log("3. Final Array being sent to State:", [identity, ...secureCards, ...licenseSummary]);
+
+            // Combine both: Secure Score cards come first, then License cards
+            setSummaryItems([identity, ...secureCards, ...licenseSummary]);
+            
+        } catch (error) {
+            console.error("Aggregation Error:", error);
+            message.error("Could not load dashboard data");
+        } finally {
+            setLoading(false);
+        }
     };
 
     if (selectedTenant) {
-      fetchLicenseData();
+        fetchDashboardData();
     }
-  }, [selectedTenant, clientId, clientSecret]);
+}, [selectedTenant, clientId, clientSecret]);
+ 
 
   // Fetch governance report
   useEffect(() => {

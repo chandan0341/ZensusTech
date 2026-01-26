@@ -13,6 +13,7 @@ from app.services.azure.license_service import LicenseService
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["microsoft365"])
+PRICE_MAP = {"O365_BUSINESS_ESSENTIALS": 6.00, "SPE_E3": 36.00}
 
 
 @router.post("/microsoft0365/license_and_usage_details", response_model=LicenseUsageResponse)
@@ -87,6 +88,34 @@ async def get_identity_report(request: SubscriptionRequest) -> list[GovernanceIt
         logger.info(f"Identity governance report generated with {len(report_data)} items")
 
         return [GovernanceItem(**item) for item in report_data]
+
+    except (TokenError, AzureAPIError):
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching identity governance: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch identity governance report")
+
+@router.post("/microsoft0365/secure/score")
+async def get_microsoft0365_secure_score_details(request: SubscriptionRequest):
+    
+    # Get raw data from service layer
+    try:
+        logger.info(f"Fetching identity governance for tenant: {request.tenant_id}")
+
+        # Get Graph token
+        graph_token = await AzureAuthService.get_graph_token(
+            tenant_id=request.tenant_id,
+            client_id=request.client_id,
+            client_secret=request.client_secret,
+        )
+
+        # Get governance report
+        license_service = LicenseService(graph_token=graph_token)
+        report_data = await license_service.get_microsoft0365_secure_score()
+
+        logger.info(f"Identity governance report generated with {len(report_data)} items")
+
+        return report_data
 
     except (TokenError, AzureAPIError):
         raise
