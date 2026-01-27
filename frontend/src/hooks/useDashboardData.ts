@@ -9,7 +9,7 @@ interface UseDashboardDataProps {
   clientId: string;
   clientSecret: string;
   selectedTenant: string;
-  selectedSubscription: string;
+  selectedSubscription: string|null;
   mgtToken: string;
 }
 
@@ -80,7 +80,7 @@ useEffect(() => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subscription_id: selectedSubscription,
+          subscription_id: selectedSubscription || "",
           tenant_id: selectedTenant,
           client_id: clientId,
           client_secret: clientSecret,
@@ -204,7 +204,27 @@ useEffect(() => {
             console.log("3. Final Array being sent to State:", [identity, ...secureCards, ...licenseSummary]);
 
             // Combine both: Secure Score cards come first, then License cards
-            setSummaryItems([identity, ...secureCards, ...licenseSummary]);
+            // --- THE MERGE LOGIC ---
+
+            // 1. Combine all sources into one array
+            const allItems = [identity, ...secureCards, ...licenseSummary];
+
+            // 2. Use a Map to ensure uniqueness by 'area' and cast to SummaryItem[]
+            const unifiedItems: SummaryItem[] = Array.from(
+                allItems.reduce((map, item) => {
+                    if (item && item.area) {
+                        // This ensures we keep the most complete version of an item
+                        map.set(item.area, item as SummaryItem);
+                    }
+                    return map;
+                }, new Map<string, SummaryItem>()).values()
+            );
+
+            // 3. Debug logs to verify the 'number' field is present
+            console.log("Unified Items being set to State:", unifiedItems);
+
+            // 4. Set state with the correctly typed array
+            setSummaryItems(unifiedItems);
             
         } catch (error) {
             console.error("Aggregation Error:", error);

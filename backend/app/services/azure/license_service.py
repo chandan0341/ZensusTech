@@ -37,56 +37,60 @@ class LicenseService:
             Dictionary with overall score, summary items, and table data
         """
         try:
-            # Fetch data in parallel
             skus = await self.graph_service.get_license_and_usage()
             score = await self.graph_service.get_secure_score()
-
+            
             license_list = []
-            total_unused = 0
+            total_purchased_units = 0
+            total_unused_units = 0
 
-            # Process each SKU
             for item in skus:
                 sku_id = item.get("skuId")
-                sku_name = item.get("skuPartNumber")
-
-                # Filter: Only allow the specific Business Essentials SKU
                 if sku_id != "3b555118-da6a-4418-894f-7df1e2096870":
                     continue
-                sku_name = item.get("skuPartNumber")
+
+                sku_name = item.get("skuPartNumber", "Unknown")
                 purchased = item.get("prepaidUnits", {}).get("enabled", 0)
                 assigned = item.get("consumedUnits", 0)
-                unused = purchased - assigned
-                total_unused += unused
-
+                unused = max(0, purchased - assigned)
+                
+                # Aggregate the actual unit counts
+                total_purchased_units += purchased
+                total_unused_units += unused
 
                 license_list.append({
-                    "license": sku_name.replace("_", " ") if sku_name else "Unknown",
+                    "license": sku_name.replace("_", " "),
                     "purchased": purchased,
                     "assigned": assigned,
                     "unused": unused
                 })
 
-            # Build executive summary
-            executive_summary = [
-                {
-                    "area": "License Optimization",
-                    "status": "Savings Possible" if total_unused > 0 else "Optimized",
-                    "color": "red" if total_unused > 0 else "green",
-                }
-            ]
+            # Logic for Results and Status using unit counts
+            if not license_list:
+                status, color, number = "N/A", "grey", "0/0"
+            elif total_unused_units > 0:
+                status, color = "Savings Possible", "red"
+                number = f"{total_unused_units}/{total_purchased_units}"
+            else:
+                status, color = "Optimized", "green"
+                number = f"0/{total_purchased_units}" # This will now show 0/4
 
-            logger.info(f"License usage report generated with score: {score}%")
+            executive_summary = [{
+                "area": "License Optimization",
+                "status": status,
+                "color": color,
+                "number": number,
+                "note": f"Managed {total_purchased_units} total license units."
+            }]
 
             return {
                 "overallScore": score,
                 "summaryItems": executive_summary,
                 "tableData": license_list,
             }
-
         except Exception as e:
-            logger.error(f"Error generating license usage report: {str(e)}", exc_info=True)
+            logger.error(f"Error: {str(e)}")
             raise
-
     async def get_identity_governance_report(self) -> List[Dict]:
         """
         Get identity governance report.

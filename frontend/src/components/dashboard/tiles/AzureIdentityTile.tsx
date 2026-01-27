@@ -54,7 +54,7 @@ export const AzureIdentityTile = ({
             <LockOutlined style={{ fontSize: '32px' }} />
             <div>
               <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>
-                Azure Identity
+                Identity & Access
               </h2>
               <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '14px' }}>
                 Identity & Access Governance Reports

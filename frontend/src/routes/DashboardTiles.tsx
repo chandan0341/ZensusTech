@@ -1,274 +1,92 @@
 import React from "react";
 import { Card, Space, Typography } from "antd";
-import { LockOutlined, GlobalOutlined, TeamOutlined } from "@ant-design/icons";
+import { 
+  LockOutlined, 
+  GlobalOutlined, 
+  TeamOutlined, 
+  DollarOutlined, 
+  CloudSyncOutlined, 
+  SafetyCertificateOutlined,
+  DatabaseOutlined,
+  DashboardOutlined
+} from "@ant-design/icons";
 
 interface DashboardTilesProps {
   selectedTile: string;
   setSelectedTile: (tile: string) => void;
+  viewMode: 'tenant' | 'subscription';
 }
 
-export const DashboardTiles: React.FC<DashboardTilesProps> = ({ selectedTile, setSelectedTile }) => (
-  <Card
-    style={{
-      borderRadius: '12px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-      height: 'fit-content'
-    }}
-    bodyStyle={{ padding: '16px' }}
-  >
-    <div style={{ marginBottom: '16px' }}>
-      <Typography.Title level={4} style={{ margin: 0, textAlign: 'center' }}>
-        Dashboard Tiles
-      </Typography.Title>
-    </div>
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
-      {/* Azure Identity Tile */}
-      <Card
-        style={{
-          borderRadius: '8px',
-          border: selectedTile === 'azure-identity' ? '2px solid #1890ff' : '1px solid #e8e8e8',
-          background: selectedTile === 'azure-identity' ? '#f0f8ff' : 'white',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease'
-        }}
-        bodyStyle={{ padding: '12px' }}
-        onClick={() => setSelectedTile('azure-identity')}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <LockOutlined style={{ fontSize: '20px', color: '#1890ff' }} />
-          <div>
-            <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#1890ff' }}>
-              Azure Identity
-            </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              Access Governance
-            </div>
-          </div>
-        </div>
-      </Card>
+export const DashboardTiles: React.FC<DashboardTilesProps> = ({ 
+  selectedTile, 
+  setSelectedTile, 
+  viewMode 
+}) => {
 
-      {/* Security Tile */}
-      <Card
-        style={{
-          borderRadius: '8px',
-          border: selectedTile === 'security' ? '2px solid #fa541c' : '1px solid #e8e8e8',
-          background: selectedTile === 'security' ? '#fff7e6' : 'white',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease'
-        }}
-        bodyStyle={{ padding: '12px' }}
-        onClick={() => setSelectedTile('security')}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <LockOutlined style={{ fontSize: '20px', color: '#fa541c' }} />
-          <div>
-            <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#fa541c' }}>
-              Security
-            </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              Security Posture & Alerts
-            </div>
-          </div>
+  const renderTile = (key: string, title: string, subText: string, icon: React.ReactNode, color: string, activeBg: string) => (
+    <Card
+      style={{
+        borderRadius: '8px',
+        border: selectedTile === key ? `2px solid ${color}` : '1px solid #e8e8e8',
+        background: selectedTile === key ? activeBg : 'white',
+        cursor: 'pointer',
+        transition: 'all 0.3s ease'
+      }}
+      bodyStyle={{ padding: '12px' }}
+      onClick={() => setSelectedTile(key)}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ fontSize: '20px', color: color }}>{icon}</div>
+        <div>
+          <div style={{ fontWeight: 'bold', fontSize: '13px', color: color }}>{title}</div>
+          <div style={{ fontSize: '11px', color: '#666' }}>{subText}</div>
         </div>
-      </Card>
+      </div>
+    </Card>
+  );
 
-      {/* Cost Management (FinOps) & Optimisation Tile */}
-      <Card
-        style={{
-          borderRadius: '8px',
-          border: selectedTile === 'cost-management' ? '2px solid #13c2c2' : '1px solid #e8e8e8',
-          background: selectedTile === 'cost-management' ? '#e6fffb' : 'white',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease'
-        }}
-        bodyStyle={{ padding: '12px' }}
-        onClick={() => setSelectedTile('cost-management')}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <TeamOutlined style={{ fontSize: '20px', color: '#13c2c2' }} />
-          <div>
-            <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#13c2c2' }}>
-              Cost Management (FinOps)
-            </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              Optimisation & Spend
-            </div>
-          </div>
-        </div>
-      </Card>
+  return (
+    <Card
+      style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', height: 'fit-content' }}
+      bodyStyle={{ padding: '16px' }}
+    >
+      <div style={{ marginBottom: '16px' }}>
+        <Typography.Title level={5} style={{ margin: 0, textAlign: 'center', color: '#434343' }}>
+          <DashboardOutlined /> Dashboard Tiles
+        </Typography.Title>
+      </div>
 
-      {/* Backups & DR Tile */}
-      <Card
-        style={{
-          borderRadius: '8px',
-          border: selectedTile === 'backups-dr' ? '2px solid #722ed1' : '1px solid #e8e8e8',
-          background: selectedTile === 'backups-dr' ? '#f9f0ff' : 'white',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease'
-        }}
-        bodyStyle={{ padding: '12px' }}
-        onClick={() => setSelectedTile('backups-dr')}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <LockOutlined style={{ fontSize: '20px', color: '#722ed1' }} />
-          <div>
-            <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#722ed1' }}>
-              Backups & DR
-            </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              Backup & Disaster Recovery
-            </div>
-          </div>
-        </div>
-      </Card>
+      <Space direction="vertical" size={10} style={{ width: '100%' }}>
+        
+        {/* Identity is always first, regardless of mode */}
+        {renderTile(
+          'azure-identity', 
+          'Identity & Access', 
+          viewMode === 'tenant' ? 'Organization Entra ID' : 'Subscription RBAC', 
+          <LockOutlined />, '#1890ff', '#f0f8ff'
+        )}
 
-      {/* Patch Management Tile */}
-      <Card
-        style={{
-          borderRadius: '8px',
-          border: selectedTile === 'patch-management' ? '2px solid #faad14' : '1px solid #e8e8e8',
-          background: selectedTile === 'patch-management' ? '#fffbe6' : 'white',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease'
-        }}
-        bodyStyle={{ padding: '12px' }}
-        onClick={() => setSelectedTile('patch-management')}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <TeamOutlined style={{ fontSize: '20px', color: '#faad14' }} />
-          <div>
-            <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#faad14' }}>
-              Patch Management
-            </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              Updates & Compliance
-            </div>
-          </div>
-        </div>
-      </Card>
+        {/* Tiles visible in BOTH modes */}
+        {renderTile('security', 'Security', 'Posture & Alerts', <SafetyCertificateOutlined />, '#fa541c', '#fff7e6')}
+        {renderTile('cost-management', 'Cost Management', 'FinOps & Spending', <DollarOutlined />, '#13c2c2', '#e6fffb')}
+        {renderTile('backups-dr', 'Backups & DR', 'Recovery Points', <CloudSyncOutlined />, '#722ed1', '#f9f0ff')}
+        {renderTile('patch-management', 'Patch Management', 'Updates & Compliance', <SafetyCertificateOutlined />, '#faad14', '#fffbe6')}
+        
+        {/* Renamed CMDB Tile */}
+        {renderTile('cmdb', 'Asset Optimization', 'Inventory & Reserved Instances', <DatabaseOutlined />, '#1890ff', '#f0f8ff')}
+        
+        {renderTile('infra-availability', 'Infrastructure', 'Performance Metrics', <DashboardOutlined />, '#52c41a', '#f6ffed')}
+        {renderTile('billing-view', 'Billing View', 'Invoices & Charges', <DollarOutlined />, '#d4380d', '#fff2e8')}
 
-      {/* CMDB Tile */}
-      <Card
-        style={{
-          borderRadius: '8px',
-          border: selectedTile === 'cmdb' ? '2px solid #1890ff' : '1px solid #e8e8e8',
-          background: selectedTile === 'cmdb' ? '#f0f8ff' : 'white',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease'
-        }}
-        bodyStyle={{ padding: '12px' }}
-        onClick={() => setSelectedTile('cmdb')}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <GlobalOutlined style={{ fontSize: '20px', color: '#1890ff' }} />
-          <div>
-            <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#1890ff' }}>
-              CMDB
-            </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              Asset Inventory
-            </div>
-          </div>
-        </div>
-      </Card>
+        {/* Tenant-Only Tiles (Hidden in Subscription Mode) */}
+        {viewMode === 'tenant' && (
+          <>
+            {renderTile('microsoft-365', 'Microsoft O365', 'Managed Services', <TeamOutlined />, '#722ed1', '#f9f0ff')}
+            {renderTile('domain-overview', 'Domain Overview', 'Health & Security', <GlobalOutlined />, '#52c41a', '#f6ffed')}
+          </>
+        )}
 
-      {/* Infrastructure Availability & Performance Report Tile */}
-      <Card
-        style={{
-          borderRadius: '8px',
-          border: selectedTile === 'infra-availability' ? '2px solid #52c41a' : '1px solid #e8e8e8',
-          background: selectedTile === 'infra-availability' ? '#f6ffed' : 'white',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease'
-        }}
-        bodyStyle={{ padding: '12px' }}
-        onClick={() => setSelectedTile('infra-availability')}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <TeamOutlined style={{ fontSize: '20px', color: '#52c41a' }} />
-          <div>
-            <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#52c41a' }}>
-              Infrastructure Availability
-            </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              Performance Report
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Billing View Tile */}
-      <Card
-        style={{
-          borderRadius: '8px',
-          border: selectedTile === 'billing-view' ? '2px solid #d4380d' : '1px solid #e8e8e8',
-          background: selectedTile === 'billing-view' ? '#fff2e8' : 'white',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease'
-        }}
-        bodyStyle={{ padding: '12px' }}
-        onClick={() => setSelectedTile('billing-view')}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <TeamOutlined style={{ fontSize: '20px', color: '#d4380d' }} />
-          <div>
-            <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#d4380d' }}>
-              Billing View
-            </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              Invoices & Charges
-            </div>
-          </div>
-        </div>
-      </Card>
-      {/* Domain Overview Tile */}
-      <Card
-        style={{
-          borderRadius: '8px',
-          border: selectedTile === 'domain-overview' ? '2px solid #52c41a' : '1px solid #e8e8e8',
-          background: selectedTile === 'domain-overview' ? '#f6ffed' : 'white',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease'
-        }}
-        bodyStyle={{ padding: '12px' }}
-        onClick={() => setSelectedTile('domain-overview')}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <GlobalOutlined style={{ fontSize: '20px', color: '#52c41a' }} />
-          <div>
-            <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#52c41a' }}>
-              Domain Overview
-            </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              Health & Security
-            </div>
-          </div>
-        </div>
-      </Card>
-      {/* Microsoft 0365 Managed Services Tile */}
-      <Card
-        style={{
-          borderRadius: '8px',
-          border: selectedTile === 'microsoft-365' ? '2px solid #722ed1' : '1px solid #e8e8e8',
-          background: selectedTile === 'microsoft-365' ? '#f9f0ff' : 'white',
-          cursor: 'pointer',
-          transition: 'all 0.3s ease'
-        }}
-        bodyStyle={{ padding: '12px' }}
-        onClick={() => setSelectedTile('microsoft-365')}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <TeamOutlined style={{ fontSize: '20px', color: '#722ed1' }} />
-          <div>
-            <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#722ed1' }}>
-              Microsoft O365
-            </div>
-            <div style={{ fontSize: '12px', color: '#666' }}>
-              Managed Services
-            </div>
-          </div>
-        </div>
-      </Card>
-    </Space>
-  </Card>
-);
+      </Space>
+    </Card>
+  );
+};

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Row, Col, Spin, Alert } from "antd";
+import { Row, Col, Spin, Alert, Empty } from "antd";
 import { DashboardTiles } from "./DashboardTiles";
 import { useCredentials } from "@/context/CredentialsContext";
 import { useAzureSubscriptions } from "@/hooks/useAzureSubscriptions";
@@ -34,18 +34,19 @@ import { Microsoft365Tile } from "@/components/dashboard/tiles/Microsoft365Tile"
 function Dashboard() {
   const { clientId, clientSecret, tenantId } = useCredentials();
   const [selectedTenant, setSelectedTenant] = useState<string>(tenantId || "tenant-1");
-  const [selectedSubscription, setSelectedSubscription] = useState<string>("");
+  const [selectedSubscription, setSelectedSubscription] = useState<string | null>(null);
   const [selectedTile, setSelectedTile] = useState<string>("azure-identity");
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedCardData, setSelectedCardData] = useState<ModalData | null>(null);
+  const [viewMode, setViewMode] = useState<'tenant' | 'subscription'>('tenant');
 
-  // Check if credentials exist
+  // Guard: Redirect if credentials missing
   if (!clientId || !clientSecret) {
     window.location.href = "/login";
     return null;
   }
 
-  // Clean up query parameters
+  // Effect: URL Parameter Cleanup
   useEffect(() => {
     const url = new URL(window.location.href);
     if (url.searchParams.has('from')) {
@@ -54,7 +55,7 @@ function Dashboard() {
     }
   }, []);
 
-  // Azure Subscriptions hook
+  // Hook: Azure Subscriptions
   const {
     azureSubscriptions,
     mgtToken,
@@ -62,16 +63,12 @@ function Dashboard() {
     loading: subscriptionsLoading,
     error: subscriptionsError,
     fetchSubscriptionMetadata,
-  } = useAzureSubscriptions({
-    clientId,
-    clientSecret,
-    selectedTenant,
-  });
+  } = useAzureSubscriptions({ clientId, clientSecret, selectedTenant });
 
-  // Dashboard data hook
+  // Hook: Dashboard Core Data
   const {
     users,
-    allTenantUsers, // <--- Add this here
+    allTenantUsers,
     loading: dataLoading,
     foreignGroupsCount,
     servicePrincipalsCount,
@@ -90,34 +87,76 @@ function Dashboard() {
     mgtToken,
   });
 
-  // Fetch subscription metadata when subscription changes
+  // Effect: Fetch metadata when sub changes
   useEffect(() => {
     if (selectedSubscription && mgtToken) {
       fetchSubscriptionMetadata(selectedSubscription);
     }
   }, [selectedSubscription, mgtToken, fetchSubscriptionMetadata]);
 
+  // --- Handlers ---
+  const handleViewModeChange = (newMode: 'tenant' | 'subscription') => {
+    setViewMode(newMode);
+    
+    if (newMode === 'subscription') {
+      // Auto-select first sub if none selected
+      if (azureSubscriptions && azureSubscriptions.length > 0 && !selectedSubscription) {
+        const firstSub = azureSubscriptions[0];
+        const subId = (firstSub as any).subscriptionId || (firstSub as any).id || (firstSub as any).value;
+        if (subId) handleSubscriptionChange(subId);
+      }
+      // Tile Guard: Move to Identity if on a Tenant-only tile
+      if (selectedTile === 'microsoft-365' || selectedTile === 'domain-overview') {
+        setSelectedTile('azure-identity');
+      }
+    } else {
+      // Clear sub when switching back to Tenant mode
+      handleSubscriptionChange(null);
+    }
+  };
+
   const handleTenantChange = (tenantId: string) => {
     setSelectedTenant(tenantId);
-    setSelectedSubscription("");
+    setSelectedSubscription(null);
+    setViewMode('tenant');
+    setSelectedTile('azure-identity'); 
   };
 
-  const handleSubscriptionChange = (subscriptionId: string) => {
+  const handleSubscriptionChange = (subscriptionId: string | null) => {
     setSelectedSubscription(subscriptionId);
+    if (subscriptionId) {
+      setViewMode('subscription');
+      setSelectedTile('azure-identity');
+    } else {
+      setViewMode('tenant');
+      setSelectedTile('azure-identity');
+    }
   };
 
-  // Modal handlers
-  const handleCardClick = (cardType: string, currentTile: string) => {
-    let modalData: ModalData | null = null;
+  // --- Blank State Logic ---
+  // If in subscription mode but no ID is selected, force a blank data state
+  const isSubModeWithoutSelection = viewMode === 'subscription' && !selectedSubscription;
 
+  const displayUsers = isSubModeWithoutSelection 
+    ? [] 
+    : (viewMode === 'tenant' ? (allTenantUsers || []) : (users || []));
+
+  // Derived calculations (will result in empty/zero states if displayUsers is [])
+  const roleCounts = calculateRoleCounts(displayUsers);
+  const { mfaEnabledCount, mfaDisabledCount } = calculateMFAStats(displayUsers);
+  const mfaDisabledByRole = calculateMFADisabledByRole(displayUsers);
+
+  // --- Modal Interaction Handlers ---
+  const handleCardClick = (cardType: string, currentTile: string) => {
+    if (isSubModeWithoutSelection) return;
+    let modalData: ModalData | null = null;
     if (currentTile === 'azure-identity') {
-      modalData = getAzureIdentityModalData(cardType, users);
+      modalData = getAzureIdentityModalData(cardType, displayUsers);
     } else if (currentTile === 'microsoft-365') {
-      modalData = getMicrosoft365ModalData(cardType); // Use allTenantUsers here
+      modalData = getMicrosoft365ModalData(cardType); 
     } else if (currentTile === 'domain-overview') {
       modalData = getDomainOverviewModalData(cardType);
     }
-
     if (modalData) {
       setSelectedCardData(modalData);
       setDetailModalVisible(true);
@@ -125,16 +164,8 @@ function Dashboard() {
   };
 
   const handleCardClickForUserType = (roleKey: string) => {
-    if (!users || users.length === 0) return;
-    const modalData = getModalDataByRole(roleKey, users);
-    if (modalData) {
-      setSelectedCardData(modalData);
-      setDetailModalVisible(true);
-    }
-  };
-  const handleCardClickForMicrosoftUserType = (roleKey: string) => {
-    if (!allTenantUsers || allTenantUsers.length === 0) return;
-    const modalData = getModalDataByRole(roleKey, allTenantUsers);
+    if (isSubModeWithoutSelection || displayUsers.length === 0) return;
+    const modalData = getModalDataByRole(roleKey, displayUsers);
     if (modalData) {
       setSelectedCardData(modalData);
       setDetailModalVisible(true);
@@ -142,12 +173,11 @@ function Dashboard() {
   };
 
   const handleCardClickForMFADisabledRole = (record: { role: string; count: number }, type: string) => {
-    if (type === 'mfa-disabled-roles') {
-      const modalData = getMFADisabledModalData(record.role, users);
-      if (modalData) {
-        setSelectedCardData(modalData);
-        setDetailModalVisible(true);
-      }
+    if (isSubModeWithoutSelection || type !== 'mfa-disabled-roles') return;
+    const modalData = getMFADisabledModalData(record.role, displayUsers);
+    if (modalData) {
+      setSelectedCardData(modalData);
+      setDetailModalVisible(true);
     }
   };
 
@@ -159,11 +189,6 @@ function Dashboard() {
     }
   };
 
-  // Calculate derived data
-  const roleCounts = calculateRoleCounts(users);
-  const { mfaEnabledCount, mfaDisabledCount } = calculateMFAStats(users);
-  const mfaDisabledByRole = calculateMFADisabledByRole(users);
-
   const loading = subscriptionsLoading || dataLoading;
 
   return (
@@ -172,6 +197,8 @@ function Dashboard() {
         <DashboardHeader />
 
         <SubscriptionSelector
+          viewMode={viewMode}
+          onViewModeChange={handleViewModeChange}
           selectedTenant={selectedTenant}
           selectedSubscription={selectedSubscription}
           azureSubscriptions={azureSubscriptions}
@@ -186,88 +213,87 @@ function Dashboard() {
         )}
 
         {subscriptionsError && (
-          <Alert
-            message="Warning"
-            description={subscriptionsError}
-            type="error"
-            style={{ marginBottom: "24px" }}
-            closable
-          />
+          <Alert message="Warning" description={subscriptionsError} type="error" style={{ marginBottom: "24px" }} closable />
         )}
 
-        {loading && (
+        {loading ? (
           <Row justify="center" style={{ padding: "64px 0" }}>
-            <Spin size="large" tip="Loading dashboard data..." />
+            <Spin size="large" tip="Loading data..." />
           </Row>
-        )}
-
-        {!loading && users.length > 0 && (
+        ) : (
           <Row gutter={24} style={{ marginTop: '24px' }}>
             <Col xs={24} lg={6}>
-              <DashboardTiles selectedTile={selectedTile} setSelectedTile={setSelectedTile} />
+              <DashboardTiles 
+                selectedTile={selectedTile} 
+                setSelectedTile={setSelectedTile} 
+                viewMode={viewMode} 
+              />
             </Col>
 
             <Col xs={24} lg={18}>
-              {selectedTile === 'azure-identity' && (
-                <AzureIdentityTile
-                  users={users}
-                  loading={dataLoading}
-                  foreignGroupsCount={foreignGroupsCount}
-                  servicePrincipalsCount={servicePrincipalsCount}
-                  selectedSubscription={selectedSubscription}
-                  roleCounts={roleCounts}
-                  mfaEnabledCount={mfaEnabledCount}
-                  mfaDisabledCount={mfaDisabledCount}
-                  mfaDisabledByRole={mfaDisabledByRole}
-                  adminRolesData={adminRolesData}
-                  onCardClick={handleCardClick}
-                  onCardClickForUserType={handleCardClickForUserType}
-                  onCardClickForMFADisabledRole={handleCardClickForMFADisabledRole}
-                />
-              )}
+              {/* Conditional Content Rendering */}
+              {isSubModeWithoutSelection ? (
+                <div style={{ background: '#fff', padding: '100px 24px', borderRadius: '12px', textAlign: 'center' }}>
+                  <Empty 
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description="Please select a subscription to view associated resources and identity data." 
+                  />
+                </div>
+              ) : (
+                <>
+                  {selectedTile === 'azure-identity' && (
+                    <AzureIdentityTile
+                      users={displayUsers}
+                      loading={dataLoading}
+                      foreignGroupsCount={foreignGroupsCount}
+                      servicePrincipalsCount={servicePrincipalsCount}
+                      selectedSubscription={selectedSubscription ?? ""}
+                      roleCounts={roleCounts}
+                      mfaEnabledCount={mfaEnabledCount}
+                      mfaDisabledCount={mfaDisabledCount}
+                      mfaDisabledByRole={mfaDisabledByRole}
+                      adminRolesData={adminRolesData}
+                      onCardClick={handleCardClick}
+                      onCardClickForUserType={handleCardClickForUserType}
+                      onCardClickForMFADisabledRole={handleCardClickForMFADisabledRole}
+                    />
+                  )}
 
-              {selectedTile === 'security' && (
-                <SecurityTile />
-              )}
+                  {viewMode === 'tenant' && (
+                    <>
+                      {selectedTile === 'domain-overview' && <DomainOverviewTile sslCertificates={sslCertificates} sslError={sslError} />}
+                      {selectedTile === 'microsoft-365' && (
+                        <Microsoft365Tile
+                          overallScore={overallScore}
+                          summaryItems={summaryItems}
+                          identityGovernanceData={identityGovernanceData}
+                          adminRolesData={adminRolesData}
+                          licenseUsageData={licenseUsageData}
+                          onRowClick={handleRowClick}
+                          handleCardClickForMicrosoftUserType={handleCardClickForUserType}
+                        />
+                      )}
+                    </>
+                  )}
 
-              {selectedTile === 'cost-management' && (
-                <CostManagementTile />
-              )}
-
-              {selectedTile === 'backups-dr' && (
-                <BackupsDRTile />
-              )}
-
-              {selectedTile === 'patch-management' && (
-                <PatchManagementTile />
-              )}
-
-              {selectedTile === 'domain-overview' && (
-                <DomainOverviewTile
-                  sslCertificates={sslCertificates}
-                  sslError={sslError}
-                />
-              )}
-
-              {selectedTile === 'microsoft-365' && (
-                <Microsoft365Tile
-                 overallScore={overallScore}
-                summaryItems={summaryItems}
-                identityGovernanceData={identityGovernanceData}
-                adminRolesData={adminRolesData} // <--- This line is the fix
-                licenseUsageData={licenseUsageData} // Placeholder, implement fetching if needed
-                onRowClick={handleRowClick}
-                handleCardClickForMicrosoftUserType={handleCardClickForMicrosoftUserType}
-                />
+                  {viewMode === 'subscription' && (
+                    <>
+                      {selectedTile === 'security' && <SecurityTile />}
+                      {selectedTile === 'cost-management' && <CostManagementTile />}
+                      {selectedTile === 'backups-dr' && <BackupsDRTile />}
+                      {selectedTile === 'patch-management' && <PatchManagementTile />}
+                    </>
+                  )}
+                </>
               )}
             </Col>
           </Row>
         )}
 
-        <DetailModal
-          visible={detailModalVisible}
-          data={selectedCardData}
-          onClose={() => setDetailModalVisible(false)}
+        <DetailModal 
+          visible={detailModalVisible} 
+          data={selectedCardData} 
+          onClose={() => setDetailModalVisible(false)} 
         />
       </div>
     </div>
@@ -276,11 +302,5 @@ function Dashboard() {
 
 export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
-  head: () => ({
-    meta: [
-      {
-        title: "Dashboard - ZensusTech",
-      },
-    ],
-  }),
+  head: () => ({ meta: [{ title: "Dashboard - ZensusTech" }] }),
 });

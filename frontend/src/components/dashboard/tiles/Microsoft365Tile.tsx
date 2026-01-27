@@ -61,89 +61,96 @@ export const Microsoft365Tile = ({
     Executive Summary (CXO View)
   </Typography.Title>
   <TableComponent
-    title="" 
-    columns={[
-      { 
-        key: "area", 
-        label: "Area", 
-        width: "40%",
-        render: (value: string, record: any) => (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontWeight: "600", color: "#1a3353" }}>{value}</span>
-            {record.note && (
-              <span style={{ fontSize: '11px', color: '#8c8c8c', fontWeight: '400' }}>
-                {record.note}
-              </span>
-            )}
-          </div>
-        )
-      },
-      {
-        key: "status",
-        label: "Result / Status",
-        width: "60%",
-        render: (value: string, record: any) => {
-          // 1. Handle N/A or Missing Data
-          if (value === "N/A" || !value) {
-            return (
-              <div style={{ backgroundColor: "#f5f5f5", color: "#8c8c8c", padding: "2px 10px", borderRadius: "4px", display: "inline-block", fontSize: "12px", fontStyle: "italic" }}>
-                N/A
-              </div>
-            );
-          }
-
-          // 2. Determine Color and Icon based on Backend provided color or value
-          const statusColor = record.color === 'red' ? '#ff4d4f' : 
-                             record.color === 'orange' ? '#faad14' : 
-                             record.color === 'green' ? '#52c41a' : '#1890ff';
-          
-          const icon = record.color === 'red' ? "🛑" : 
-                       record.color === 'orange' ? "⚠️" : 
-                       record.color === 'green' ? "✅" : "📊";
-
+  title="" 
+  columns={[
+    { 
+      key: "area", 
+      label: "Area", 
+      width: "40%",
+      render: (value: string, record: any) => (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontWeight: "600", color: "#1a3353" }}>{value}</span>
+          {record.note && (
+            <span style={{ fontSize: '11px', color: '#8c8c8c', fontWeight: '400' }}>
+              {record.note}
+            </span>
+          )}
+        </div>
+      )
+    },
+    {
+      key: "status",
+      label: "Result / Status",
+      width: "60%",
+      render: (value: string, record: any) => {
+        // Professional N/A Handling
+        if (value === "N/A" || record.color === 'grey') {
           return (
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {/* Display the Number (e.g., 0/3 or 6/7) in a badge format */}
-              {record.number && (
-                <span style={{ 
-                  backgroundColor: '#f0f2f5', 
-                  padding: '2px 8px', 
-                  borderRadius: '12px', 
-                  fontSize: '12px', 
-                  fontWeight: 'bold',
-                  color: '#595959',
-                  border: '1px solid #d9d9d9'
-                }}>
-                  {record.number}
-                </span>
-              )}
-              
-              {/* Display the Status Text */}
-              <span style={{ color: statusColor, fontWeight: "700", fontSize: "14px" }}>
-                {icon} {value}
+              <span style={{ backgroundColor: '#f0f2f5', padding: '2px 8px', borderRadius: '12px', fontSize: '12px', color: '#8c8c8c', border: '1px solid #d9d9d9' }}>
+                0/0
               </span>
+              <div style={{ backgroundColor: "#f5f5f5", color: "#8c8c8c", padding: "4px 10px", borderRadius: "4px", fontSize: "12px", fontStyle: "italic" }}>
+                N/A
+              </div>
             </div>
           );
-        },
+        }
+
+        const statusColor = record.color === 'red' ? '#ff4d4f' : 
+                           record.color === 'orange' ? '#faad14' : 
+                           record.color === 'green' ? '#52c41a' : '#1890ff';
+        
+        const icon = record.color === 'red' ? "🛑" : 
+                     record.color === 'orange' ? "⚠️" : 
+                     record.color === 'green' ? "✅" : "📊";
+
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Numerical Badge (e.g., 0/1 or 1/1) */}
+            <span style={{ 
+              backgroundColor: '#f0f2f5', 
+              padding: '2px 8px', 
+              borderRadius: '12px', 
+              fontSize: '12px', 
+              fontWeight: 'bold',
+              color: '#595959',
+              border: '1px solid #d9d9d9'
+            }}>
+              {record.number}
+            </span>
+            
+            {/* Status Text with Icon */}
+            <span style={{ color: statusColor, fontWeight: "700", fontSize: "14px" }}>
+              {icon} {value}
+            </span>
+          </div>
+        );
       },
-    ]}
-    data={[
-      ...summaryItems.map((item: any) => ({
-        ...item,
-        // Ensure we show the status exactly as backend sends it
-        status: item.status || "N/A",
-      })),
-      { 
-        area: "Overall Security Score", 
-        status: `${overallScore} %`, 
-        number: `${overallScore}/100`,
-        color: overallScore > 70 ? 'green' : overallScore > 40 ? 'orange' : 'red',
-        note: "Consolidated security posture across all audited modules."
-      }
-    ]}
-    onRowClick={(record: any) => onRowClick(record, 'executive-summary')}
-  />
-</div>
+    },
+  ]}
+  data={[
+  ...(summaryItems || []).map((item: any) => {
+    // LOG THE ITEM: Open your browser console (F12) and check this!
+    console.log("Summary Item from Backend:", item); 
+
+    return {
+      ...item,
+      // Priority 1: Use the number from the backend
+      // Priority 2: If area is License and no number, it means data hasn't arrived (show 0/0)
+      number: item.number ? item.number : (item.area === "License Optimization" ? "0/0" : "0/0"),
+      status: item.status || "N/A",
+    };
+  }),
+  { 
+    area: "Overall Security Score", 
+    status: `${overallScore} %`, 
+    number: `${overallScore}/100`,
+    color: overallScore > 70 ? 'green' : overallScore > 40 ? 'orange' : 'red',
+  }
+]}
+  onRowClick={(record: any) => onRowClick(record, 'executive-summary')}
+/></div>
 
         <Divider style={{ margin: '48px 0' }} />
 
