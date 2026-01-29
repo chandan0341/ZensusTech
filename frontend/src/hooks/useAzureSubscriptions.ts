@@ -15,9 +15,8 @@ export const useAzureSubscriptions = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const dropdownSubs: SubscriptionOption[] = [
-    { label: "Subscription A", value: "sub-a-id" },
-    { label: "Subscription B", value: "sub-b-id" },
-    { label: "Subscription C", value: "sub-c-id" },
+    { label: "95f52ab4-5d3f-49e6-8ef7-1b14626ff046-Subscription-PROD", value: "sub-a-id" },
+    { label: "95f52ab4-5d3f-49e6-8ef7-1b14626ff046-Subscription-DEV", value: "sub-c-id" },
   ];
 
   // 1. Fetch Subscriptions List

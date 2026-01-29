@@ -1,22 +1,92 @@
 import { useState, useEffect } from "react";
 import { User, AdminRoleData, GovernanceItem, SummaryItem } from "@/types/dashboard.types";
 import { processAdminRoles } from "@/utils/dashboardUtils";
+// 1. Define the specific literal types to match your User interface
+type RiskLevel = "High" | "Medium" | "Low";
+type MFAStatus = "Enabled" | "Disabled";
 
-// --- STATIC DATA CONFIGURATION ---
-const GENERATE_USERS = (count: number, isOrg: boolean): User[] => {
-  return Array(count).fill(null).map((_, i) => ({
-    user: `${isOrg ? 'Corp' : 'Sub'} User ${i + 1}`,
-    role: isOrg ? (i < 5 ? "Global Administrator" : "Standard User") : (i < 3 ? "Owner" : "Reader"),
-    subscription: isOrg ? "Tenant Root" : "Production-Subscription",
-    mfa: i % 4 === 0 ? "Disabled" : "Enabled",
-    status: "Active",
-    risk: i % 7 === 0 ? "High" : "Low",
-    lastLogin: "2024-05-21"
-  }));
-};
+// 2. Use 'as const' so TS doesn't generalize these to just 'string'
+const RAW_NAMES = [
+  { name: "Rajesh P", sub: "Prod-ERP", mfa: "Disabled" as MFAStatus, status: "Inactive", risk: "High" as RiskLevel },
+  { name: "Amit S", sub: "Prod-ERP", mfa: "Disabled" as MFAStatus, status: "Active", risk: "Medium" as RiskLevel },
+  { name: "John D (Guest)", sub: "Prod-ERP", mfa: "Disabled" as MFAStatus, status: "Inactive", risk: "High" as RiskLevel },
+  { name: "Neha K", sub: "NonProd", mfa: "Disabled" as MFAStatus, status: "Active", risk: "Low" as RiskLevel },
+  { name: "Vendor-App-SP", sub: "NonProd", mfa: "Disabled" as MFAStatus, status: "Active", risk: "High" as RiskLevel },
+  { name: "Sunil R", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "HR-Admin", sub: "Both", mfa: "Disabled" as MFAStatus, status: "Active", risk: "High" as RiskLevel },
+  { name: "TestUser01", sub: "NonProd", mfa: "Disabled" as MFAStatus, status: "Dormant", risk: "High" as RiskLevel },
+  { name: "Vinayak S", sub: "Prod-ERP", mfa: "Disabled" as MFAStatus, status: "Active", risk: "Medium" as RiskLevel },
+  { name: "Sachin P", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Active", risk: "Low" as RiskLevel },
+  { name: "Mahesh M", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Active", risk: "Low" as RiskLevel },
+  { name: "NileshM", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Active", risk: "Low" as RiskLevel },
+  { name: "Umesh S", sub: "Prod-ERP", mfa: "Enabled" as MFAStatus, status: "Active", risk: "Medium" as RiskLevel },
+  { name: "Ramesh S", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Sidhant S", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Sidhi S", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Deepali S", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Ronin K", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Shaiendra Jain", sub: "Prod-ERP", mfa: "Enabled" as MFAStatus, status: "Active", risk: "Medium" as RiskLevel },
+  { name: "Shubham P", sub: "Both", mfa: "Enabled" as MFAStatus, status: "Active", risk: "High" as RiskLevel },
+  { name: "Pooja A", sub: "Both", mfa: "Enabled" as MFAStatus, status: "Active", risk: "High" as RiskLevel },
+  { name: "Fieona F", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Anne Thomas", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Sandy P", sub: "Prod-ERP", mfa: "Disabled" as MFAStatus, status: "Active", risk: "Medium" as RiskLevel },
+  { name: "Ramakant T", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Amitabh K", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Ankan K", sub: "Prod-ERP", mfa: "Disabled" as MFAStatus, status: "Active", risk: "Medium" as RiskLevel },
+  { name: "Sudhant B", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Active", risk: "Low" as RiskLevel },
+  { name: "Rohit S", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Active", risk: "Low" as RiskLevel },
+  { name: "Sivakumar T", sub: "Prod-ERP", mfa: "Disabled" as MFAStatus, status: "Inactive", risk: "High" as RiskLevel },
+  { name: "Vivek l", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Rajanish G", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Mahendra P", sub: "Prod-ERP", mfa: "Disabled" as MFAStatus, status: "Active", risk: "Medium" as RiskLevel },
+  { name: "Mosine M", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Active", risk: "Low" as RiskLevel },
+  { name: "Michele T", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Active", risk: "Low" as RiskLevel },
+  { name: "Rohan P", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Kush S", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "App_Admin", sub: "Prod-ERP", mfa: "Disabled" as MFAStatus, status: "Inactive", risk: "High" as RiskLevel },
+  { name: "DB_admin", sub: "Prod-ERP", mfa: "Disabled" as MFAStatus, status: "Inactive", risk: "High" as RiskLevel },
+  { name: "Testing_123", sub: "Prod-ERP", mfa: "Disabled" as MFAStatus, status: "Inactive", risk: "High" as RiskLevel },
+  { name: "Rest_users_30days", sub: "Prod-ERP", mfa: "Disabled" as MFAStatus, status: "Inactive", risk: "High" as RiskLevel },
+  { name: "Kunal P", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Jignesh T", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Ashish P", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Romy F", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Priya A", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+  { name: "Chandan S", sub: "NonProd", mfa: "Enabled" as MFAStatus, status: "Inactive", risk: "Medium" as RiskLevel },
+];
 
-const STATIC_ORG_USERS = GENERATE_USERS(47, true);
-const STATIC_SUB_USERS = GENERATE_USERS(20, false);
+/**
+ * 1. ORG USERS (Typed as User[])
+ */
+export const STATIC_ORG_USERS: User[] = RAW_NAMES.map((u, i) => ({
+  user: u.name,
+  role: i < 5 ? "Global Administrator" : "Standard User",
+  subscription: "Tenant Root",
+  mfa: u.mfa,
+  status: u.status,
+  risk: u.risk,
+  lastLogin: "N/A"
+}));
+
+/**
+ * 2. SUB USERS (Typed as User[])
+ */
+export const STATIC_SUB_USERS: User[] = RAW_NAMES.map((u, i) => {
+  let subRole = "Reader";
+  if (i % 3 === 0) subRole = "Owner";
+  else if (i % 3 === 1) subRole = "Contributor";
+
+  return {
+    user: u.name,
+    role: subRole,
+    subscription: u.sub,
+    mfa: u.mfa,
+    status: u.status,
+    risk: u.risk,
+    lastLogin: "N/A"
+  };
+});
 
 // Added "selectedTenant" back to the props interface to stop the Dashboard.tsx error
 interface UseDashboardDataProps {
