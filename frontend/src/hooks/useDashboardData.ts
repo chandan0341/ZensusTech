@@ -67,7 +67,7 @@ export const useDashboardData = ({ selectedSubscription }: UseDashboardDataProps
       { id: "2", metric: "Access Reviews", value: "Pending", status: "Warning" } as unknown as GovernanceItem
     ],
     foreignGroupsCount: 2,
-    servicePrincipalsCount: 5,
+    servicePrincipalsCount: 1,
     sslCertificates: [],
     sslError: null, // FIX: Added this back to satisfy Dashboard.tsx
     licenseUsageData: [],

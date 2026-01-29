@@ -18,7 +18,6 @@ import {
   getAzureIdentityModalData,
   getMicrosoft365ModalData,
   getDomainOverviewModalData,
-  getTableRowModalData,
   getModalDataByRole,
   getMFADisabledModalData,
 } from "@/utils/modalDataUtils";
@@ -28,7 +27,7 @@ import { CostManagementTile } from "@/components/dashboard/tiles/CostManagementT
 import { BackupDRTile } from "@/components/dashboard/tiles/BackupsDRTile";
 import { PatchManagementTile } from "@/components/dashboard/tiles/PatchManagementTile";
 import { DomainOverviewTile } from "@/components/dashboard/tiles/DomainOverviewTile";
-import { Microsoft365Tile } from "@/components/dashboard/tiles/Microsoft365Tile";
+import { MicrosoftO365Tile } from '@/components/dashboard/tiles/Microsoft365Tile';
 
 function Dashboard() {
   // 1. Updated Context: We no longer pull clientId/Secret here for security
@@ -74,10 +73,6 @@ function Dashboard() {
     adminRolesData,
     sslCertificates,
     sslError,
-    overallScore,
-    summaryItems,
-    identityGovernanceData,
-    licenseUsageData,
   } = useDashboardData({
     selectedTenant,
     selectedSubscription,
@@ -155,13 +150,6 @@ function Dashboard() {
     }
   };
 
-  const handleRowClick = (record: any, tableType: string) => {
-    const modalData = getTableRowModalData(tableType, record);
-    if (modalData) {
-      setSelectedCardData(modalData);
-      setDetailModalVisible(true);
-    }
-  };
 
   const loading = subscriptionsLoading || dataLoading;
 
@@ -233,27 +221,24 @@ function Dashboard() {
 
                   {viewMode === 'tenant' && (
                     <>
+                      {selectedTile === 'microsoft-365' && <MicrosoftO365Tile selectedSubscription={selectedSubscription ?? ""} />}
+                      {selectedTile === 'security' && <SecurityTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
+                      {selectedTile === 'cost-management' && <CostManagementTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
+                      {selectedTile === 'backups-dr' && <BackupDRTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
+                      {selectedTile === 'patch-management' && <PatchManagementTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
                       {selectedTile === 'domain-overview' && <DomainOverviewTile sslCertificates={sslCertificates} sslError={sslError} />}
-                      {selectedTile === 'microsoft-365' && (
-                        <Microsoft365Tile
-                          overallScore={overallScore}
-                          summaryItems={summaryItems}
-                          identityGovernanceData={identityGovernanceData}
-                          adminRolesData={adminRolesData}
-                          licenseUsageData={licenseUsageData}
-                          onRowClick={handleRowClick}
-                          handleCardClickForMicrosoftUserType={handleCardClickForUserType}
-                        />
-                      )}
+
                     </>
                   )}
 
-                  {viewMode === 'subscription' || viewMode === 'tenant' && (
+                  {viewMode === 'subscription' && (
                     <>
                       {selectedTile === 'security' && <SecurityTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
                       {selectedTile === 'cost-management' && <CostManagementTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
                       {selectedTile === 'backups-dr' && <BackupDRTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
                       {selectedTile === 'patch-management' && <PatchManagementTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
+                      {selectedTile === 'domain-overview' && <DomainOverviewTile sslCertificates={sslCertificates} sslError={sslError} />}
+
                     </>
                   )}
                 </>

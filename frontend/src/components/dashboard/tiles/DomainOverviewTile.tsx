@@ -1,192 +1,142 @@
-import { Card, Row, Col, Typography, Alert, Divider } from "antd"; // Added Divider
-import { TeamOutlined, LockOutlined, ClockCircleOutlined, GlobalOutlined } from "@ant-design/icons";
-import { TableComponent } from "@/components/TailAdminReports";
+import { Table, Typography, Tag, Space, Card, Row, Col, Alert } from 'antd';
+import { GlobalOutlined, ClockCircleOutlined, LockOutlined, TeamOutlined } from '@ant-design/icons';
 
-interface DomainOverviewTileProps {
-  sslCertificates: any[];
-  sslError: string | null;
+const { Title, Text } = Typography;
+
+interface SSLCertificate {
+  key: string | number;
+  domain: string;
+  expiryDate: string;
+  daysToExpiry: number;
 }
 
-export const DomainOverviewTile = ({ sslCertificates, sslError }: DomainOverviewTileProps) => {
+export const DomainOverviewTile = ({ 
+  sslCertificates = [], 
+  sslError = null 
+}: { 
+  sslCertificates?: SSLCertificate[], 
+  sslError?: string | null 
+}) => {
+  
+  const sectionStyle: React.CSSProperties = {
+    background: '#ffffff',
+    borderRadius: '8px',
+    padding: '24px',
+    marginBottom: '40px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+    border: '1px solid #f0f0f0'
+  };
+
+  const headerTextStyle: React.CSSProperties = {
+    textAlign: 'center',
+    marginBottom: '24px',
+    fontWeight: 700,
+    color: '#262626',
+    fontSize: '22px'
+  };
+
+  // Mock data matching image_e3e47c.png
+  const displayCertificates = sslCertificates.length > 0 ? sslCertificates : [
+    { key: '1', domain: 'example.com', expiryDate: '2026-02-20', daysToExpiry: 30 },
+    { key: '2', domain: 'company.net', expiryDate: '2026-01-25', daysToExpiry: 4 },
+    { key: '3', domain: 'brand.org', expiryDate: '2026-03-30', daysToExpiry: 69 },
+    { key: '4', domain: 'portal.io', expiryDate: '2026-01-29', daysToExpiry: 8 },
+    { key: '5', domain: 'safe-site.com', expiryDate: '2026-04-15', daysToExpiry: 85 },
+  ];
+
   return (
-    <div>
+    <div style={{ padding: '32px', background: '#f5f7f9', minHeight: '100%' }}>
+      
+      {/* 1. Header Banner */}
       <Card
-        style={{
-          borderRadius: '16px',
-          border: '2px solid #52c41a',
-          boxShadow: '0 4px 12px rgba(82,196,26,0.15)',
-          overflow: 'hidden',
-          marginBottom: '24px'
+        style={{ 
+          borderRadius: '12px', 
+          background: 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)', 
+          border: 'none', 
+          marginBottom: '40px',
+          boxShadow: '0 8px 16px rgba(82, 196, 26, 0.25)'
         }}
-        bodyStyle={{ padding: '0' }}
+        bodyStyle={{ padding: '20px 24px' }}
       >
-        <div style={{
-          background: 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)',
-          padding: '20px',
-          color: 'white'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <GlobalOutlined style={{ fontSize: '32px' }} />
-            <div>
-              <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>
-                Domain Overview Dashboard
-              </h2>
-              <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '14px' }}>
-                Domain Health & Security Monitoring
-              </p>
-            </div>
+        <Space size="large">
+          <GlobalOutlined style={{ fontSize: '32px', color: 'white' }} />
+          <div>
+            <h2 style={{ margin: 0, color: 'white', fontSize: '24px', fontWeight: 800 }}>Domain Overview Dashboard</h2>
+            <p style={{ margin: 0, color: 'rgba(255,255,255,0.9)', fontWeight: 500 }}>
+              Domain Health & Security Monitoring
+            </p>
           </div>
-        </div>
+        </Space>
       </Card>
 
-      <div style={{ padding: '24px' }}>
-        <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-          Domain Health Summary
-        </Typography.Title>
-        
-        <Row gutter={[16, 16]}>
-          <Col xs={24} sm={12} lg={6}>
-            <Card
-              style={{
-                borderRadius: '12px',
-                border: '1px solid #e8e8e8',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-              }}
-              bodyStyle={{ padding: '20px', textAlign: 'center' }}
-            >
-              <div style={{ marginBottom: '8px' }}>
-                <GlobalOutlined style={{ fontSize: '24px', color: '#52c41a' }} />
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a', marginBottom: '4px' }}>
-                5
-              </div>
-              <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
-                Active Domains
-              </div>
+      {sslError && <Alert message={sslError} type="error" showIcon style={{ marginBottom: 24 }} />}
+
+      {/* 2. KPI Cards */}
+      <Title level={4} style={headerTextStyle}>Domain Health Summary</Title>
+      <Row gutter={[16, 16]} style={{ marginBottom: '40px' }}>
+        {[
+          { label: 'Active Domains', val: '5', icon: <GlobalOutlined />, color: '#52c41a' },
+          { label: 'Expiring Soon', val: '2', icon: <ClockCircleOutlined />, color: '#faad14' },
+          { label: 'SSL Secured', val: '4', icon: <LockOutlined />, color: '#1890ff' },
+          { label: 'DNS Records', val: '12', icon: <TeamOutlined />, color: '#722ed1' }
+        ].map((kpi, i) => (
+          <Col xs={24} sm={12} lg={6} key={i}>
+            <Card style={{ borderRadius: '12px', textAlign: 'center', border: '1px solid #f0f0f0' }}>
+               <div style={{ fontSize: '24px', color: kpi.color, marginBottom: '8px' }}>{kpi.icon}</div>
+               <div style={{ fontSize: '28px', fontWeight: 800, color: kpi.color }}>{kpi.val}</div>
+               <div style={{ color: '#8c8c8c', fontWeight: 600 }}>{kpi.label}</div>
             </Card>
           </Col>
-          <Col xs={24} sm={12} lg={6}>
-            <Card
-              style={{
-                borderRadius: '12px',
-                border: '1px solid #e8e8e8',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-              }}
-              bodyStyle={{ padding: '20px', textAlign: 'center' }}
-            >
-              <div style={{ marginBottom: '8px' }}>
-                <ClockCircleOutlined style={{ fontSize: '24px', color: '#faad14' }} />
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#faad14', marginBottom: '4px' }}>
-                2
-              </div>
-              <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
-                Expiring Soon
-              </div>
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} lg={6}>
-            <Card
-              style={{
-                borderRadius: '12px',
-                border: '1px solid #e8e8e8',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-              }}
-              bodyStyle={{ padding: '20px', textAlign: 'center' }}
-            >
-              <div style={{ marginBottom: '8px' }}>
-                <LockOutlined style={{ fontSize: '24px', color: '#1890ff' }} />
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#1890ff', marginBottom: '4px' }}>
-                4
-              </div>
-              <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
-                SSL Secured
-              </div>
-            </Card>
-          </Col>
-          <Col xs={24} sm={12} lg={6}>
-            <Card
-              style={{
-                borderRadius: '12px',
-                border: '1px solid #e8e8e8',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-              }}
-              bodyStyle={{ padding: '20px', textAlign: 'center' }}
-            >
-              <div style={{ marginBottom: '8px' }}>
-                <TeamOutlined style={{ fontSize: '24px', color: '#722ed1' }} />
-              </div>
-              <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#722ed1', marginBottom: '4px' }}>
-                12
-              </div>
-              <div style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
-                DNS Records
-              </div>
-            </Card>
-          </Col>
-        </Row>
+        ))}
+      </Row>
 
-        {/* --- ADDED SPACING SECTION START --- */}
-        <Divider style={{ margin: '64px 0 40px 0', borderTopColor: '#f0f0f0' }} />
-        
-        <div style={{ marginBottom: '24px' }}>
-          <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '32px' }}>
-            SSL Certificate Expiry Report
-          </Typography.Title>
-        {/* --- ADDED SPACING SECTION END --- */}
+      {/* 3. MSP Action Plan */}
+      <Title level={4} style={headerTextStyle}>MSP Action Plan</Title>
+      <div style={sectionStyle}>
+        <Table 
+          size="small"
+          pagination={false}
+          dataSource={[
+            { key: 1, priority: "P1", action: "Renew abcmfg.com", owner: "MSP" },
+            { key: 2, priority: "P1", action: "Enable DMARC & DKIM", owner: "MSP" },
+            { key: 3, priority: "P2", action: "Enable MFA on registrar", owner: "Customer" },
+            { key: 4, priority: "P2", action: "SSL auto-renew setup", owner: "MSP" },
+          ]} 
+          columns={[
+            { title: 'Priority', dataIndex: 'priority', width: 120 },
+            { title: 'Action', dataIndex: 'action' },
+            { title: 'Owner', dataIndex: 'owner', align: 'right' }
+          ]} 
+        />
+      </div>
 
-          <TableComponent
-            title=""
-            columns={[
-              { key: 'num', label: '#', width: '5%' },
-              { key: 'domain', label: 'Domain / Endpoint', width: '30%' },
-              { key: 'expiryDate', label: 'Expiry Date', width: '20%' },
-              { key: 'daysToExpiry', label: 'Days to Expiry', width: '15%' },
-              { key: 'status', label: 'Status', width: '30%' },
-            ]}
-            data={sslCertificates.map((cert, idx) => {
-              const days = Number(cert.daysToExpiry);
-              let statusLabel = '🟢 Expiring in >30 days';
-              let statusColor = '#16a34a';
-              let bgColor = '#dcfce7';
+      {/* 4. SSL Expiry Report */}
+      <Title level={4} style={headerTextStyle}>SSL Certificate Expiry Report</Title>
+      <div style={sectionStyle}>
+        <Table 
+          size="small"
+          pagination={false}
+          dataSource={displayCertificates} 
+          columns={[
+            { title: '#', dataIndex: 'key', width: 50 },
+            { title: 'Domain / Endpoint', dataIndex: 'domain', render: (t) => <Text strong>{t}</Text> },
+            { title: 'Expiry Date', dataIndex: 'expiryDate' },
+            { title: 'Days to Expiry', dataIndex: 'daysToExpiry', render: (d) => <Text strong>{d} days</Text> },
+            { title: 'Status', dataIndex: 'status', align: 'right', render: (_, record) => {
+                const days = record.daysToExpiry;
+                let config = { label: 'Expiring in >30 days', color: '#f6ffed', border: '#b7eb8f', text: '#389e0d' };
+                
+                if (days <= 7) config = { label: 'Expiring in ≤7 days', color: '#fff1f0', border: '#ffa39e', text: '#cf1322' };
+                else if (days <= 30) config = { label: 'Expiring in ≤30 days', color: '#fff7e6', border: '#ffd591', text: '#d46b08' };
 
-              if (days <= 7) {
-                statusLabel = '🔴 Expiring in ≤7 days';
-                statusColor = '#dc2626';
-                bgColor = '#fee2e2';
-              } else if (days <= 30) {
-                statusLabel = '🟠 Expiring in ≤30 days';
-                statusColor = '#d97706';
-                bgColor = '#fef3c7';
-              }
-
-              return {
-                num: idx + 1,
-                domain: cert.domain,
-                expiryDate: cert.expiryDate,
-                daysToExpiry: <strong>{days} days</strong>,
-                status: (
-                  <span style={{
-                    backgroundColor: bgColor,
-                    color: statusColor,
-                    padding: '4px 12px',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    display: 'inline-block',
-                    border: `1px solid ${statusColor}40`,
-                    minWidth: '160px',
-                    textAlign: 'center'
-                  }}>
-                    {statusLabel}
-                  </span>
-                ),
-              };
-            })}
-          />
-          {sslError && <Alert type="error" message={sslError} showIcon style={{ marginTop: 12 }} />}
-        </div>
+                return (
+                  <Tag color={config.color} style={{ border: `1px solid ${config.border}`, color: config.text, fontWeight: 700, borderRadius: '20px' }}>
+                    ● {config.label}
+                  </Tag>
+                );
+            }}
+          ]} 
+        />
       </div>
     </div>
   );
