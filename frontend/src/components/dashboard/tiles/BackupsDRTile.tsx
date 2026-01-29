@@ -5,22 +5,21 @@ const { Title, Text } = Typography;
 
 export const BackupDRTile = ({ selectedSubscription }: { selectedSubscription: string | null }) => {
   
+ // Section wrapper style to match screenshot card look
   const sectionStyle: React.CSSProperties = {
-    background: '#ffffff',
+    background: '#fff',
     borderRadius: '8px',
-    padding: '24px',
-    marginBottom: '40px',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-    border: '1px solid #f0f0f0'
+    padding: '16px',
+    marginBottom: '32px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
   };
 
   const headerTextStyle: React.CSSProperties = {
     textAlign: 'center',
-    marginBottom: '24px',
-    fontWeight: 700,
-    color: '#262626',
-    fontSize: '22px'
+    marginBottom: '20px',
+    fontWeight: 500
   };
+
 
   const tableProps = {
     size: "small" as const,

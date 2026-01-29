@@ -253,7 +253,7 @@ function Dashboard() {
                       {selectedTile === 'security' && <SecurityTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
                       {selectedTile === 'cost-management' && <CostManagementTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
                       {selectedTile === 'backups-dr' && <BackupDRTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
-                      {selectedTile === 'patch-management' && <PatchManagementTile />}
+                      {selectedTile === 'patch-management' && <PatchManagementTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
                     </>
                   )}
                 </>
