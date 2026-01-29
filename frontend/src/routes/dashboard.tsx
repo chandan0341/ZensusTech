@@ -7,6 +7,7 @@ import { useAzureSubscriptions } from "@/hooks/useAzureSubscriptions";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { SubscriptionSelector } from "@/components/dashboard/SubscriptionSelector";
+import { SubscriptionMetadataBar } from "@/components/dashboard/SubscriptionMetadataBar";
 import { DetailModal } from "@/components/dashboard/DetailModal";
 import { ModalData } from "@/types/dashboard.types";
 import { 
@@ -60,6 +61,7 @@ function Dashboard() {
   // The hooks internally must now use { credentials: 'include' } in their fetches.
   const {
     azureSubscriptions,
+    subMetadata,
     loading: subscriptionsLoading,
     error: subscriptionsError
     } = useAzureSubscriptions({ selectedTenant });
@@ -172,7 +174,9 @@ function Dashboard() {
           tenantId={tenantId || undefined}
         />
 
-\
+ {selectedSubscription && (
+          <SubscriptionMetadataBar subMetadata={subMetadata} loading={subscriptionsLoading} />
+        )}
         {subscriptionsError && (
           <Alert message="Connection Error" description={subscriptionsError} type="error" style={{ marginBottom: "24px" }} showIcon closable />
         )}
