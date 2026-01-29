@@ -2,7 +2,7 @@
  * Hook to manage Azure Subscription listing and metadata via Bearer tokens.
  */
 import { useState, useEffect, useCallback } from "react";
-import { SubscriptionOption, SubscriptionMetadata } from "@/types/dashboard.types";
+import { SubscriptionOption } from "@/types/dashboard.types";
 
 interface UseAzureSubscriptionsProps {
   selectedTenant: string;
@@ -12,9 +12,13 @@ export const useAzureSubscriptions = ({
   selectedTenant,
 }: UseAzureSubscriptionsProps) => {
   const [azureSubscriptions, setAzureSubscriptions] = useState<SubscriptionOption[]>([]);
-  const [subMetadata, setSubMetadata] = useState<SubscriptionMetadata | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const dropdownSubs: SubscriptionOption[] = [
+    { label: "Subscription A", value: "sub-a-id" },
+    { label: "Subscription B", value: "sub-b-id" },
+    { label: "Subscription C", value: "sub-c-id" },
+  ];
 
   // 1. Fetch Subscriptions List
   const fetchSubscriptions = useCallback(async () => {
@@ -28,45 +32,7 @@ export const useAzureSubscriptions = ({
     setError(null);
 
     try {
-      // --- TOKEN RETRIEVAL ---
-      // Get the management token saved during the /connect phase
-      const mgmtToken = localStorage.getItem('mgmt_token');
-
-      if (!mgmtToken) {
-        throw new Error("No active session found. Please reconnect.");
-      }
-
-      /**
-       * We now pass the token in the Authorization header.
-       * This avoids the 4KB cookie size limit entirely.
-       */
-      const response = await fetch(`/api/v1/subscriptions?tenant_id=${selectedTenant}`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${mgmtToken}`,
-          "Content-Type": "application/json"
-        }
-        // credentials: 'include' is removed as we are not using cookies
-      });
-
-      if (response.status === 401 || response.status === 403) {
-        throw new Error("Azure session expired or unauthorized. Please reconnect.");
-      }
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.detail || "Failed to fetch subscriptions.");
-      }
-
-      const data = await response.json();
       
-      const dropdownSubs = (data.value || [])
-        .filter((sub: any) => sub.state === "Enabled")
-        .map((sub: any) => ({
-          value: sub.subscriptionId,
-          label: `${sub.subscriptionId} - ${sub.displayName}`
-        }));
-
       setAzureSubscriptions(dropdownSubs);
     } catch (err: any) {
       console.error("Subscription fetch error:", err);
@@ -76,34 +42,6 @@ export const useAzureSubscriptions = ({
     }
   }, [selectedTenant]);
 
-  // 2. Fetch Subscription Metadata
-  const fetchSubscriptionMetadata = useCallback(async (subscriptionId: string) => {
-    if (!subscriptionId) {
-      setSubMetadata(null);
-      return;
-    };
-
-    try {
-      const mgmtToken = localStorage.getItem('mgmt_token');
-
-      // Updated path: Ensure this matches the router path in your FastAPI azure.py
-      const response = await fetch(`/api/v1/subscriptions/${subscriptionId}/metadata`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${mgmtToken}`,
-          "Content-Type": "application/json"
-        }
-      });
-
-      if (!response.ok) throw new Error("Metadata fetch failed");
-
-      const metadata = await response.json();
-      setSubMetadata(metadata);
-    } catch (err: any) {
-      console.error("Metadata fetch error:", err);
-      setSubMetadata(null);
-    }
-  }, []);
 
   useEffect(() => {
     fetchSubscriptions();
@@ -111,9 +49,7 @@ export const useAzureSubscriptions = ({
 
   return {
     azureSubscriptions,
-    subMetadata,
     loading,
-    error,
-    fetchSubscriptionMetadata,
+    error
   };
 };
