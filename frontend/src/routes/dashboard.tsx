@@ -248,9 +248,9 @@ function Dashboard() {
                     </>
                   )}
 
-                  {viewMode === 'subscription' && (
+                  {viewMode === 'subscription' || viewMode === 'tenant' && (
                     <>
-                      {selectedTile === 'security' && <SecurityTile />}
+                      {selectedTile === 'security' && <SecurityTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
                       {selectedTile === 'cost-management' && <CostManagementTile />}
                       {selectedTile === 'backups-dr' && <BackupsDRTile />}
                       {selectedTile === 'patch-management' && <PatchManagementTile />}
