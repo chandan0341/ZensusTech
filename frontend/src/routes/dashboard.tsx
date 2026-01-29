@@ -25,7 +25,7 @@ import {
 import { AzureIdentityTile } from "@/components/dashboard/tiles/AzureIdentityTile";
 import { SecurityTile } from "@/components/dashboard/tiles/SecurityTile";
 import { CostManagementTile } from "@/components/dashboard/tiles/CostManagementTile";
-import { BackupsDRTile } from "@/components/dashboard/tiles/BackupsDRTile";
+import { BackupDRTile } from "@/components/dashboard/tiles/BackupsDRTile";
 import { PatchManagementTile } from "@/components/dashboard/tiles/PatchManagementTile";
 import { DomainOverviewTile } from "@/components/dashboard/tiles/DomainOverviewTile";
 import { Microsoft365Tile } from "@/components/dashboard/tiles/Microsoft365Tile";
@@ -252,7 +252,7 @@ function Dashboard() {
                     <>
                       {selectedTile === 'security' && <SecurityTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
                       {selectedTile === 'cost-management' && <CostManagementTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
-                      {selectedTile === 'backups-dr' && <BackupsDRTile />}
+                      {selectedTile === 'backups-dr' && <BackupDRTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
                       {selectedTile === 'patch-management' && <PatchManagementTile />}
                     </>
                   )}
