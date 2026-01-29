@@ -1,114 +1,116 @@
-import { useState, useEffect } from "react";
-import { ENDPOINTS } from "@/constants/api";
+/**
+ * Hook to manage Azure Subscription listing and metadata via Bearer tokens.
+ */
+import { useState, useEffect, useCallback } from "react";
 import { SubscriptionOption, SubscriptionMetadata } from "@/types/dashboard.types";
 
 interface UseAzureSubscriptionsProps {
-  clientId: string;
-  clientSecret: string;
   selectedTenant: string;
 }
 
 export const useAzureSubscriptions = ({
-  clientId,
-  clientSecret,
   selectedTenant,
 }: UseAzureSubscriptionsProps) => {
   const [azureSubscriptions, setAzureSubscriptions] = useState<SubscriptionOption[]>([]);
-  const [mgtToken, setMgtToken] = useState<string>("");
   const [subMetadata, setSubMetadata] = useState<SubscriptionMetadata | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize: Fetch token and subscriptions
-  useEffect(() => {
-    const initializeAzureData = async () => {
-      if (!clientId || !clientSecret || !selectedTenant) {
-        setLoading(false);
-        return;
-      }
+  // 1. Fetch Subscriptions List
+  const fetchSubscriptions = useCallback(async () => {
+    if (!selectedTenant) {
+      setAzureSubscriptions([]);
+      setLoading(false);
+      return;
+    }
 
-      setLoading(true);
-      setError(null);
-
-      try {
-        // Fetch Management Token
-        const subTokenResp = await fetch(`${ENDPOINTS.AZURE.TOKEN}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tenant_id: selectedTenant,
-            client_id: clientId,
-            client_secret: clientSecret,
-            scope: "https://management.azure.com/.default"
-          })
-        });
-
-        if (!subTokenResp.ok) {
-          throw new Error("Failed to fetch management token");
-        }
-
-        const { access_token: managementToken } = await subTokenResp.json();
-        setMgtToken(managementToken);
-
-        // Fetch Subscriptions
-        const subsResp = await fetch(`${ENDPOINTS.SUBSCRIPTIONS.LIST}`, {
-          method: "GET",
-          headers: { "Authorization": `Bearer ${managementToken}` }
-        });
-
-        if (!subsResp.ok) {
-          throw new Error("Failed to fetch subscriptions");
-        }
-
-        const subsData = await subsResp.json();
-        
-        const dropdownSubs = (subsData.value || [])
-          .filter((sub: any) => sub.state === "Enabled")
-          .map((sub: any) => ({
-            value: sub.subscriptionId,
-            label: `${sub.subscriptionId} - ${sub.displayName}`
-          }));
-
-        setAzureSubscriptions(dropdownSubs);
-      } catch (err: any) {
-        console.error("Initialization Error:", err.message);
-        setError("Failed to load subscriptions. Check credentials.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initializeAzureData();
-  }, [clientId, clientSecret, selectedTenant]);
-
-  // Fetch subscription metadata when subscription is selected
-  const fetchSubscriptionMetadata = async (subscriptionId: string) => {
-    if (!mgtToken || !subscriptionId) return;
+    setLoading(true);
+    setError(null);
 
     try {
-      const metaResp = await fetch(
-        `https://management.azure.com/subscriptions/${subscriptionId}?api-version=2020-01-01`,
-        {
-          method: "GET",
-          headers: { "Authorization": `Bearer ${mgtToken}` }
-        }
-      );
+      // --- TOKEN RETRIEVAL ---
+      // Get the management token saved during the /connect phase
+      const mgmtToken = localStorage.getItem('mgmt_token');
 
-      if (!metaResp.ok) {
-        throw new Error("Failed to fetch subscription metadata");
+      if (!mgmtToken) {
+        throw new Error("No active session found. Please reconnect.");
       }
 
-      const metadata = await metaResp.json();
+      /**
+       * We now pass the token in the Authorization header.
+       * This avoids the 4KB cookie size limit entirely.
+       */
+      const response = await fetch(`/api/v1/subscriptions?tenant_id=${selectedTenant}`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${mgmtToken}`,
+          "Content-Type": "application/json"
+        }
+        // credentials: 'include' is removed as we are not using cookies
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("Azure session expired or unauthorized. Please reconnect.");
+      }
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to fetch subscriptions.");
+      }
+
+      const data = await response.json();
+      
+      const dropdownSubs = (data.value || [])
+        .filter((sub: any) => sub.state === "Enabled")
+        .map((sub: any) => ({
+          value: sub.subscriptionId,
+          label: `${sub.subscriptionId} - ${sub.displayName}`
+        }));
+
+      setAzureSubscriptions(dropdownSubs);
+    } catch (err: any) {
+      console.error("Subscription fetch error:", err);
+      setError(err.message || "Failed to load subscriptions.");
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedTenant]);
+
+  // 2. Fetch Subscription Metadata
+  const fetchSubscriptionMetadata = useCallback(async (subscriptionId: string) => {
+    if (!subscriptionId) {
+      setSubMetadata(null);
+      return;
+    };
+
+    try {
+      const mgmtToken = localStorage.getItem('mgmt_token');
+
+      // Updated path: Ensure this matches the router path in your FastAPI azure.py
+      const response = await fetch(`/api/v1/subscriptions/${subscriptionId}/metadata`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${mgmtToken}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (!response.ok) throw new Error("Metadata fetch failed");
+
+      const metadata = await response.json();
       setSubMetadata(metadata);
     } catch (err: any) {
-      console.error("Metadata fetch error:", err.message);
+      console.error("Metadata fetch error:", err);
       setSubMetadata(null);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchSubscriptions();
+  }, [fetchSubscriptions]);
 
   return {
     azureSubscriptions,
-    mgtToken,
     subMetadata,
     loading,
     error,

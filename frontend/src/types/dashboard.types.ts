@@ -22,6 +22,8 @@ export interface SummaryItem {
   area: string;
   status: string;
   color: string;
+  note: string;
+  number?: string; // Add this line (the '?' makes it optional)
 }
 
 export interface LicenseUsageAPIResponse {

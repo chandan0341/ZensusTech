@@ -1,7 +1,7 @@
 import secrets
 import warnings
 from typing import Annotated, Any, Literal,Dict
-
+import os
 
 from pydantic import (
     AnyUrl,
@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     GRAPH_BASE: str = "https://graph.microsoft.com/v1.0"
     BETA_BASE: str = "https://graph.microsoft.com/beta"
     ARM_BASE: str = "https://management.azure.com"
+    SESSION_SECRET_KEY: str = os.getenv("SESSION_SECRET_KEY", "super-secret-development-key-change-me")
 
     # We keep the Role Mapping logic here
     # (Mapping IDs to Names is usually static "Business Logic")

@@ -1,39 +1,28 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Card, Form, Input, Button, Alert, message } from "antd";
+import { Card, Form, Input, Button, Alert, message, Space } from "antd"; 
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useCredentials } from "@/context/CredentialsContext";
 import { useState, useEffect } from "react";
+import { useCredentials } from "@/hooks/useCredentials"; 
 
-// Reusable Input Component
-const InputField = ({
-  name,
-  label,
-  control,
-  placeholder,
-}: {
-  name: string;
-  label: string;
-  control: any; // react-hook-form Control type
-  placeholder: string;
-}) => (
+// --- Reusable Input Component ---
+const InputField = ({ name, label, control, placeholder, type = "text" }: any) => (
   <Controller
     name={name}
     control={control}
     render={({ field, fieldState: { error } }) => (
-      <Form.Item
-        label={label}
-        validateStatus={error ? "error" : ""}
-        help={error?.message}
-      >
-        <Input placeholder={placeholder} {...field} />
+      <Form.Item label={label} validateStatus={error ? "error" : ""} help={error?.message}>
+        {type === "password" ? (
+          <Input.Password placeholder={placeholder} {...field} />
+        ) : (
+          <Input placeholder={placeholder} {...field} />
+        )}
       </Form.Item>
     )}
   />
 );
 
-// Zod schema for validation
 const credentialsSchema = z.object({
   clientId: z.string().min(1, { message: "Client ID is required" }),
   clientSecret: z.string().min(1, { message: "Client Secret is required" }),
@@ -44,164 +33,106 @@ type CredentialsFormData = z.infer<typeof credentialsSchema>;
 
 export const Route = createFileRoute("/connection")({
   component: ConnectionPage,
-  head: () => ({
-    meta: [
-      {
-        title: "Enter Connection Details - ZensusTech",
-      },
-    ],
-  }),
 });
 
 function ConnectionPage() {
   const navigate = useNavigate();
-  const { setCredentials } = useCredentials();
+  const { setConnectionSuccess } = useCredentials(); 
   const [formError, setFormError] = useState<string | null>(null);
-
-  const { control, handleSubmit, watch } = useForm<CredentialsFormData>({
-    resolver: zodResolver(credentialsSchema),
-    defaultValues: {
-      clientId: "",
-      clientSecret: "",
-      tenantId: "",
-    },
-  });
-
   const [isTesting, setIsTesting] = useState(false);
   const [isValidConnection, setIsValidConnection] = useState(false);
 
-  // Reset Run button if any input changes after testing
+  const { control, handleSubmit, watch } = useForm<CredentialsFormData>({
+    resolver: zodResolver(credentialsSchema),
+    defaultValues: { clientId: "", clientSecret: "", tenantId: "" },
+  });
+
+  // Resets "Run" button if inputs change
   useEffect(() => {
-    const subscription = watch(() => {
-      setIsValidConnection(false);
-    });
+    const subscription = watch(() => setIsValidConnection(false));
     return () => subscription.unsubscribe();
   }, [watch]);
 
-  // Function to test connection by calling token API
-  const testConnection = async (data: CredentialsFormData) => {
+  const handleConnect = async (data: CredentialsFormData, isTestOnly: boolean) => {
     setIsTesting(true);
     setFormError(null);
-
+    
     try {
-  const payload = {
-  tenant_id: data.tenantId,      // from form input
-  client_id: data.clientId,      // from form input
-  client_secret: data.clientSecret, // from form input
-  scope: "https://management.azure.com/.default", // required by Azure API
-};
-
-
-      const response = await fetch("http://localhost:8000/api/v1/azure/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const response = await fetch('/api/v1/connect', { 
+        method: 'POST', 
+        body: JSON.stringify(data), 
+        headers: { 'Content-Type': 'application/json' },
+        // Removed credentials: 'include' as we are moving away from cookies
       });
 
       if (response.ok) {
-        setIsValidConnection(true); // enable Run button
-        message.success("Connection successful! You can now run the dashboard.");
+        const result = await response.json();
+        
+        // --- TOKEN STORAGE ---
+        // Save tokens to localStorage so your dashboard hooks can access them
+        localStorage.setItem('mgmt_token', result.mgmt_token);
+        localStorage.setItem('graph_token', result.graph_token);
+        localStorage.setItem('tenant_id', result.tenant_id);
+
+        setIsValidConnection(true);
+        message.success("Connection verified successfully!");
+        
+        // Update global state context
+        setConnectionSuccess(data.tenantId); 
+        
+        if (!isTestOnly) {
+          navigate({ to: '/dashboard' }); 
+        }
       } else {
-        const errorData = await response.json();
-        setFormError(errorData.message || "Connection failed");
-        setIsValidConnection(false);
+        const err = await response.json();
+        setFormError(err.detail || "Authentication failed. Check your credentials.");
       }
-    } catch (err) {
-      console.error(err);
-      setFormError("Connection failed. Please check your credentials.");
-      setIsValidConnection(false);
+    } catch (error) {
+      setFormError("Could not reach the server. Is your backend running?");
     } finally {
       setIsTesting(false);
     }
   };
 
-  // Function called when Run Dashboard is clicked
-  const onSubmit = (data: CredentialsFormData) => {
-    setCredentials(data.clientId, data.clientSecret, data.tenantId);
-    navigate({
-      to: "/dashboard",
-      search: { from: "connection" },
-    });
-  };
-
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: "100vh",
-        background: "#f5f5f5",
-      }}
-    >
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f0f2f5" }}>
       <Card
         title="ZensusTech Connection"
-        style={{ width: "100%", maxWidth: "450px" }}
-        headStyle={{
-          background: "#1890ff",
-          color: "white",
-          borderRadius: "8px 8px 0 0",
-        }}
+        style={{ width: "100%", maxWidth: "450px", borderRadius: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+        headStyle={{ background: "#1890ff", color: "white", borderRadius: "12px 12px 0 0" }}
       >
         <p style={{ marginBottom: "24px", color: "#666" }}>
-          Connect your Azure account to access governance insights
+          Connect your Azure account. Your secrets are never saved to a database.
         </p>
 
-        <Form layout="vertical" onFinish={handleSubmit(onSubmit)}>
-          <InputField
-            name="tenantId"
-            label="Tenant ID"
-            control={control}
-            placeholder="Enter your Tenant ID"
-          />
-          <InputField
-            name="clientId"
-            label="Client ID"
-            control={control}
-            placeholder="Enter your Client ID"
-          />
-          <InputField
-            name="clientSecret"
-            label="Client Secret"
-            control={control}
-            placeholder="Enter your Client Secret"
-          />
+        <Form layout="vertical">
+          <InputField name="tenantId" label="Tenant ID" control={control} placeholder="Enter Tenant ID" />
+          <InputField name="clientId" label="Client ID" control={control} placeholder="Enter Client ID" />
+          <InputField name="clientSecret" label="Client Secret" type="password" control={control} placeholder="Enter Client Secret" />
 
           {formError && (
-            <Alert
-              message="Error"
-              description={formError}
-              type="error"
-              showIcon
-              style={{ marginBottom: "16px" }}
-              closable
-              onClose={() => setFormError(null)}
-            />
+            <Alert message={formError} type="error" showIcon style={{ marginBottom: "16px" }} closable onClose={() => setFormError(null)} />
           )}
 
-          <Form.Item>
-            <Button
-              type="default"
-              block
-              size="large"
-              loading={isTesting}
-              onClick={handleSubmit(testConnection)}
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Button 
+              block 
+              size="large" 
+              loading={isTesting} 
+              onClick={handleSubmit((d) => handleConnect(d, true))}
             >
               Test Connection
             </Button>
-          </Form.Item>
-
-          <Form.Item>
-            <Button
-              type="primary"
-              block
-              size="large"
-              htmlType="submit"
-              disabled={!isValidConnection}
+            <Button 
+              type="primary" 
+              block 
+              size="large" 
+              disabled={!isValidConnection} 
+              onClick={() => navigate({ to: '/dashboard' })}
             >
               Run the Dashboard
             </Button>
-          </Form.Item>
+          </Space>
         </Form>
       </Card>
     </div>

@@ -3,25 +3,18 @@ import { User, AdminRoleData, GovernanceItem, SummaryItem } from "@/types/dashbo
 import { fetchSSLCertificates } from "@/services/dashboardApi";
 import { ENDPOINTS } from "@/constants/api";
 import { processAdminRoles } from "@/utils/dashboardUtils";
-import { message } from "antd";
 
 interface UseDashboardDataProps {
-  clientId: string;
-  clientSecret: string;
   selectedTenant: string;
-  selectedSubscription: string|null;
-  mgtToken: string;
+  selectedSubscription: string | null;
 }
 
 export const useDashboardData = ({
-  clientId,
-  clientSecret,
   selectedTenant,
   selectedSubscription,
-  mgtToken,
 }: UseDashboardDataProps) => {
   const [users, setUsers] = useState<User[]>([]);
-  const [allTenantUsers, setAllTenantUsers] = useState<User[]>([]); // ADD THIS: Permanent store
+  const [allTenantUsers, setAllTenantUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [foreignGroupsCount, setForeignGroupsCount] = useState<number | null>(null);
   const [servicePrincipalsCount, setServicePrincipalsCount] = useState<number | null>(null);
@@ -33,251 +26,153 @@ export const useDashboardData = ({
   const [summaryItems, setSummaryItems] = useState<SummaryItem[]>([]);
   const [identityGovernanceData, setIdentityGovernanceData] = useState<GovernanceItem[]>([]);
 
-  // 1. EFFECT FOR TENANT-LEVEL DATA (M365, Governance, Global Admin Roles)
-// This only re-runs if the Tenant ID changes.
-useEffect(() => {
-  if (!selectedTenant || !mgtToken) return;
-
-  const fetchTenantData = async () => {
-    try {
-      const response = await fetch(`${ENDPOINTS.AZURE.TANENT_USERS}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenant_id: selectedTenant,
-          client_id: clientId,
-          client_secret: clientSecret,
-        })
-      });
-
-      const data = await response.json();
-      const tenantUserList = data.users || [];
-      setAllTenantUsers(tenantUserList); // Save here permanently
-      setUsers(tenantUserList); // Also set to users for initial display
-
-      // Update M365 specific states
-      const adminRoles = processAdminRoles(tenantUserList); 
-      setAdminRolesData(adminRoles);
-      
-    } catch (err) {
-      console.error("Tenant Fetch Error:", err);
-    }
+  // Helper to get tokens from localStorage
+  const getAuthHeaders = () => {
+    const mgmtToken = localStorage.getItem("mgmt_token");
+    const graphToken = localStorage.getItem("graph_token");
+    return {
+      "Authorization": `Bearer ${mgmtToken}`,
+      "X-Graph-Token": graphToken || "",
+      "Content-Type": "application/json",
+    };
   };
 
-  fetchTenantData();
-}, [selectedTenant, mgtToken, clientId, clientSecret]); // Removed selectedSubscription here
-
-
-// 2. EFFECT FOR SUBSCRIPTION-LEVEL DATA (Azure Users, Resource Counts)
-// This re-runs every time a new subscription is picked.
-useEffect(() => {
-  if (!selectedTenant || !selectedSubscription) return;
-
-  const fetchSubscriptionData = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${ENDPOINTS.AZURE.USERS}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subscription_id: selectedSubscription || "",
-          tenant_id: selectedTenant,
-          client_id: clientId,
-          client_secret: clientSecret,
-        })
-      });
-
-      const data = await response.json();
-      setUsers(data.users || []); // Update the user list for the Azure Identity tile
-      setForeignGroupsCount(data.foreignGroupsCount ?? null);
-      setServicePrincipalsCount(data.servicePrincipalsCount ?? null);
-    } catch (err) {
-      console.error("Subscription Fetch Error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  fetchSubscriptionData();
-}, [selectedSubscription, selectedTenant]); // Only runs on Sub change
-  // Fetch SSL certificates
+  // 1. TENANT-LEVEL USERS & ADMIN ROLES
   useEffect(() => {
-    const fetchSSL = async () => {
-      if (!clientId || !clientSecret || !selectedTenant || !selectedSubscription) return;
-      setSslError(null);
+    if (!selectedTenant) return;
+    const fetchTenantData = async () => {
+      setLoading(true);
       try {
-        const data = await fetchSSLCertificates(clientId, clientSecret, selectedTenant, selectedSubscription);
-        setSslCertificates(data);
+        // Appending tenant_id as a query param since backend expects it
+        const response = await fetch(`${ENDPOINTS.AZURE.TANENT_USERS}?tenant_id=${selectedTenant}`, {
+          method: "GET",
+          headers: getAuthHeaders(),
+        });
+        
+        if (response.status === 401 || response.status === 403) {
+          console.error("Auth Error: Check X-Graph-Token and Mgmt Token in LocalStorage");
+        }
+
+        const data = await response.json();
+        const tenantUserList = data.users || [];
+        
+        setAllTenantUsers(tenantUserList);
+        setUsers(tenantUserList);
+        setAdminRolesData(processAdminRoles(tenantUserList));
       } catch (err) {
-        setSslError("Failed to fetch SSL Certificate Expiry data");
-        setSslCertificates([]);
+        console.error("Tenant Fetch Error:", err);
+      } finally {
+        // If no subscription is selected, we stop loading here
+        if (!selectedSubscription) setLoading(false);
       }
     };
-    fetchSSL();
-  }, [clientId, clientSecret, selectedTenant, selectedSubscription]);
+    fetchTenantData();
+  }, [selectedTenant, selectedSubscription]);
 
-  // Fetch license usage data
+  // 2. SUBSCRIPTION-LEVEL DATA
   useEffect(() => {
-    const fetchDashboardData = async () => {
-        try {
-            setLoading(true);
-            
-            // 1. Fetch License Data
-            const response = await fetch(`${ENDPOINTS.MICROSOFT.LICENSE_AND_USAGE_DETAILS}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    tenant_id: selectedTenant,
-                    client_id: clientId,
-                    client_secret: clientSecret
-                })
-            });
-
-            if (!response.ok) throw new Error('License API failed');
-            const data = await response.json();
-
-            // Store License summary items temporarily
-            const licenseSummary = data.summaryItems || [];
-            
-            setOverallScore(data.overallScore);
-
-            // Safety check for table mapping
-            if (data.tableData) {
-                const formattedData = data.tableData.map((item: any, index: number) => ({
-                    key: index,
-                    licenseType: item.license,
-                    purchased: item.purchased,
-                    assigned: item.assigned,
-                    unused: item.unused
-                }));
-                setLicenseUsageData(formattedData);
-            }
-
-            // 2. Fetch Secure Score Data
-            const response_ss = await fetch(`${ENDPOINTS.MICROSOFT.SECURE_SCORE_DETAILS}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    tenant_id: selectedTenant,
-                    client_id: clientId,
-                    client_secret: clientSecret
-                })
-            });
-
-            if (!response_ss.ok) throw new Error('Secure Score API failed');
-            const data_ss = await response_ss.json();
-
-            // --- THE MERGE LOGIC ---
-            // Take the cards from Secure Score and add them to the summary list
-            const secureCards = data_ss.cards || [];
-            const response_users = await fetch(`${ENDPOINTS.AZURE.TANENT_USERS}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                tenant_id: selectedTenant,
-                client_id: clientId,
-                client_secret: clientSecret,
-              })
-            });
-
-            const userDataResponse = await response_users.json();
-
-            // FIX: Extract the actual array from the response object
-            const actualUsers = userDataResponse.users || []; 
-
-            const total = actualUsers.length;
-            const mfaEnabled = actualUsers.filter((u: User) => u.mfa === "Enabled").length;
-            const missingMfa = actualUsers.filter((u: User) => u.mfa === "Disabled").map((u: User) => u.user);
-
-            const identity = {
-                area: "Identity Security",
-                status: total > 0 && mfaEnabled === total ? "Secure" : "Attention Required",
-                color: total > 0 && mfaEnabled === total ? "green" : "orange",
-                number: `${mfaEnabled}/${total}`,
-                note: total === 0 ? "No users detected." : 
-                      mfaEnabled === total ? "All users verified with MFA." : 
-                      `MFA disabled for: ${missingMfa.join(", ")}`
-            };
-            // --- ADD THESE LOGS HERE ---
-            console.log("1. Total Users Found:", total);
-            console.log("2. Identity Object Created:", identity);
-            console.log("3. Final Array being sent to State:", [identity, ...secureCards, ...licenseSummary]);
-
-            // Combine both: Secure Score cards come first, then License cards
-            // --- THE MERGE LOGIC ---
-
-            // 1. Combine all sources into one array
-            const allItems = [identity, ...secureCards, ...licenseSummary];
-
-            // 2. Use a Map to ensure uniqueness by 'area' and cast to SummaryItem[]
-            const unifiedItems: SummaryItem[] = Array.from(
-                allItems.reduce((map, item) => {
-                    if (item && item.area) {
-                        // This ensures we keep the most complete version of an item
-                        map.set(item.area, item as SummaryItem);
-                    }
-                    return map;
-                }, new Map<string, SummaryItem>()).values()
-            );
-
-            // 3. Debug logs to verify the 'number' field is present
-            console.log("Unified Items being set to State:", unifiedItems);
-
-            // 4. Set state with the correctly typed array
-            setSummaryItems(unifiedItems);
-            
-        } catch (error) {
-            console.error("Aggregation Error:", error);
-            message.error("Could not load dashboard data");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (selectedTenant) {
-        fetchDashboardData();
-    }
-}, [selectedTenant, clientId, clientSecret]);
- 
-
-  // Fetch governance report
-  useEffect(() => {
-    const fetchGovernanceReport = async () => {
-      if (!selectedTenant) return;
-
+    if (!selectedTenant || !selectedSubscription) return;
+    const fetchSubscriptionData = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        
-        const response = await fetch(`${ENDPOINTS.MICROSOFT.IDENTITY_GOVERNANCE}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tenant_id: selectedTenant,
-            client_id: clientId,
-            client_secret: clientSecret
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`Server responded with ${response.status}`);
-        }
-
-        const data: GovernanceItem[] = await response.json();
-        setIdentityGovernanceData(data);
-      } catch (error) {
-        console.error("Error fetching governance data:", error);
-        message.error("Failed to load Identity Governance report");
+        const response = await fetch(
+          `${ENDPOINTS.AZURE.USERS}?subscription_id=${selectedSubscription}&tenant_id=${selectedTenant}`, 
+          {
+            method: "GET",
+            headers: getAuthHeaders(),
+          }
+        );
+        const data = await response.json();
+        setUsers(data.users || []);
+        setForeignGroupsCount(data.foreignGroupsCount ?? null);
+        setServicePrincipalsCount(data.servicePrincipalsCount ?? null);
+      } catch (err) {
+        console.error("Sub Fetch Error:", err);
       } finally {
         setLoading(false);
       }
     };
+    fetchSubscriptionData();
+  }, [selectedSubscription, selectedTenant]);
 
-    fetchGovernanceReport();
-  }, [selectedTenant, clientId, clientSecret]);
+  // 3. SSL CERTIFICATES
+  useEffect(() => {
+    const fetchSSL = async () => {
+      if (!selectedTenant || !selectedSubscription) return;
+      try {
+        const data = await fetchSSLCertificates(selectedTenant, selectedSubscription);
+        setSslCertificates(data);
+      } catch (err) {
+        setSslError("SSL Error");
+      }
+    };
+    fetchSSL();
+  }, [selectedTenant, selectedSubscription]);
+
+  // 4. M365 DATA AGGREGATION
+  useEffect(() => {
+    const fetchM365Data = async () => {
+      if (!selectedTenant) return;
+      try {
+        const headers = getAuthHeaders();
+        const tenantQuery = `?tenant_id=${selectedTenant}`;
+
+        // Fetch License and Secure Score in parallel
+        const [licRes, ssRes] = await Promise.all([
+          fetch(`${ENDPOINTS.MICROSOFT.LICENSE_AND_USAGE_DETAILS}${tenantQuery}`, { headers }),
+          fetch(`${ENDPOINTS.MICROSOFT.SECURE_SCORE_DETAILS}${tenantQuery}`, { headers })
+        ]);
+
+        const licData = await licRes.json();
+        const ssData = await ssRes.json();
+
+        setLicenseUsageData(licData.tableData || []);
+        setOverallScore(licData.overallScore || 0);
+
+        // Identity Logic
+        const total = allTenantUsers.length;
+        const mfaEnabled = allTenantUsers.filter(u => u.mfa === "Enabled").length;
+        const identity: SummaryItem = {
+          area: "Identity Security",
+          status: total > 0 && mfaEnabled === total ? "Secure" : "Attention Required",
+          color: total > 0 && mfaEnabled === total ? "green" : "orange",
+          number: `${mfaEnabled}/${total}`,
+          note: `MFA status for ${total} users`
+        };
+
+        const unified = [identity, ...(ssData.cards || []), ...(licData.summaryItems || [])];
+        setSummaryItems(unified);
+      } catch (e) { 
+        console.error("M365 Aggregation Error:", e); 
+      } finally {
+        // Ensure loading is false if M365 was the last thing we were waiting for
+        setLoading(false);
+      }
+    };
+    fetchM365Data();
+  }, [selectedTenant, allTenantUsers]);
+
+  // 5. GOVERNANCE
+  useEffect(() => {
+    const fetchGov = async () => {
+      if (!selectedTenant) return;
+      try {
+        const res = await fetch(`${ENDPOINTS.MICROSOFT.IDENTITY_GOVERNANCE}?tenant_id=${selectedTenant}`, { 
+          method: "GET",
+          headers: getAuthHeaders() 
+        });
+        const data = await res.json();
+        setIdentityGovernanceData(data);
+      } catch (e) { 
+        console.error("Governance Error:", e); 
+      }
+    };
+    fetchGov();
+  }, [selectedTenant]);
 
   return {
     users,
-    allTenantUsers, // RETURN THIS TOO
+    allTenantUsers,
     loading,
     foreignGroupsCount,
     servicePrincipalsCount,

@@ -1,45 +1,32 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-
-interface CredentialsContextType {
-  clientId: string | null;
-  clientSecret: string | null;
+import { createContext, useState, ReactNode } from 'react';
+// Exporting the interface is required for the hook to know the types
+export interface CredentialsContextType {
+  isConnected: boolean;
   tenantId: string | null;
-  setCredentials: (clientId: string, clientSecret: string, tenantId: string) => void;
-  clearCredentials: () => void;
+  setConnectionSuccess: (tenantId: string) => void;
+  logout: () => void;
 }
 
-const CredentialsContext = createContext<CredentialsContextType | undefined>(undefined);
+// Exporting the context constant is required for the Hook to consume it
+export const CredentialsContext = createContext<CredentialsContextType | undefined>(undefined);
 
-export const CredentialsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [clientId, setClientId] = useState<string | null>(null);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
+export const CredentialsProvider = ({ children }: { children: ReactNode }) => {
+  const [isConnected, setIsConnected] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
 
-  const setCredentials = (newClientId: string, newClientSecret: string, newTenantId: string) => {
-    setClientId(newClientId);
-    setClientSecret(newClientSecret);
-    setTenantId(newTenantId);
-    // No caching - credentials only exist in memory for current session
+  const setConnectionSuccess = (id: string) => {
+    setTenantId(id);
+    setIsConnected(true);
   };
 
-  const clearCredentials = () => {
-    setClientId(null);
-    setClientSecret(null);
+  const logout = () => {
     setTenantId(null);
-    // No localStorage operations since we're not caching
+    setIsConnected(false);
   };
 
   return (
-    <CredentialsContext.Provider value={{ clientId, clientSecret, tenantId, setCredentials, clearCredentials }}>
+    <CredentialsContext.Provider value={{ isConnected, tenantId, setConnectionSuccess, logout }}>
       {children}
     </CredentialsContext.Provider>
   );
-};
-
-export const useCredentials = () => {
-  const context = useContext(CredentialsContext);
-  if (!context) {
-    throw new Error('useCredentials must be used within a CredentialsProvider');
-  }
-  return context;
 };

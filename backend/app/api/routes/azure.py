@@ -1,172 +1,127 @@
 """
-Azure API routes for authentication, subscriptions, and user management.
+Azure API routes for authentication, subscriptions, and user management using session-based tokens.
 """
-from fastapi import APIRouter, Depends, HTTPException, Header
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import APIRouter, Depends, HTTPException, Request, Body, Query
+from typing import Dict, Any
 
-from app.api.models.requests import TokenRequest, SubscriptionRequest, UserRequest
 from app.api.models.responses import UsersResponse
-from app.core.exceptions import AzureAPIError, TokenError
 from app.core.logging_config import get_logger
 from app.services.azure.auth_service import AzureAuthService
 from app.services.azure.subscription_service import SubscriptionService
 from app.services.azure.user_service import UserService
+# Import our session dependencies
+from app.api.deps import get_mgmt_token, get_graph_token
 
 logger = get_logger(__name__)
-
 router = APIRouter(tags=["azure"])
-bearer_scheme = HTTPBearer()
 
+# --- 1. Handshake Endpoint ---
 
-@router.post("/azure/token")
-async def get_token(request: TokenRequest) -> dict:
-    """
-    Get Azure access token.
-
-    Args:
-        request: Token request with tenant, client credentials, and scope
-
-    Returns:
-        Token response with access_token
-
-    Raises:
-        TokenError: If token acquisition fails
-    """
+@router.post("/connect")
+async def connect_azure(
+    credentials: dict = Body(...)
+):
+    auth_service = AzureAuthService()
     try:
-        logger.info(f"Token request for tenant: {request.tenant_id}, scope: {request.scope}")
-        token = await AzureAuthService.get_access_token(
-            tenant_id=request.tenant_id,
-            client_id=request.client_id,
-            client_secret=request.client_secret,
-            scope=request.scope,
+        tenant_id = credentials.get("tenantId")
+        client_id = credentials.get("clientId")
+        client_secret = credentials.get("clientSecret")
+
+        # 1. Fetch Tokens
+        mgmt_data = await auth_service.get_access_token(
+            tenant_id=tenant_id, client_id=client_id, client_secret=client_secret,
+            scope="https://management.azure.com/.default"
         )
-        return {"access_token": token}
-    except TokenError:
-        raise
+        graph_data = await auth_service.get_access_token(
+            tenant_id=tenant_id, client_id=client_id, client_secret=client_secret,
+            scope="https://graph.microsoft.com/.default"
+        )
+
+        # 2. Extract strings
+        mgmt_token = mgmt_data.get("access_token") if isinstance(mgmt_data, dict) else mgmt_data
+        graph_token = graph_data.get("access_token") if isinstance(graph_data, dict) else graph_data
+
+        # 3. Return as JSON Body (No more 4KB limit!)
+        return {
+            "message": "Authenticated successfully",
+            "mgmt_token": mgmt_token,
+            "graph_token": graph_token,
+            "tenant_id": tenant_id
+        }
     except Exception as e:
-        logger.error(f"Unexpected error in token endpoint: {str(e)}", exc_info=True)
-        raise TokenError("Failed to obtain access token")
+        logger.error(f"Handshake failed: {str(e)}")
+        raise HTTPException(status_code=401, detail="Azure authentication failed")
+# --- 2. Subscription Endpoints ---
 
-
-@router.get("/azure/subscriptions")
+@router.get("/subscriptions")
 async def get_subscriptions(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    token: str = Depends(get_mgmt_token)
 ) -> dict:
     """
-    Get Azure subscriptions.
-
-    Args:
-        credentials: Bearer token credentials
-
-    Returns:
-        Subscriptions response
-
-    Raises:
-        AzureAPIError: If API call fails
+    Fetches subscriptions using the token string stored in the session.
     """
     try:
-        logger.info("Fetching subscriptions")
-        access_token = credentials.credentials
-        subscriptions = await SubscriptionService.get_subscriptions(access_token)
+        subscriptions = await SubscriptionService.get_subscriptions(token)
         return {"value": subscriptions}
-    except AzureAPIError:
-        raise
     except Exception as e:
-        logger.error(f"Unexpected error fetching subscriptions: {str(e)}", exc_info=True)
-        raise AzureAPIError("Failed to fetch subscriptions")
+        logger.error(f"Subscription fetch error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch subscriptions")
 
-
-@router.post("/azure/users", response_model=UsersResponse)
-async def get_users_info(request_data: UserRequest) -> UsersResponse:
+@router.get("/subscriptions/{subscription_id}/metadata")
+async def get_subscription_metadata(
+    subscription_id: str,
+    token: str = Depends(get_mgmt_token)
+):
     """
-    Get users with role assignments for a subscription.
-
-    Args:
-        request_data: User request with subscription and credentials
-
-    Returns:
-        Users response with users list and counts
-
-    Raises:
-        HTTPException: If operation fails
+    Proxy to get specific subscription details.
     """
     try:
-        logger.info(f"Fetching users for subscription: {request_data.subscription_id}")
+        metadata = await SubscriptionService.get_subscription_details(subscription_id, token)
+        return metadata
+    except Exception as e:
+        logger.error(f"Metadata fetch error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-        # Get tokens
-        graph_token = await AzureAuthService.get_graph_token(
-            tenant_id=request_data.tenant_id,
-            client_id=request_data.client_id,
-            client_secret=request_data.client_secret,
-        )
+# --- 3. User & Identity Endpoints ---
 
-        mgmt_token = await AzureAuthService.get_management_token(
-            tenant_id=request_data.tenant_id,
-            client_id=request_data.client_id,
-            client_secret=request_data.client_secret,
-        )
-
-        # Get users
+@router.get("/users", response_model=UsersResponse)
+async def get_users_info(
+    subscription_id: str = Query(...),
+    mgmt_token: str = Depends(get_mgmt_token),
+    graph_token: str = Depends(get_graph_token)
+) -> UsersResponse:
+    """
+    Get users for a specific subscription.
+    """
+    try:
         user_service = UserService(graph_token=graph_token, management_token=mgmt_token)
-        result = await user_service.get_subscription_users(request_data.subscription_id)
-
-        logger.info(
-            f"Retrieved {len(result['users'])} users, "
-            f"SP count: {result['servicePrincipalsCount']}, "
-            f"FG count: {result['foreignGroupsCount']}"
-        )
-
+        result = await user_service.get_subscription_users(subscription_id)
+        
         return UsersResponse(
             users=result["users"],
             foreignGroupsCount=result.get("foreignGroupsCount"),
             servicePrincipalsCount=result.get("servicePrincipalsCount"),
         )
-
-    except (TokenError, AzureAPIError):
-        raise
     except Exception as e:
-        logger.error(f"Error fetching subscription users: {str(e)}", exc_info=True)
+        logger.error(f"Error fetching users: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to fetch subscription users")
 
-
-@router.post("/azure/tenant/users", response_model=UsersResponse)
-async def get_tenant_users_info(request_data: SubscriptionRequest) -> UsersResponse:
+@router.get("/tenant/users", response_model=UsersResponse)
+async def get_tenant_users_info(
+    graph_token: str = Depends(get_graph_token)
+) -> UsersResponse:
     """
-    Get all users from the tenant.
-
-    Args:
-        request_data: Subscription request with tenant and credentials
-
-    Returns:
-        Users response with tenant users
-
-    Raises:
-        HTTPException: If operation fails
+    Get all tenant users using the Graph token from the session.
     """
     try:
-        logger.info(f"Fetching tenant users for tenant: {request_data.tenant_id}")
-
-        # Get Graph token
-        graph_token = await AzureAuthService.get_graph_token(
-            tenant_id=request_data.tenant_id,
-            client_id=request_data.client_id,
-            client_secret=request_data.client_secret,
-        )
-
-        # Get tenant users
         user_service = UserService(graph_token=graph_token, management_token="")
         users = await user_service.get_tenant_users()
-
-        logger.info(f"Retrieved {len(users)} tenant users")
-
+        
         return UsersResponse(
             users=users,
             foreignGroupsCount=None,
             servicePrincipalsCount=None,
         )
-
-    except (TokenError, AzureAPIError):
-        raise
     except Exception as e:
-        logger.error(f"Error fetching tenant users: {str(e)}", exc_info=True)
+        logger.error(f"Error fetching tenant users: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to fetch tenant users")

@@ -5,7 +5,6 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, delete
 
 from app.core.config import settings
-from app.core.db import engine, init_db
 from app.main import app
 from app.models import Item, User
 from tests.utils.user import authentication_token_from_email

@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Row, Col, Spin, Alert, Empty } from "antd";
 import { DashboardTiles } from "./DashboardTiles";
-import { useCredentials } from "@/context/CredentialsContext";
+import { useCredentials } from "../hooks/useCredentials";
 import { useAzureSubscriptions } from "@/hooks/useAzureSubscriptions";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
@@ -32,21 +32,24 @@ import { DomainOverviewTile } from "@/components/dashboard/tiles/DomainOverviewT
 import { Microsoft365Tile } from "@/components/dashboard/tiles/Microsoft365Tile";
 
 function Dashboard() {
-  const { clientId, clientSecret, tenantId } = useCredentials();
-  const [selectedTenant, setSelectedTenant] = useState<string>(tenantId || "tenant-1");
+  // 1. Updated Context: We no longer pull clientId/Secret here for security
+  const { tenantId, isConnected } = useCredentials();
+  
+  const [selectedTenant, setSelectedTenant] = useState<string>(tenantId || "");
   const [selectedSubscription, setSelectedSubscription] = useState<string | null>(null);
   const [selectedTile, setSelectedTile] = useState<string>("azure-identity");
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedCardData, setSelectedCardData] = useState<ModalData | null>(null);
   const [viewMode, setViewMode] = useState<'tenant' | 'subscription'>('tenant');
 
-  // Guard: Redirect if credentials missing
-  if (!clientId || !clientSecret) {
-    window.location.href = "/login";
-    return null;
-  }
+  // 2. Updated Guard: Redirect to /connection if session isn't initialized
+  useEffect(() => {
+    if (!isConnected) {
+      // Use window.location or navigate to ensure they go back to connect
+      window.location.href = "/connection";
+    }
+  }, [isConnected]);
 
-  // Effect: URL Parameter Cleanup
   useEffect(() => {
     const url = new URL(window.location.href);
     if (url.searchParams.has('from')) {
@@ -55,17 +58,16 @@ function Dashboard() {
     }
   }, []);
 
-  // Hook: Azure Subscriptions
+  // 3. Updated Hooks: Removed credentials passing. 
+  // The hooks internally must now use { credentials: 'include' } in their fetches.
   const {
     azureSubscriptions,
-    mgtToken,
     subMetadata,
     loading: subscriptionsLoading,
     error: subscriptionsError,
     fetchSubscriptionMetadata,
-  } = useAzureSubscriptions({ clientId, clientSecret, selectedTenant });
+  } = useAzureSubscriptions({ selectedTenant });
 
-  // Hook: Dashboard Core Data
   const {
     users,
     allTenantUsers,
@@ -80,43 +82,35 @@ function Dashboard() {
     identityGovernanceData,
     licenseUsageData,
   } = useDashboardData({
-    clientId,
-    clientSecret,
     selectedTenant,
     selectedSubscription,
-    mgtToken,
   });
 
-  // Effect: Fetch metadata when sub changes
   useEffect(() => {
-    if (selectedSubscription && mgtToken) {
+    if (selectedSubscription) {
       fetchSubscriptionMetadata(selectedSubscription);
     }
-  }, [selectedSubscription, mgtToken, fetchSubscriptionMetadata]);
+  }, [selectedSubscription, fetchSubscriptionMetadata]);
 
-  // --- Handlers ---
+  // --- Handlers (Remain largely the same) ---
   const handleViewModeChange = (newMode: 'tenant' | 'subscription') => {
     setViewMode(newMode);
-    
     if (newMode === 'subscription') {
-      // Auto-select first sub if none selected
-      if (azureSubscriptions && azureSubscriptions.length > 0 && !selectedSubscription) {
+      if (azureSubscriptions?.length > 0 && !selectedSubscription) {
         const firstSub = azureSubscriptions[0];
-        const subId = (firstSub as any).subscriptionId || (firstSub as any).id || (firstSub as any).value;
+        const subId = (firstSub as any).subscriptionId || (firstSub as any).id;
         if (subId) handleSubscriptionChange(subId);
       }
-      // Tile Guard: Move to Identity if on a Tenant-only tile
       if (selectedTile === 'microsoft-365' || selectedTile === 'domain-overview') {
         setSelectedTile('azure-identity');
       }
     } else {
-      // Clear sub when switching back to Tenant mode
       handleSubscriptionChange(null);
     }
   };
 
-  const handleTenantChange = (tenantId: string) => {
-    setSelectedTenant(tenantId);
+  const handleTenantChange = (tId: string) => {
+    setSelectedTenant(tId);
     setSelectedSubscription(null);
     setViewMode('tenant');
     setSelectedTile('azure-identity'); 
@@ -124,39 +118,27 @@ function Dashboard() {
 
   const handleSubscriptionChange = (subscriptionId: string | null) => {
     setSelectedSubscription(subscriptionId);
-    if (subscriptionId) {
-      setViewMode('subscription');
-      setSelectedTile('azure-identity');
-    } else {
-      setViewMode('tenant');
-      setSelectedTile('azure-identity');
-    }
+    setViewMode(subscriptionId ? 'subscription' : 'tenant');
+    setSelectedTile('azure-identity');
   };
 
-  // --- Blank State Logic ---
-  // If in subscription mode but no ID is selected, force a blank data state
   const isSubModeWithoutSelection = viewMode === 'subscription' && !selectedSubscription;
-
   const displayUsers = isSubModeWithoutSelection 
     ? [] 
     : (viewMode === 'tenant' ? (allTenantUsers || []) : (users || []));
 
-  // Derived calculations (will result in empty/zero states if displayUsers is [])
   const roleCounts = calculateRoleCounts(displayUsers);
   const { mfaEnabledCount, mfaDisabledCount } = calculateMFAStats(displayUsers);
   const mfaDisabledByRole = calculateMFADisabledByRole(displayUsers);
 
-  // --- Modal Interaction Handlers ---
+  // Modal Handlers
   const handleCardClick = (cardType: string, currentTile: string) => {
     if (isSubModeWithoutSelection) return;
-    let modalData: ModalData | null = null;
-    if (currentTile === 'azure-identity') {
-      modalData = getAzureIdentityModalData(cardType, displayUsers);
-    } else if (currentTile === 'microsoft-365') {
-      modalData = getMicrosoft365ModalData(cardType); 
-    } else if (currentTile === 'domain-overview') {
-      modalData = getDomainOverviewModalData(cardType);
-    }
+    let modalData = null;
+    if (currentTile === 'azure-identity') modalData = getAzureIdentityModalData(cardType, displayUsers);
+    else if (currentTile === 'microsoft-365') modalData = getMicrosoft365ModalData(cardType); 
+    else if (currentTile === 'domain-overview') modalData = getDomainOverviewModalData(cardType);
+    
     if (modalData) {
       setSelectedCardData(modalData);
       setDetailModalVisible(true);
@@ -191,6 +173,8 @@ function Dashboard() {
 
   const loading = subscriptionsLoading || dataLoading;
 
+  if (!isConnected) return null; // Prevent flicker before redirect
+
   return (
     <div style={{ padding: "24px", background: "#f5f5f5", minHeight: "100vh" }}>
       <div style={{ maxWidth: "1400px", margin: "0 auto" }}>
@@ -213,12 +197,12 @@ function Dashboard() {
         )}
 
         {subscriptionsError && (
-          <Alert message="Warning" description={subscriptionsError} type="error" style={{ marginBottom: "24px" }} closable />
+          <Alert message="Connection Error" description={subscriptionsError} type="error" style={{ marginBottom: "24px" }} showIcon closable />
         )}
 
         {loading ? (
           <Row justify="center" style={{ padding: "64px 0" }}>
-            <Spin size="large" tip="Loading data..." />
+            <Spin size="large" tip="Fetching Azure Intelligence..." />
           </Row>
         ) : (
           <Row gutter={24} style={{ marginTop: '24px' }}>
@@ -231,12 +215,11 @@ function Dashboard() {
             </Col>
 
             <Col xs={24} lg={18}>
-              {/* Conditional Content Rendering */}
               {isSubModeWithoutSelection ? (
                 <div style={{ background: '#fff', padding: '100px 24px', borderRadius: '12px', textAlign: 'center' }}>
                   <Empty 
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="Please select a subscription to view associated resources and identity data." 
+                    description="Select a subscription to analyze resources." 
                   />
                 </div>
               ) : (
