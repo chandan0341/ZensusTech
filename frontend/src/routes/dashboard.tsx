@@ -251,7 +251,7 @@ function Dashboard() {
                   {viewMode === 'subscription' || viewMode === 'tenant' && (
                     <>
                       {selectedTile === 'security' && <SecurityTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
-                      {selectedTile === 'cost-management' && <CostManagementTile />}
+                      {selectedTile === 'cost-management' && <CostManagementTile selectedSubscription={selectedSubscription ? selectedSubscription : ""} />}
                       {selectedTile === 'backups-dr' && <BackupsDRTile />}
                       {selectedTile === 'patch-management' && <PatchManagementTile />}
                     </>
