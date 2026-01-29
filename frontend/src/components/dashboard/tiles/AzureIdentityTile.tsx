@@ -188,15 +188,14 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = ({
           </div>
 
           {/* 4. MFA & Security Compliance (Lead's Patterns integrated here) */}
-          <div style={{ marginBottom: '24px' }}>
-            <Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>MFA & Security Compliance</Title>
-            
+          <div style={{ marginBottom: '24px' }}>            
             {!loading && mfaDisabledCount > 0 && (
               <>
                 <FinancialRiskBanner count={mfaDisabledCount} />
                 <CriticalIssueCard count={mfaDisabledCount} />
               </>
             )}
+            <Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>MFA & Security Compliance</Title>
 
             <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
               <Col xs={24} sm={12}>

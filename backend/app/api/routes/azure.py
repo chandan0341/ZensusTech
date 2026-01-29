@@ -76,7 +76,7 @@ async def get_subscription_metadata(
     Proxy to get specific subscription details.
     """
     try:
-        metadata = await SubscriptionService.get_subscription_details(subscription_id, token)
+        metadata = await SubscriptionService.get_subscription_metadata(subscription_id, token)
         return metadata
     except Exception as e:
         logger.error(f"Metadata fetch error: {str(e)}")
