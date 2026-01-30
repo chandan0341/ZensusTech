@@ -66,20 +66,23 @@ class LicenseService:
                 })
 
             # Logic for Results and Status using unit counts
-            if not license_list:
-                status, color, number = "N/A", "grey", "0/0"
-            elif total_unused_units > 0:
-                status, color = "Savings Possible", "red"
-                number = f"{total_unused_units}/{total_purchased_units}"
-            else:
-                status, color = "Optimized", "green"
-                number = f"0/{total_purchased_units}" # This will now show 0/4
+                if not license_list:
+                    status, color, number = "N/A", "grey", "0/0"
+                elif total_unused_units > 0:
+                    # If there are unused units, show the waste (e.g., 2/4)
+                    status, color = "Savings Possible", "red"
+                    number = f"{total_unused_units}/{total_purchased_units}"
+                else:
+                    # Optimized means all purchased units are assigned
+                    status, color = "Optimized", "green"
+                    # FIX: Show total assigned instead of a hardcoded 0
+                    number = f"{assigned}/{total_purchased_units}" 
 
             executive_summary = [{
                 "area": "License Optimization",
                 "status": status,
                 "color": color,
-                "number": number,
+                "number": number, # This will now correctly show "4/4"
                 "note": f"Managed {total_purchased_units} total license units."
             }]
 

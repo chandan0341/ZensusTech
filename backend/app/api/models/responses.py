@@ -53,6 +53,8 @@ class SummaryItem(BaseModel):
     area: str
     status: str
     color: Optional[str] = None
+    number: str
+    
 
 
 class LicenseUsageResponse(BaseModel):

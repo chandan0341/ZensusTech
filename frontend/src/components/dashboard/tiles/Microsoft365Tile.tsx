@@ -211,7 +211,7 @@ export const Microsoft365Tile = ({
     title=""
     columns={[
       { 
-        key: "licenseType", 
+        key: "license", 
         label: "License Type", 
         width: "30%",
         render: (value) => (

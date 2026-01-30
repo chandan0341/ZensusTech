@@ -111,6 +111,7 @@ export const useDashboardData = ({
 
   // 4. M365 DATA AGGREGATION
   useEffect(() => {
+    console.log("useEffect Triggered! Tenant:", selectedTenant);
     const fetchM365Data = async () => {
       if (!selectedTenant) return;
       try {
@@ -125,6 +126,8 @@ export const useDashboardData = ({
 
         const licData = await licRes.json();
         const ssData = await ssRes.json();
+        console.log("Full License API Response:", licData);
+        console.log("Full License API  tableData Response:", licData.tableData);
 
         setLicenseUsageData(licData.tableData || []);
         setOverallScore(licData.overallScore || 0);
