@@ -62,59 +62,52 @@ export const useDashboardData = ({
     };
   };
 
-  // 1. TENANT-LEVEL USERS & ADMIN ROLES
-  useEffect(() => {
-    if (!selectedTenant) return;
-    const fetchTenantData = async () => {
-      setLoading(true);
-      try {
-        const authHeaders = await getAuthHeaders(); // Corrected async call
-        const response = await fetch(`${ENDPOINTS.AZURE.TANENT_USERS}?tenant_id=${selectedTenant}`, {
-          method: "GET",
-          headers: authHeaders as HeadersInit,
-        });
+  // CONSOLIDATED USER FETCH: One effect to rule them all
+useEffect(() => {
+  if (!selectedTenant) return;
 
-        const data = await response.json();
-        const tenantUserList = data.users || [];
-        setAllTenantUsers(tenantUserList);
-        setUsers(tenantUserList);
-        setAdminRolesData(processAdminRoles(tenantUserList));
-      } catch (err) {
-        console.error("Tenant Fetch Error:", err);
-      } finally {
-        if (!selectedSubscription) setLoading(false);
-      }
-    };
-    fetchTenantData();
-  }, [selectedTenant, selectedSubscription]);
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const authHeaders = await getAuthHeaders();
+      
+      // 1. Always fetch Tenant Users for master data (MFA/Roles)
+      const tenantRes = await fetch(`${ENDPOINTS.AZURE.TANENT_USERS}?tenant_id=${selectedTenant}`, {
+        headers: authHeaders as HeadersInit
+      });
+      const tenantData = await tenantRes.json();
+      const masterList = tenantData.users || [];
+      
+      // Update master states
+      setAllTenantUsers(masterList);
+      setAdminRolesData(processAdminRoles(masterList));
 
-  // 2. SUBSCRIPTION-LEVEL DATA
-  useEffect(() => {
-    if (!selectedTenant || !selectedSubscription) return;
-    const fetchSubscriptionData = async () => {
-      setLoading(true);
-      try {
-        const authHeaders = await getAuthHeaders();
-        const response = await fetch(
+      // 2. Decide what to show in the main table
+      if (selectedSubscription) {
+        // Fetch specific subscription users
+        const subRes = await fetch(
           `${ENDPOINTS.AZURE.USERS}?subscription_id=${selectedSubscription}&tenant_id=${selectedTenant}`, 
-          {
-            method: "GET",
-            headers: authHeaders as HeadersInit,
-          }
+          { headers: authHeaders as HeadersInit }
         );
-        const data = await response.json();
-        setUsers(data.users || []);
-        setForeignGroupsCount(data.foreignGroupsCount ?? null);
-        setServicePrincipalsCount(data.servicePrincipalsCount ?? null);
-      } catch (err) {
-        console.error("Sub Fetch Error:", err);
-      } finally {
-        setLoading(false);
+        const subData = await subRes.json();
+        setUsers(subData.users || []);
+        setForeignGroupsCount(subData.foreignGroupsCount ?? null);
+        setServicePrincipalsCount(subData.servicePrincipalsCount ?? null);
+      } else {
+        // No subscription selected? Show the master tenant list
+        setUsers(masterList);
+        setForeignGroupsCount(null);
+        setServicePrincipalsCount(null);
       }
-    };
-    fetchSubscriptionData();
-  }, [selectedSubscription, selectedTenant]);
+    } catch (err) {
+      console.error("Data Fetch Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  fetchData();
+}, [selectedTenant, selectedSubscription]); // Both triggers are handled here
   // 3. SSL CERTIFICATES
   useEffect(() => {
     const fetchSSL = async () => {
