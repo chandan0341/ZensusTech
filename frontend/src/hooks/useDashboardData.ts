@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { User, AdminRoleData, GovernanceItem, SummaryItem } from "@/types/dashboard.types";
-import { fetchSSLCertificates } from "@/services/dashboardApi";
 import { ENDPOINTS } from "@/constants/api";
 import { processAdminRoles } from "@/utils/dashboardUtils";
 
@@ -19,8 +18,6 @@ export const useDashboardData = ({
   const [foreignGroupsCount, setForeignGroupsCount] = useState<number | null>(null);
   const [servicePrincipalsCount, setServicePrincipalsCount] = useState<number | null>(null);
   const [adminRolesData, setAdminRolesData] = useState<AdminRoleData[]>([]);
-  const [sslCertificates, setSslCertificates] = useState<any[]>([]);
-  const [sslError, setSslError] = useState<string | null>(null);
   const [licenseUsageData, setLicenseUsageData] = useState<any[]>([]);
   const [overallScore, setOverallScore] = useState<number>(0);
   const [summaryItems, setSummaryItems] = useState<SummaryItem[]>([]);
@@ -73,7 +70,7 @@ useEffect(() => {
       
       // 1. ONLY fetch Tenant Users if we don't have them yet
       // This prevents the refetch when only selectedSubscription changes
-      if (allTenantUsers.length === 0) {
+      if (selectedTenant && !selectedSubscription) {
         const tenantRes = await fetch(`${ENDPOINTS.AZURE.TANENT_USERS}?tenant_id=${selectedTenant}`, {
           headers: authHeaders as HeadersInit
         });
@@ -84,7 +81,7 @@ useEffect(() => {
       }
 
       // 2. Fetch Subscription specific data
-      if (selectedSubscription) {
+      if (selectedTenant && selectedSubscription) {
         const subRes = await fetch(
           `${ENDPOINTS.AZURE.USERS}?subscription_id=${selectedSubscription}&tenant_id=${selectedTenant}`, 
           { headers: authHeaders as HeadersInit }
@@ -106,19 +103,6 @@ useEffect(() => {
 
   fetchData();
 }, [selectedTenant, selectedSubscription, allTenantUsers.length]);
-  // 3. SSL CERTIFICATES
-  useEffect(() => {
-    const fetchSSL = async () => {
-      if (!selectedTenant || !selectedSubscription) return;
-      try {
-        const data = await fetchSSLCertificates(selectedTenant, selectedSubscription);
-        setSslCertificates(data);
-      } catch (err) {
-        setSslError("SSL Error");
-      }
-    };
-    fetchSSL();
-  }, [selectedTenant, selectedSubscription]);
 
   // 4. M365 DATA AGGREGATION
   useEffect(() => {
@@ -198,8 +182,6 @@ useEffect(() => {
     foreignGroupsCount,
     servicePrincipalsCount,
     adminRolesData,
-    sslCertificates,
-    sslError,
     licenseUsageData,
     overallScore,
     summaryItems,

@@ -28,7 +28,6 @@ import { SecurityTile } from "@/components/dashboard/tiles/SecurityTile";
 import { CostManagementTile } from "@/components/dashboard/tiles/CostManagementTile";
 import { BackupsDRTile } from "@/components/dashboard/tiles/BackupsDRTile";
 import { PatchManagementTile } from "@/components/dashboard/tiles/PatchManagementTile";
-import { DomainOverviewTile } from "@/components/dashboard/tiles/DomainOverviewTile";
 import { Microsoft365Tile } from "@/components/dashboard/tiles/Microsoft365Tile";
 
 function Dashboard() {
@@ -75,8 +74,6 @@ function Dashboard() {
     foreignGroupsCount,
     servicePrincipalsCount,
     adminRolesData,
-    sslCertificates,
-    sslError,
     overallScore,
     summaryItems,
     identityGovernanceData,
@@ -244,7 +241,6 @@ function Dashboard() {
 
                   {viewMode === 'tenant' && (
                     <>
-                      {selectedTile === 'domain-overview' && <DomainOverviewTile sslCertificates={sslCertificates} sslError={sslError} />}
                       {selectedTile === 'microsoft-365' && (
                         <Microsoft365Tile
                           overallScore={overallScore}
