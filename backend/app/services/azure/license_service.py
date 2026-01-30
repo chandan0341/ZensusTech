@@ -42,6 +42,7 @@ class LicenseService:
             
             license_list = []
             total_purchased_units = 0
+            total_assigned_units = 0 # Added to track total used
             total_unused_units = 0
 
             for item in skus:
@@ -54,8 +55,8 @@ class LicenseService:
                 assigned = item.get("consumedUnits", 0)
                 unused = max(0, purchased - assigned)
                 
-                # Aggregate the actual unit counts
                 total_purchased_units += purchased
+                total_assigned_units += assigned # Track this for the 4/4 display
                 total_unused_units += unused
 
                 license_list.append({
@@ -65,24 +66,22 @@ class LicenseService:
                     "unused": unused
                 })
 
-            # Logic for Results and Status using unit counts
-                if not license_list:
-                    status, color, number = "N/A", "grey", "0/0"
-                elif total_unused_units > 0:
-                    # If there are unused units, show the waste (e.g., 2/4)
-                    status, color = "Savings Possible", "red"
-                    number = f"{total_unused_units}/{total_purchased_units}"
-                else:
-                    # Optimized means all purchased units are assigned
-                    status, color = "Optimized", "green"
-                    # FIX: Show total assigned instead of a hardcoded 0
-                    number = f"{assigned}/{total_purchased_units}" 
+            # FIX: MOVE THIS OUTSIDE THE FOR LOOP (UN-INDENT)
+            if not license_list:
+                status, color, number = "N/A", "grey", "0/0"
+            elif total_unused_units > 0:
+                status, color = "Savings Possible", "red"
+                number = f"{total_unused_units}/{total_purchased_units}"
+            else:
+                status, color = "Optimized", "green"
+                # Use total_assigned_units to ensure it shows "4/4"
+                number = f"{total_assigned_units}/{total_purchased_units}" 
 
             executive_summary = [{
                 "area": "License Optimization",
                 "status": status,
                 "color": color,
-                "number": number, # This will now correctly show "4/4"
+                "number": number,
                 "note": f"Managed {total_purchased_units} total license units."
             }]
 
