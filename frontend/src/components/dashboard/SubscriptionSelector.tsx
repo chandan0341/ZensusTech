@@ -56,7 +56,7 @@ export const SubscriptionSelector = ({
             onChange={(val) => onViewModeChange(val as 'tenant' | 'subscription')}
             options={[
               { 
-                label: <Space><GlobalOutlined /> Organization</Space>, 
+                label: <Space><GlobalOutlined /> Tenant</Space>, 
                 value: 'tenant' 
               },
               { 
