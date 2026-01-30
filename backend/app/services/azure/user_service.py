@@ -147,7 +147,8 @@ class UserService:
                     u_body = u_res.get("body", {})
                     is_active = u_body.get("accountEnabled", True)
 
-                    m_val = m_res.get("body", {}).get("value", []) if m_res.get("status") == 200 else []
+                    m_val = m_res.get("value", []) if "value" in m_res else m_res.get("body", {}).get("value", [])
+
                     mfa_enabled = any(
                         m.get("@odata.type") != "#microsoft.graph.passwordAuthenticationMethod"
                         for m in m_val
@@ -247,9 +248,10 @@ class UserService:
                         # Path: batch_map -> mfa-id -> body -> value
                         mfa_res = batch_map.get(f"mfa-{uid}", {})
                         mfa_body = mfa_res.get("body", {})
-                        mfa_data = mfa_body.get("value", [])
+                        # Handle cases where body might be a list or a dict containing 'value'
+                        mfa_data = mfa_body.get("value", []) if isinstance(mfa_body, dict) else []
                         
-                        # Logic: Is there any method that isn't just a standard password?
+                        # 3. Improved logic: Check for valid MFA methods
                         mfa_enabled = any(
                             "passwordauthenticationmethod" not in str(m.get("@odata.type", "")).lower()
                             for m in mfa_data
