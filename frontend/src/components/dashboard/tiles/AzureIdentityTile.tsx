@@ -1,11 +1,12 @@
 import React from "react";
-import { Card, Row, Col, Space, Typography, Tooltip, List } from "antd";
+import { Card, Row, Col, Space, Typography, Tooltip,Badge } from "antd";
 import { 
   TeamOutlined, 
   LockOutlined, 
   ExclamationCircleOutlined, 
   CheckSquareOutlined, 
-  WarningOutlined 
+  WarningOutlined ,
+  CloseCircleOutlined
 } from "@ant-design/icons";
 import { TableComponent } from "@/components/TailAdminReports";
 import { User, AdminRoleData } from "@/types/dashboard.types";
@@ -53,38 +54,6 @@ const FinancialRiskBanner = ({ count }: { count: number }) => (
           <li><CheckSquareOutlined /> Crypto Mining Threat</li>
           <li><CheckSquareOutlined /> No Refund Without MFA</li>
         </ul>
-      </Col>
-    </Row>
-  </Card>
-);
-
-// --- Internal Pattern: Critical Recommendation Card (Lead's Suggestion) ---
-const CriticalIssueCard = ({ count }: { count: number }) => (
-  <Card
-    title={<span style={{ color: '#cf1322' }}><ExclamationCircleOutlined /> Critical Issue: MFA Recommendations</span>}
-    style={{ borderRadius: '12px', border: '1px solid #ffccc7', marginBottom: '24px' }}
-  >
-    <Row gutter={24} align="middle">
-      <Col xs={24} md={14}>
-        <div style={{ padding: '16px', backgroundColor: '#fff1f0', borderRadius: '8px', border: '1px solid #ffa39e' }}>
-          <Text strong style={{ display: 'block' }}>MFA Disabled for Users</Text>
-          <div style={{ margin: '8px 0' }}>
-            <span style={{ backgroundColor: '#cf1322', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>Risk: CRITICAL</span>
-          </div>
-          <Text strong>Recommendation:</Text> <Text>Enable MFA Immediately</Text>
-          <div style={{ marginTop: '4px' }}><Text type="secondary">Affected Users: {count}</Text></div>
-        </div>
-      </Col>
-      <Col xs={24} md={10}>
-        <List
-          size="small"
-          dataSource={['Immediate Action Needed', 'Audit & Compliance Focus', 'Reduce Future Risk']}
-          renderItem={(item) => (
-            <List.Item style={{ border: 'none', padding: '4px 0' }}>
-              <CheckSquareOutlined style={{ color: '#52c41a', marginRight: '8px' }} /> {item}
-            </List.Item>
-          )}
-        />
       </Col>
     </Row>
   </Card>
@@ -192,37 +161,94 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = ({
             {!loading && mfaDisabledCount > 0 && (
               <>
                 <FinancialRiskBanner count={mfaDisabledCount} />
-                <CriticalIssueCard count={mfaDisabledCount} />
+
               </>
             )}
             <Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>MFA & Security Compliance</Title>
+<Row gutter={[16, 16]} style={{ marginBottom: '24px', alignItems: 'stretch' }}>
+  {/* 1. ENABLED CARD */}
+  <Col xs={24} sm={12}>
+    <Card 
+      loading={loading}
+      hoverable
+      style={{ 
+        textAlign: 'center', 
+        borderRadius: '12px', 
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center'
+      }} 
+      onClick={() => onCardClick('mfa-enabled', 'azure-identity')}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+        <LockOutlined style={{ fontSize: '28px', color: '#52c41a' }} />
+        <div>
+          <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#52c41a', lineHeight: 1.2 }}>
+            {mfaEnabledCount} users
+          </div>
+          <Text strong type="secondary" style={{ fontSize: '14px' }}>
+            MFA Coverage - Enabled
+          </Text>
+        </div>
+      </div>
+    </Card>
+  </Col>
 
-            <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
-              <Col xs={24} sm={12}>
-                <Card 
-                  loading={loading} 
-                  hoverable
-                  style={{ textAlign: 'center', borderRadius: '12px' }} 
-                  onClick={() => onCardClick('mfa-enabled', 'azure-identity')}
-                >
-                  <LockOutlined style={{ fontSize: '24px', color: '#52c41a', marginBottom: '8px' }} />
-                  <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a' }}>{mfaEnabledCount} users</div>
-                  <Text strong type="secondary">MFA Coverage - Enabled</Text>
-                </Card>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Card 
-                  loading={loading} 
-                  hoverable
-                  style={{ textAlign: 'center', borderRadius: '12px' }} 
-                  onClick={() => onCardClick('mfa-disabled', 'azure-identity')}
-                >
-                  <LockOutlined style={{ fontSize: '24px', color: '#ff4d4f', marginBottom: '8px' }} />
-                  <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#ff4d4f' }}>{mfaDisabledCount} users</div>
-                  <Text strong type="secondary">MFA Coverage - Disabled</Text>
-                </Card>
-              </Col>
-            </Row>
+  {/* 2. DISABLED CARD (With Conditionals) */}
+  <Col xs={24} sm={12}>
+    <Card 
+      hoverable
+      style={{ 
+        textAlign: 'center', 
+        borderRadius: '12px', 
+        // Only show yellow background if there is a risk
+        background: mfaDisabledCount > 0 ? '#fffbe6' : '#ffffff', 
+        border: mfaDisabledCount > 0 ? '1px solid #ffe58f' : '1px solid #f0f0f0', 
+        height: '100%' 
+      }} 
+      bodyStyle={{ padding: '20px' }}
+      onClick={() => onCardClick('mfa-disabled', 'azure-identity')}
+    >
+      {/* CONDITIONAL HEADER */}
+      {mfaDisabledCount > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          <CloseCircleOutlined style={{ color: '#cf1322', fontSize: '18px' }} />
+          <Text strong style={{ color: '#a8071a', fontSize: '16px' }}>
+            Critical Issue: MFA Recommendations
+          </Text>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+        <LockOutlined style={{ fontSize: '28px', color: mfaDisabledCount > 0 ? '#ff4d4f' : '#d9d9d9' }} />
+        
+        <div>
+          <div style={{ fontSize: '32px', fontWeight: 'bold', color: mfaDisabledCount > 0 ? '#ff4d4f' : 'rgba(0,0,0,0.85)', lineHeight: 1.2 }}>
+            {mfaDisabledCount} users
+          </div>
+          <Text strong type="secondary" style={{ fontSize: '14px' }}>
+            MFA Coverage - Disabled
+          </Text>
+        </div>
+
+        {/* CONDITIONAL FOOTER */}
+        {mfaDisabledCount > 0 && (
+          <div style={{ marginTop: '8px' }}>
+            <Badge 
+              count="Risk: CRITICAL" 
+              style={{ backgroundColor: '#cf1322', borderRadius: '4px', fontWeight: 'bold', marginBottom: '8px' }} 
+            />
+            <div style={{ marginTop: '4px' }}>
+              <Text strong style={{ fontSize: '13px' }}>Recommendation: </Text>
+              <Text style={{ fontSize: '13px' }}>Enable MFA Immediately</Text>
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
+  </Col>
+</Row>
 
             <TableComponent
               title="MFA Disabled by Role Details"
