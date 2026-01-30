@@ -71,20 +71,20 @@ useEffect(() => {
     try {
       const authHeaders = await getAuthHeaders();
       
-      // 1. Always fetch Tenant Users for master data (MFA/Roles)
-      const tenantRes = await fetch(`${ENDPOINTS.AZURE.TANENT_USERS}?tenant_id=${selectedTenant}`, {
-        headers: authHeaders as HeadersInit
-      });
-      const tenantData = await tenantRes.json();
-      const masterList = tenantData.users || [];
-      
-      // Update master states
-      setAllTenantUsers(masterList);
-      setAdminRolesData(processAdminRoles(masterList));
+      // 1. ONLY fetch Tenant Users if we don't have them yet
+      // This prevents the refetch when only selectedSubscription changes
+      if (allTenantUsers.length === 0) {
+        const tenantRes = await fetch(`${ENDPOINTS.AZURE.TANENT_USERS}?tenant_id=${selectedTenant}`, {
+          headers: authHeaders as HeadersInit
+        });
+        const tenantData = await tenantRes.json();
+        const masterList = tenantData.users || [];
+        setAllTenantUsers(masterList);
+        setAdminRolesData(processAdminRoles(masterList));
+      }
 
-      // 2. Decide what to show in the main table
+      // 2. Fetch Subscription specific data
       if (selectedSubscription) {
-        // Fetch specific subscription users
         const subRes = await fetch(
           `${ENDPOINTS.AZURE.USERS}?subscription_id=${selectedSubscription}&tenant_id=${selectedTenant}`, 
           { headers: authHeaders as HeadersInit }
@@ -94,10 +94,8 @@ useEffect(() => {
         setForeignGroupsCount(subData.foreignGroupsCount ?? null);
         setServicePrincipalsCount(subData.servicePrincipalsCount ?? null);
       } else {
-        // No subscription selected? Show the master tenant list
-        setUsers(masterList);
-        setForeignGroupsCount(null);
-        setServicePrincipalsCount(null);
+        // Fallback to master list if no sub is selected
+        setUsers(allTenantUsers); 
       }
     } catch (err) {
       console.error("Data Fetch Error:", err);
@@ -107,7 +105,7 @@ useEffect(() => {
   };
 
   fetchData();
-}, [selectedTenant, selectedSubscription]); // Both triggers are handled here
+}, [selectedTenant, selectedSubscription, allTenantUsers.length]);
   // 3. SSL CERTIFICATES
   useEffect(() => {
     const fetchSSL = async () => {
@@ -144,12 +142,13 @@ useEffect(() => {
         // Identity Logic: Correctly reflects 6/7 MFA users
         const total = allTenantUsers.length;
         const mfaEnabled = allTenantUsers.filter(u => u.mfa === "Enabled").length;
+        const mfaDisabled = total - mfaEnabled;
         
         const identity: SummaryItem = {
           area: "Identity Security",
           status: total > 0 && mfaEnabled === total ? "Secure" : "Attention Required",
           color: total > 0 && mfaEnabled === total ? "green" : "orange",
-          number: `${mfaEnabled}/${total}`,
+          number: `${mfaDisabled}/${total}`,
           note: `MFA status for ${total} users`
         };
 
