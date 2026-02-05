@@ -1,267 +1,287 @@
-import React from "react";
-import { Card, Row, Col, Space, Typography, Tooltip,Badge } from "antd";
+import React, { useState, useEffect } from "react";
 import { 
-  TeamOutlined, 
-  LockOutlined, 
-  ExclamationCircleOutlined, 
-  CheckSquareOutlined, 
-  WarningOutlined ,
-  CloseCircleOutlined
+  Card, Row, Col, Space, Typography, Table, Tag, Timeline, 
+  Button, Drawer, Segmented, DatePicker, Divider, Statistic, Empty, Badge
+} from "antd";
+import type { DividerProps } from "antd";
+import { 
+  TeamOutlined, AppstoreOutlined, HistoryOutlined, 
+  CloseCircleOutlined, 
+  CheckCircleFilled, ArrowRightOutlined,
+  WarningOutlined,
+  UserOutlined, SearchOutlined, GlobalOutlined, ClusterOutlined,
+  SecurityScanOutlined, InfoCircleOutlined
 } from "@ant-design/icons";
 import { TableComponent } from "@/components/TailAdminReports";
-import { User, AdminRoleData } from "@/types/dashboard.types";
+import { User, AdminRoleData, AzureApplication } from "@/types/dashboard.types";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import type { Dayjs } from "dayjs";
+
+dayjs.extend(relativeTime);
 
 const { Text, Title } = Typography;
+const { RangePicker } = DatePicker;
 
 interface AzureIdentityTileProps {
   users: User[];
+  applications: AzureApplication[];
   loading: boolean;
-  foreignGroupsCount: number | null;
+  foreignGroupsCount: number | null; 
   servicePrincipalsCount: number | null;
   selectedSubscription: string;
+  selectedTenant: string; // Now being used below
   roleCounts: Record<string, number>;
   mfaEnabledCount: number;
   mfaDisabledCount: number;
   mfaDisabledByRole: Array<{ role: string; count: number }>;
   adminRolesData: AdminRoleData[];
+  auditLogs: any[]; 
+  isAuditLoading: boolean; 
+  activeFilter: string;
+  setActiveFilter: (val: string) => void;
+  dateRange: [Dayjs, Dayjs];
+  setDateRange: (val: [Dayjs, Dayjs]) => void;
   onCardClick: (cardType: string, currentTile: string) => void;
   onCardClickForUserType: (roleKey: string) => void;
   onCardClickForMFADisabledRole: (record: { role: string; count: number }, type: string) => void;
 }
 
-// --- Internal Pattern: Financial Risk Banner (Lead's Suggestion) ---
-const FinancialRiskBanner = ({ count }: { count: number }) => (
-  <Card
-    style={{ backgroundColor: '#fffbe6', border: '1px solid #ffe58f', borderRadius: '8px', marginBottom: '16px' }}
-    bodyStyle={{ padding: '16px 24px' }}
-  >
-    <Row align="middle" gutter={24}>
-      <Col xs={24} md={18}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-          <WarningOutlined style={{ fontSize: '24px', color: '#faad14', marginTop: '4px' }} />
-          <div>
-            <Title level={4} style={{ color: '#856404', margin: 0 }}>Financial Risk Alert: Microsoft Refund Warning</Title>
-            <Text style={{ fontSize: '14px', color: '#856404', display: 'block', marginTop: '8px' }}>
-              <strong>WARNING:</strong> MFA is disabled for {count} users. Compromise charges may be treated as valid usage. 
-              Microsoft may not refund costs if breached without MFA.
-            </Text>
-          </div>
-        </div>
-      </Col>
-      <Col xs={24} md={6} style={{ borderLeft: '1px solid #ffe58f' }}>
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0, color: '#856404', fontSize: '12px' }}>
-          <li><CheckSquareOutlined /> Unauthorized Spending</li>
-          <li><CheckSquareOutlined /> Crypto Mining Threat</li>
-          <li><CheckSquareOutlined /> No Refund Without MFA</li>
-        </ul>
-      </Col>
-    </Row>
-  </Card>
-);
-
 export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = ({
-  users,
-  loading,
-  foreignGroupsCount,
-  servicePrincipalsCount,
-  selectedSubscription,
-  roleCounts,
-  mfaEnabledCount,
-  mfaDisabledCount,
-  mfaDisabledByRole,
-  onCardClick,
-  onCardClickForUserType,
-  onCardClickForMFADisabledRole,
+  users, applications, loading, foreignGroupsCount, servicePrincipalsCount, 
+  selectedSubscription, selectedTenant, roleCounts, mfaEnabledCount, mfaDisabledCount, 
+  mfaDisabledByRole, onCardClick, onCardClickForUserType, 
+  onCardClickForMFADisabledRole, auditLogs, 
+  isAuditLoading, activeFilter, setActiveFilter, dateRange, setDateRange
 }) => {
-  return (
-    <div>
-      {/* 1. Main Header */}
-      <Card 
-        style={{ borderRadius: '16px', border: '2px solid #1890ff', overflow: 'hidden', marginBottom: '24px' }} 
-        bodyStyle={{ padding: '0' }}
-      >
-        <div style={{ background: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)', padding: '20px', color: 'white' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <LockOutlined style={{ fontSize: '32px' }} />
-            <div>
-              <Title level={2} style={{ color: 'white', margin: 0 }}>Identity & Access</Title>
-              <Text style={{ color: 'white', opacity: 0.9 }}>Identity & Access Governance Reports</Text>
-            </div>
-          </div>
-        </div>
-      </Card>
+  const [drawerVisible, setDrawerVisible] = useState(false);
 
-      <div style={{ padding: '24px' }}>
-        <Space direction="vertical" size={24} style={{ width: "100%" }}>
-          
-          {/* 2. Identity Distribution */}
-          {selectedSubscription && (
-            <div style={{ marginBottom: '24px' }}>
-              <Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>Identity Type Distribution</Title>
-              <Row gutter={[24, 24]} justify="center">
-                <Col xs={24} sm={12} lg={8}>
-                  <Card loading={loading} style={{ borderRadius: '12px', borderTop: `4px solid ${foreignGroupsCount && foreignGroupsCount > 1 ? '#faad14' : '#52c41a'}`, textAlign: 'center' }}>
-                    <Text type="secondary" strong>Foreign Principal</Text>
-                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: foreignGroupsCount && foreignGroupsCount > 1 ? '#faad14' : '#52c41a' }}>
-                      {foreignGroupsCount ?? 0}
-                      {foreignGroupsCount && foreignGroupsCount > 1 && (
-                        <Tooltip title="Multiple assignments detected for the same identity."><ExclamationCircleOutlined style={{ marginLeft: '8px', fontSize: '20px' }} /></Tooltip>
-                      )}
-                    </div>
-                  </Card>
+  useEffect(() => {
+    setDrawerVisible(false);
+  }, [selectedSubscription]);
+
+  const getLogImportance = (activity: string) => {
+    const act = activity.toLowerCase();
+    if (act.includes('delete') || act.includes('remove') || act.includes('role') || act.includes('permission')) {
+      return { color: '#ff4d4f', label: 'CRITICAL', icon: <SecurityScanOutlined /> };
+    }
+    if (act.includes('update') || act.includes('add')) {
+      return { color: '#faad14', label: 'WARNING', icon: <WarningOutlined /> };
+    }
+    return { color: '#1890ff', label: 'INFO', icon: <InfoCircleOutlined /> };
+  };
+
+  const previewLogs = auditLogs.slice(0, 5);
+
+  const timelineItems = previewLogs.map((log: any) => {
+    const importance = getLogImportance(log.activityDisplayName);
+    const isSuccess = log.result?.toLowerCase() === "success";
+
+    return {
+      dot: (
+        <Badge dot={!isSuccess} status={isSuccess ? "success" : "error"} offset={[-2, 12]}>
+          <div style={{ background: importance.color, borderRadius: '50%', padding: '4px', display: 'flex', color: 'white', fontSize: '10px' }}>
+            {importance.icon}
+          </div>
+        </Badge>
+      ),
+      children: (
+        <div style={{ paddingBottom: '4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Text strong style={{ fontSize: '13px' }}>{log.activityDisplayName}</Text>
+            <Text type="secondary" style={{ fontSize: '11px' }}>{dayjs(log.activityDateTime).fromNow()}</Text>
+          </div>
+          <Text type="secondary" style={{ fontSize: '12px', display: 'block' }}>
+            Actor: {log.initiatedBy?.user?.userPrincipalName || "System"}
+          </Text>
+        </div>
+      )
+    };
+  });
+
+  return (
+    <div style={{ padding: '0px', background: 'transparent' }}>
+      <Space direction="vertical" size={24} style={{ width: "100%" }}>
+        
+        {/* --- 1. EXECUTIVE SUMMARY --- */}
+        <Card styles={{ body: { padding: '24px' } }} style={{ borderRadius: '12px', border: '1px solid #f0f0f0' }}>
+          <Row gutter={[32, 24]} align="middle">
+            <Col xs={24} lg={7} style={{ borderRight: '1px solid #f0f0f0' }}>
+              <Statistic 
+                title={<Text strong style={{ color: '#8c8c8c', fontSize: '11px', textTransform: 'uppercase' }}>Total Users</Text>}
+                value={loading ? 0 : users.length} 
+                prefix={<TeamOutlined style={{ color: '#1890ff' }} />}
+                valueStyle={{ fontSize: '32px', fontWeight: '700' }}
+              />
+              <Space split={<Divider type="vertical" />} style={{ marginTop: '4px', flexWrap: 'wrap' }}>
+                {!loading && Object.entries(roleCounts).map(([role, count]) => (
+                  <Text key={role} style={{ fontSize: '12px', cursor: 'pointer', fontWeight: 500 }} onClick={() => onCardClickForUserType(role.toLowerCase())}>
+                    <UserOutlined style={{ color: '#1890ff', marginRight: '4px' }} />
+                    {count} {role}
+                  </Text>
+                ))}
+              </Space>
+            </Col>
+            
+            <Col xs={24} lg={8} style={{ paddingLeft: '40px', borderRight: '1px solid #f0f0f0' }}>
+               <Row gutter={16}>
+                  <Col span={12} style={{ cursor: 'pointer' }} onClick={() => onCardClick('mfa-enabled', 'azure-identity')}>
+                    <Statistic title="MFA COMPLIANT" value={loading ? 0 : mfaEnabledCount} valueStyle={{ color: '#52c41a', fontSize: '22px' }} prefix={<CheckCircleFilled />} />
+                    <Tag color="success" bordered={false}>Secure</Tag>
+                  </Col>
+                  <Col span={12} style={{ cursor: 'pointer' }} onClick={() => onCardClick('mfa-disabled', 'azure-identity')}>
+                    <Statistic title="MFA VULNERABLE" value={loading ? 0 : mfaDisabledCount} valueStyle={{ color: '#ff4d4f', fontSize: '22px' }} prefix={<CloseCircleOutlined />} />
+                    <Tag color="error" bordered={false}>Critical Risk</Tag>
+                  </Col>
+               </Row>
+            </Col>
+
+            <Col xs={24} lg={9} style={{ paddingLeft: '40px' }}>
+              <Row gutter={12}>
+                <Col span={12}>
+                    <Card size="small" styles={{ body: { padding: '12px' } }} style={{ background: '#f0f5ff', border: 'none', textAlign: 'center' }}>
+                        <Statistic title={<Text style={{ fontSize: '11px' }}>Apps</Text>} value={loading ? 0 : (servicePrincipalsCount ?? 0)} valueStyle={{ fontSize: '18px' }} prefix={<ClusterOutlined />} />
+                    </Card>
                 </Col>
-                <Col xs={24} sm={12} lg={8}>
-                  <Card loading={loading} style={{ borderRadius: '12px', borderTop: `4px solid ${servicePrincipalsCount && servicePrincipalsCount > 1 ? '#faad14' : '#52c41a'}`, textAlign: 'center' }}>
-                    <Text type="secondary" strong>Service Principal</Text>
-                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: servicePrincipalsCount && servicePrincipalsCount > 1 ? '#faad14' : '#52c41a' }}>
-                      {servicePrincipalsCount ?? 0}
-                    </div>
-                  </Card>
+                <Col span={12}>
+                    <Card size="small" styles={{ body: { padding: '12px' } }} style={{ background: '#f9f0ff', border: 'none', textAlign: 'center' }}>
+                        <Statistic title={<Text style={{ fontSize: '11px' }}>Foreign Groups</Text>} value={loading ? 0 : (foreignGroupsCount ?? 0)} valueStyle={{ fontSize: '18px' }} prefix={<GlobalOutlined />} />
+                    </Card>
                 </Col>
               </Row>
-            </div>
-          )}
+              <Button danger type="primary" block style={{ marginTop: '16px', height: '40px', fontWeight: '600' }} onClick={() => onCardClick('mfa-disabled', 'azure-identity')}>
+                Remediate MFA Issues
+              </Button>
+            </Col>
+          </Row>
+        </Card>
 
-          {/* 3. Executive Summary */}
-          <div>
-            <Title level={3} style={{ textAlign: 'center', marginBottom: '32px' }}>Executive Summary</Title>
-            <Row justify="center" style={{ marginBottom: '32px' }}>
-              <Col xs={24} sm={12} lg={6}>
-                <Card 
-                  hoverable 
-                  loading={loading}
-                  onClick={() => onCardClick('total-users', 'azure-identity')} 
-                  style={{ textAlign: 'center', borderTop: '4px solid #1890ff', borderRadius: '12px' }}
-                >
-                  <TeamOutlined style={{ fontSize: '32px', color: '#1890ff', marginBottom: '8px' }} />
-                  <div style={{ fontSize: '36px', fontWeight: 'bold', color: '#1890ff' }}>{users.length}</div>
-                  <Text strong>Total Users</Text>
-                </Card>
+        {/* --- 2. RISK BANNER --- */}
+        {!loading && mfaDisabledCount > 0 && (
+          <Card styles={{ body: { padding: '20px' } }} style={{ backgroundColor: '#fffbe6', border: '1px solid #ffe58f', borderRadius: '8px' }}>
+            <Row align="middle" gutter={24}>
+              <Col flex="auto">
+                <Space align="start" size={16}>
+                  <WarningOutlined style={{ fontSize: '24px', color: '#faad14' }} />
+                  <div>
+                    <Text strong style={{ fontSize: '16px' }}>Security Posture Alert</Text>
+                    <div style={{ marginTop: '4px' }}>
+                      <Text style={{ fontSize: '13px' }}>
+                        MFA is disabled for {mfaDisabledCount} users. Microsoft reserves the right to treat compromise charges as valid usage if MFA is not enforced.
+                      </Text>
+                    </div>
+                  </div>
+                </Space>
               </Col>
             </Row>
-            <Row gutter={[24, 24]} justify="center">
-              {Object.entries(roleCounts).map(([role, count]) => (
-                <Col xs={22} sm={10} lg={6} key={role}>
-                  <Card 
-                    hoverable 
-                    loading={loading}
-                    onClick={() => onCardClickForUserType(role.toLowerCase())} 
-                    style={{ textAlign: 'center', borderTop: '4px solid #52c41a', borderRadius: '12px' }}
-                  >
-                    <Text type="secondary" strong>{role}</Text>
-                    <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#52c41a' }}>{count}</div>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-          </div>
-
-          {/* 4. MFA & Security Compliance (Lead's Patterns integrated here) */}
-          <div style={{ marginBottom: '24px' }}>            
-            {!loading && mfaDisabledCount > 0 && (
-              <>
-                <FinancialRiskBanner count={mfaDisabledCount} />
-
-              </>
-            )}
-            <Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>MFA & Security Compliance</Title>
-<Row gutter={[16, 16]} style={{ marginBottom: '24px', alignItems: 'stretch' }}>
-  {/* 1. ENABLED CARD */}
-  <Col xs={24} sm={12}>
-    <Card 
-      loading={loading}
-      hoverable
-      style={{ 
-        textAlign: 'center', 
-        borderRadius: '12px', 
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center'
-      }} 
-      onClick={() => onCardClick('mfa-enabled', 'azure-identity')}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-        <LockOutlined style={{ fontSize: '28px', color: '#52c41a' }} />
-        <div>
-          <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#52c41a', lineHeight: 1.2 }}>
-            {mfaEnabledCount} users
-          </div>
-          <Text strong type="secondary" style={{ fontSize: '14px' }}>
-            MFA Coverage - Enabled
-          </Text>
-        </div>
-      </div>
-    </Card>
-  </Col>
-
-  {/* 2. DISABLED CARD (With Conditionals) */}
-  <Col xs={24} sm={12}>
-    <Card 
-      hoverable
-      style={{ 
-        textAlign: 'center', 
-        borderRadius: '12px', 
-        // Only show yellow background if there is a risk
-        background: mfaDisabledCount > 0 ? '#fffbe6' : '#ffffff', 
-        border: mfaDisabledCount > 0 ? '1px solid #ffe58f' : '1px solid #f0f0f0', 
-        height: '100%' 
-      }} 
-      bodyStyle={{ padding: '20px' }}
-      onClick={() => onCardClick('mfa-disabled', 'azure-identity')}
-    >
-      {/* CONDITIONAL HEADER */}
-      {mfaDisabledCount > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-          <CloseCircleOutlined style={{ color: '#cf1322', fontSize: '18px' }} />
-          <Text strong style={{ color: '#a8071a', fontSize: '16px' }}>
-            Critical Issue: MFA Recommendations
-          </Text>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-        <LockOutlined style={{ fontSize: '28px', color: mfaDisabledCount > 0 ? '#ff4d4f' : '#d9d9d9' }} />
-        
-        <div>
-          <div style={{ fontSize: '32px', fontWeight: 'bold', color: mfaDisabledCount > 0 ? '#ff4d4f' : 'rgba(0,0,0,0.85)', lineHeight: 1.2 }}>
-            {mfaDisabledCount} users
-          </div>
-          <Text strong type="secondary" style={{ fontSize: '14px' }}>
-            MFA Coverage - Disabled
-          </Text>
-        </div>
-
-        {/* CONDITIONAL FOOTER */}
-        {mfaDisabledCount > 0 && (
-          <div style={{ marginTop: '8px' }}>
-            <Badge 
-              count="Risk: CRITICAL" 
-              style={{ backgroundColor: '#cf1322', borderRadius: '4px', fontWeight: 'bold', marginBottom: '8px' }} 
-            />
-            <div style={{ marginTop: '4px' }}>
-              <Text strong style={{ fontSize: '13px' }}>Recommendation: </Text>
-              <Text style={{ fontSize: '13px' }}>Enable MFA Immediately</Text>
-            </div>
-          </div>
+          </Card>
         )}
-      </div>
-    </Card>
-  </Col>
-</Row>
 
+        {/* --- 3. BREAKDOWN TABLE --- */}
+        <Card title="MFA Status Breakdown by Role" styles={{ body: { padding: '0px' } }} style={{ borderRadius: '8px', overflow: 'hidden' }}>
             <TableComponent
-              title="MFA Disabled by Role Details"
-              columns={[
-                { key: "role", label: "Role" },
-                { key: "count", label: "Count" }
-              ]}
-              data={mfaDisabledByRole}
+              title=""
+              columns={[{ key: "role", label: "Identity Role" }, { key: "count", label: "MFA Disabled Users" }]}
+              data={loading ? [] : mfaDisabledByRole}
               onRowClick={(record) => onCardClickForMFADisabledRole(record, 'mfa-disabled-roles')}
             />
-          </div>
+        </Card>
+
+        {/* --- 4. APPLICATION INVENTORY --- */}
+        <Card title={<Space><AppstoreOutlined /> Application Inventory (Top 5)</Space>} styles={{ body: { padding: '0px' } }} style={{ borderRadius: '8px' }}>
+          <Table 
+            dataSource={loading ? [] : applications.slice(0, 5)}
+            loading={loading}
+            rowKey="id"
+            pagination={false}
+            columns={[
+              { title: 'Display Name', dataIndex: 'displayName', render: (text) => <Text strong>{text || 'Unnamed'}</Text> },
+              { title: 'App ID', dataIndex: 'appId', render: (id) => <Text code style={{ fontSize: '11px' }}>{id}</Text> },
+              { title: 'Audience', dataIndex: 'signInAudience', render: (aud) => <Tag color="blue">{aud}</Tag> },
+              { title: 'Created', dataIndex: 'createdDateTime', render: (date) => dayjs(date).format('MMM D, YYYY') }
+            ]}
+          />
+        </Card>
+
+        {/* --- 5. INVESTIGATION CONSOLE --- */}
+        <Card title={<Space><SearchOutlined /> Investigation Console</Space>} style={{ borderRadius: '8px' }}>
+            <Row gutter={[24, 24]} align="middle">
+                <Col xs={24} md={10}>
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                        <Text strong style={{ fontSize: '11px', color: '#8c8c8c' }}>TIME HORIZON</Text>
+                        <RangePicker 
+                          style={{ width: '100%' }} 
+                          value={dateRange} 
+                          onChange={(values) => {
+                            if (values && values[0] && values[1]) {
+                              setDateRange([values[0], values[1]]);
+                            }
+                          }} 
+                        />
+                    </Space>
+                </Col>
+                <Col xs={24} md={14}>
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                        <Text strong style={{ fontSize: '11px', color: '#8c8c8c' }}>CATEGORY</Text>
+                        <Segmented block options={['All', 'Role Changes', 'User Lifecycle', 'App Reg', 'MFA']} value={activeFilter} onChange={(v) => setActiveFilter(v as string)} />
+                    </Space>
+                </Col>
+            </Row>
+        </Card>
+
+        {/* --- 6. AUDIT FEED (TOP 5) --- */}
+        <Card 
+          title={<Space><HistoryOutlined /> Recent Audit Feed</Space>} 
+          extra={<Badge count={auditLogs.length} overflowCount={99} style={{ backgroundColor: '#108ee9' }} />}
+          style={{ borderRadius: '8px' }}
+        >
+          <Divider orientation={"left" as DividerProps["orientation"]} plain>
+            <Text type="secondary" style={{ fontSize: '11px' }}>LATEST 5 EVENTS</Text>
+          </Divider>
+          
+          {auditLogs.length > 0 ? (
+            <>
+              <Timeline items={timelineItems} style={{ marginTop: '20px' }} />
+              <Button block type="primary" ghost icon={<ArrowRightOutlined />} onClick={() => setDrawerVisible(true)} style={{ marginTop: '16px' }}>
+                Open Full Investigation Page
+              </Button>
+            </>
+          ) : (
+            <Empty description="No events found" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          )}
+        </Card>
+      </Space>
+
+      {/* --- 7. FULL HISTORY DRAWER --- */}
+      <Drawer 
+        title={
+          <Space>
+            <SecurityScanOutlined /> 
+            {/* Using selectedTenant here to satisfy TS and provide context */}
+            <Text strong>Audit History for {selectedTenant || 'Default Tenant'}</Text>
+          </Space>
+        } 
+        width="80%" 
+        open={drawerVisible} 
+        onClose={() => setDrawerVisible(false)}
+      >
+        <Space direction="vertical" size={24} style={{ width: '100%' }}>
+            <Title level={4}>Detailed Audit Records</Title>
+            <Table 
+              dataSource={auditLogs} 
+              rowKey="id"
+              loading={isAuditLoading}
+              pagination={{ pageSize: 15 }}
+              columns={[
+                { title: 'Severity', render: (_, rec) => <Tag color={getLogImportance(rec.activityDisplayName).color}>{getLogImportance(rec.activityDisplayName).label}</Tag> },
+                { title: 'Time', dataIndex: 'activityDateTime', render: (d) => dayjs(d).format('YYYY-MM-DD HH:mm:ss') },
+                { title: 'Activity', dataIndex: 'activityDisplayName', render: (t) => <Text strong>{t}</Text> },
+                { title: 'Actor', dataIndex: ['initiatedBy', 'user', 'userPrincipalName'] },
+                { title: 'Result', dataIndex: 'result', render: (r) => <Badge status={r === 'success' ? 'success' : 'error'} text={String(r || '').toUpperCase()} /> }
+              ]}
+            />
         </Space>
-      </div>
+      </Drawer>
     </div>
   );
 };

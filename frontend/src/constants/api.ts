@@ -9,6 +9,9 @@ export const ENDPOINTS = {
         ROLES: `${BASE_URL}/roles`,
         USERS: `${BASE_URL}/users`,
         TANENT_USERS: `${BASE_URL}/tenant/users`,
+        TENANT_APPLICATIONS: `${BASE_URL}/tenant/applications`,
+        AUDIT_LOGS: `${BASE_URL}/tenant/audit-logs`,
+        ORGANIZATION: `${BASE_URL}/tenant/organization`
     },
     USERS: {
         DASHBOARD: `${BASE_URL}/users/dashboard`,

@@ -1,16 +1,22 @@
 import { useState, useEffect } from "react";
-import { User, AdminRoleData, GovernanceItem, SummaryItem } from "@/types/dashboard.types";
+import { User, AdminRoleData, GovernanceItem, SummaryItem ,AzureApplication,OrganizationData} from "@/types/dashboard.types";
 import { ENDPOINTS } from "@/constants/api";
 import { processAdminRoles } from "@/utils/dashboardUtils";
+import type { Dayjs } from "dayjs"; // Fixed dayjs namespace (TS2503 fix)
 
 interface UseDashboardDataProps {
   selectedTenant: string;
   selectedSubscription: string | null;
+  activeFilter: string;           // Add this
+  dateRange: [Dayjs, Dayjs]; // Add this
+  
 }
 
 export const useDashboardData = ({
   selectedTenant,
   selectedSubscription,
+  activeFilter,
+  dateRange,
 }: UseDashboardDataProps) => {
   const [users, setUsers] = useState<User[]>([]);
   const [allTenantUsers, setAllTenantUsers] = useState<User[]>([]);
@@ -22,7 +28,11 @@ export const useDashboardData = ({
   const [overallScore, setOverallScore] = useState<number>(0);
   const [summaryItems, setSummaryItems] = useState<SummaryItem[]>([]);
   const [identityGovernanceData, setIdentityGovernanceData] = useState<GovernanceItem[]>([]);
-
+  const [applications, setApplications] = useState<AzureApplication[]>([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [isAuditLoading, setIsAuditLoading] = useState(false);
+  const [organization, setOrganization] = useState<OrganizationData | null>(null);
+  
   // Helper to get tokens and manage expiry
   const getAuthHeaders = async (): Promise<Record<string, string>> => {
     let mgmtToken = localStorage.getItem("mgmt_token");
@@ -71,12 +81,21 @@ useEffect(() => {
       // 1. ONLY fetch Tenant Users if we don't have them yet
       // This prevents the refetch when only selectedSubscription changes
       if (selectedTenant && !selectedSubscription) {
-        const tenantRes = await fetch(`${ENDPOINTS.AZURE.TANENT_USERS}?tenant_id=${selectedTenant}`, {
-          headers: authHeaders as HeadersInit
-        });
-        const tenantData = await tenantRes.json();
-        const masterList = tenantData.users || [];
+        const [userRes, appRes, orgRes] = await Promise.all([
+          fetch(`${ENDPOINTS.AZURE.TANENT_USERS}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
+          fetch(`${ENDPOINTS.AZURE.TENANT_APPLICATIONS}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
+          fetch(`${ENDPOINTS.AZURE.ORGANIZATION}?tenant_id=${selectedTenant}`, { headers: authHeaders as any })
+        ]);
+        const userResData = await userRes.json();
+        const appResData = await appRes.json();
+        const orgResData = await orgRes.json();
+        const masterList = userResData.users || [];
+        console.log("[API Debug] Raw Organization Response:", orgResData);
+        console.log("[API Debug] Processed Organization Data:", orgResData?.organization);
+
         setAllTenantUsers(masterList);
+        setApplications(appResData.applications || []);
+        setOrganization(orgResData.organization);
         setAdminRolesData(processAdminRoles(masterList));
       }
 
@@ -174,9 +193,42 @@ useEffect(() => {
     };
     fetchGov();
   }, [selectedTenant]);
+  useEffect(() => {
+    const fetchAuditData = async () => {
+      if (!selectedTenant) return;
 
+      setIsAuditLoading(true);
+      try {
+        const authHeaders = await getAuthHeaders();
+        const catMap: Record<string, string> = { 
+          "Role Changes": "RoleManagement", 
+          "User Lifecycle": "UserManagement", 
+          "App Reg/Consent": "ApplicationManagement", 
+          "MFA/Auth": "Authentication" 
+        };
+        
+        const apiCat = catMap[activeFilter] || "All";
+        const startDate = encodeURIComponent(dateRange[0].toISOString());
+
+        const res = await fetch(
+          `${ENDPOINTS.AZURE.AUDIT_LOGS}?tenant_id=${selectedTenant}&category=${apiCat}&start_date=${startDate}`,
+          { headers: authHeaders as any }
+        );
+
+        const data = await res.json();
+        setAuditLogs(data.logs || []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setIsAuditLoading(false);
+      }
+    };
+
+    fetchAuditData();
+  }, [selectedTenant, activeFilter, dateRange]); // Errors gone! These are now tracked dependencies.
   return {
     users,
+    applications,
     allTenantUsers,
     loading,
     foreignGroupsCount,
@@ -186,5 +238,8 @@ useEffect(() => {
     overallScore,
     summaryItems,
     identityGovernanceData,
+    auditLogs,
+    isAuditLoading,
+    organization,
   };
 };

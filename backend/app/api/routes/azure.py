@@ -1,10 +1,11 @@
 """
 Azure API routes for authentication, subscriptions, and user management using session-based tokens.
 """
+from app.services.azure.graph_service import GraphService
 from fastapi import APIRouter, Depends, HTTPException, Request, Body, Query
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-from app.api.models.responses import UsersResponse
+from app.api.models.responses import UsersResponse, ApplicationsResponse
 from app.core.logging_config import get_logger
 from app.services.azure.auth_service import AzureAuthService
 from app.services.azure.subscription_service import SubscriptionService
@@ -125,3 +126,46 @@ async def get_tenant_users_info(
     except Exception as e:
         logger.error(f"Error fetching tenant users: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to fetch tenant users")
+
+@router.get("/tenant/applications", response_model=ApplicationsResponse)
+async def get_tenant_applications(
+    graph_token: str = Depends(get_graph_token)
+) -> ApplicationsResponse:
+    try:
+        graph_service = GraphService(access_token=graph_token)
+        # These are the 5 pillars of App Inventory metadata
+        applications = await graph_service.get_applications(
+            select_fields=["id", "appId", "displayName", "createdDateTime", "signInAudience"]
+        )
+        return ApplicationsResponse(
+            applications=applications,
+            count=len(applications)
+        )
+    except Exception as e:
+        logger.error(f"Inventory fetch failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Identity service unavailable")   
+
+@router.get("/tenant/audit-logs")
+async def get_tenant_audit_logs(
+    category: Optional[str] = None,
+    start_date: Optional[str] = None,
+    graph_token: str = Depends(get_graph_token)
+):
+    service = GraphService(access_token=graph_token)
+    logs = await service.get_audit_logs(category=category, start_date=start_date)
+    return {"logs": logs}  
+
+@router.get("/tenant/organization")
+async def get_tenant_organization(
+    graph_token: str = Depends(get_graph_token)
+):
+    """
+    Fetches the high-level health and identity metrics for the tenant.
+    """
+    service = GraphService(access_token=graph_token)
+    organization = await service.get_organization_info()
+    
+    if not organization:
+        raise HTTPException(status_code=404, detail="Organization data not found")
+        
+    return {"organization": organization}

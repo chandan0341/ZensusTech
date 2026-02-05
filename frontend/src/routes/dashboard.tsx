@@ -10,6 +10,8 @@ import { SubscriptionSelector } from "@/components/dashboard/SubscriptionSelecto
 import { SubscriptionMetadataBar } from "@/components/dashboard/SubscriptionMetadataBar";
 import { DetailModal } from "@/components/dashboard/DetailModal";
 import { ModalData } from "@/types/dashboard.types";
+import dayjs from "dayjs";
+import type { Dayjs } from "dayjs"; // Import the type separately
 import { 
   calculateRoleCounts, 
   calculateMFAStats, 
@@ -40,6 +42,12 @@ function Dashboard() {
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedCardData, setSelectedCardData] = useState<ModalData | null>(null);
   const [viewMode, setViewMode] = useState<'tenant' | 'subscription'>('tenant');
+  const [activeFilter, setActiveFilter] = useState<string>("All");
+  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>([
+  dayjs().subtract(7, 'day'), 
+  dayjs()
+]);
+
 
   // 2. Updated Guard: Redirect to /connection if session isn't initialized
   useEffect(() => {
@@ -69,6 +77,7 @@ function Dashboard() {
 
   const {
     users,
+    applications,
     allTenantUsers,
     loading: dataLoading,
     foreignGroupsCount,
@@ -78,9 +87,15 @@ function Dashboard() {
     summaryItems,
     identityGovernanceData,
     licenseUsageData,
+    auditLogs,
+    isAuditLoading,
+    organization,
+  
   } = useDashboardData({
     selectedTenant,
     selectedSubscription,
+    activeFilter, // Pass to hook
+  dateRange     // Pass to hook
   });
 
   useEffect(() => {
@@ -178,6 +193,7 @@ function Dashboard() {
         <DashboardHeader />
 
         <SubscriptionSelector
+          organization={organization}
           viewMode={viewMode}
           onViewModeChange={handleViewModeChange}
           selectedTenant={selectedTenant}
@@ -224,6 +240,7 @@ function Dashboard() {
                   {selectedTile === 'azure-identity' && (
                     <AzureIdentityTile
                       users={displayUsers}
+                      applications={applications}
                       loading={dataLoading}
                       foreignGroupsCount={foreignGroupsCount}
                       servicePrincipalsCount={servicePrincipalsCount}
@@ -233,6 +250,14 @@ function Dashboard() {
                       mfaDisabledCount={mfaDisabledCount}
                       mfaDisabledByRole={mfaDisabledByRole}
                       adminRolesData={adminRolesData}
+                      // ADD THESE FOUR PROPS:
+                      selectedTenant={selectedTenant}
+                      auditLogs={auditLogs}
+                      isAuditLoading={isAuditLoading}
+                      dateRange={dateRange}
+                      setDateRange={setDateRange}
+                      activeFilter={activeFilter}
+                      setActiveFilter={setActiveFilter}
                       onCardClick={handleCardClick}
                       onCardClickForUserType={handleCardClickForUserType}
                       onCardClickForMFADisabledRole={handleCardClickForMFADisabledRole}

@@ -373,3 +373,133 @@ class GraphService:
                 score_value = score_body.get("value", [{}])[0] if isinstance(score_body, dict) else {}   
 
                 return score_value
+    
+    async def get_applications(
+        self, 
+        select_fields: Optional[List[str]] = None, 
+        top: int = 100
+    ) -> List[Dict]:
+        """
+        Get all application registrations from the tenant.
+        
+        Uses: GET https://graph.microsoft.com/v1.0/applications
+        """
+        # Define the fields requested by the frontend
+        default_fields = ["id", "appId", "displayName", "createdDateTime", "signInAudience"]
+        select = ",".join(select_fields or default_fields)
+        
+        # Build URL
+        url = f"{self.base_url}/applications?$select={select}&$top={top}"
+        all_apps = []
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            while url:
+                try:
+                    response = await client.get(url, headers=self.headers)
+                    response.raise_for_status()
+
+                    data = response.json()
+                    apps_chunk = data.get("value", [])
+                    all_apps.extend(apps_chunk)
+
+                    # Handle pagination if many apps exist
+                    url = data.get("@odata.nextLink")
+                    if url and not url.startswith("http"):
+                        url = f"{self.base_url}{url}"
+
+                except httpx.HTTPStatusError as e:
+                    logger.error(f"HTTP error fetching applications: {e.response.status_code}")
+                    # We return an empty list or partial list rather than crashing the whole dashboard
+                    break 
+
+                except Exception as e:
+                    logger.error(f"Error fetching applications: {str(e)}", exc_info=True)
+                    break
+
+        logger.info(f"Retrieved {len(all_apps)} applications from tenant")
+        return all_apps    
+    
+    async def get_audit_logs(self, category: Optional[str] = None, start_date: Optional[str] = None):
+        # 1. Base URL
+        url = f"{self.base_url}/auditLogs/directoryAudits"
+        
+        # 2. Build Filters
+        filters = []
+        if start_date:
+            filters.append(f"activityDateTime ge {start_date}")
+        if category and category != "All":
+            filters.append(f"category eq '{category}'")
+        
+        # 3. Construct Query
+        params = {
+            "$select": "id,activityDateTime,activityDisplayName,initiatedBy,targetResources,category",
+            "$orderby": "activityDateTime desc",
+            "$top": 50
+        }
+        
+        if filters:
+            params["$filter"] = " and ".join(filters)
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=self.headers, params=params)
+            response.raise_for_status()
+            return response.json().get("value", [])  
+    
+    async def get_organization_info(self):
+        url = f"{self.base_url}/organization"
+        
+        # Selecting all fields present in your JSON response
+        params = {
+            "$select": "id,displayName,verifiedDomains,onPremisesSyncEnabled,"
+                    "onPremisesLastSyncDateTime,city,state,countryLetterCode,"
+                    "street,postalCode,directorySizeQuota,technicalNotificationMails,"
+                    "tenantType,createdDateTime"
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=self.headers, params=params)
+            response.raise_for_status()
+            
+            raw_data = response.json()
+            value_list = raw_data.get("value", [])
+            
+            if not value_list:
+                return None
+                
+            org = value_list[0]
+            
+            # 1. Flatten Verified Domains (Find the default/primary one)
+            domains = org.get("verifiedDomains", [])
+            primary_domain = next((d["name"] for d in domains if d.get("isDefault")), None)
+            if not primary_domain and domains:
+                primary_domain = domains[0].get("name")
+
+            # 2. Calculate Quota Metrics
+            quota = org.get("directorySizeQuota", {})
+            used = quota.get("used", 0)
+            total = quota.get("total", 1) 
+            usage_pct = round((used / total) * 100, 2)
+
+            # 3. Return the comprehensive mapped object
+            return {
+                "tenantId": org.get("id"),
+                "tenantName": org.get("displayName"),
+                "domain": primary_domain,
+                "isSynced": org.get("onPremisesSyncEnabled"),
+                "lastSync": org.get("onPremisesLastSyncDateTime"),
+                # Location details
+                "city": org.get("city"),
+                "state": org.get("state"),
+                "country": org.get("countryLetterCode"),
+                "street": org.get("street"),
+                "zipCode": org.get("postalCode"),
+                # Operational data
+                "quota": {
+                    "used": used,
+                    "total": total,
+                    "percent": usage_pct
+                },
+                "supportEmail": (org.get("technicalNotificationMails") or [None])[0],
+                "tenantType": org.get("tenantType"),
+                "createdOn": org.get("createdDateTime")
+            }

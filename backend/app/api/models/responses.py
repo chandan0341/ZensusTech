@@ -5,7 +5,17 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+class AzureApplication(BaseModel):
+    id: str
+    appId: str
+    displayName: Optional[str]
+    createdDateTime: Optional[str]
+    signInAudience: Optional[str]
 
+class ApplicationsResponse(BaseModel):
+    applications: List[AzureApplication]
+    count: int
+    
 class UserResponse(BaseModel):
     """User response model."""
 

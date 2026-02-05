@@ -9,6 +9,14 @@ export interface User {
   risk: "High" | "Medium" | "Low";
 }
 
+export interface AzureApplication {
+  id: string;
+  appId: string;
+  displayName: string;
+  createdDateTime: string;
+  signInAudience: string;
+}
+
 export interface LicenseUsageData {
   license: string;
   purchased: number;
@@ -23,7 +31,7 @@ export interface SummaryItem {
   status: string;
   color: string;
   note: string;
-  number?: string; // Add this line (the '?' makes it optional)
+  number: string; // Add this line - it must be a string to handle ratios like "6/7"
 }
 
 export interface LicenseUsageAPIResponse {
@@ -83,4 +91,32 @@ export interface DashboardState {
   overallScore: number;
   summaryItems: SummaryItem[];
   identityGovernanceData: GovernanceItem[];
+}
+export interface VerifiedDomain {
+  name: string;
+  isDefault: boolean;
+  isInitial: boolean;
+  capabilities: string;
+  type: string;
+}
+
+export interface OrganizationData {
+  tenantId: string;
+  tenantName: string;
+  domain: string;
+  isSynced: boolean | null;
+  lastSync?: string | null; // Handled as optional for build stability
+  city: string;
+  state: string;
+  country: string;
+  street: string;
+  zipCode: string;
+  quota: {
+    used: number;
+    total: number;
+    percent: number;
+  };
+  supportEmail: string;
+  tenantType: string;
+  createdOn: string;
 }
