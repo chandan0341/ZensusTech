@@ -96,6 +96,8 @@ useEffect(() => {
         setAllTenantUsers(masterList);
         setApplications(appResData.applications || []);
         setOrganization(orgResData.organization);
+        setForeignGroupsCount(null);
+        setServicePrincipalsCount(null);
         setAdminRolesData(processAdminRoles(masterList));
       }
 
