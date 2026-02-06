@@ -13,7 +13,6 @@ import { ModalData } from "@/types/dashboard.types";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs"; // Import the type separately
 import { 
-  calculateRoleCounts, 
   calculateMFAStats, 
   calculateMFADisabledByRole 
 } from "@/utils/dashboardUtils";
@@ -139,7 +138,6 @@ function Dashboard() {
     ? [] 
     : (viewMode === 'tenant' ? (allTenantUsers || []) : (users || []));
 
-  const roleCounts = calculateRoleCounts(displayUsers);
   const { mfaEnabledCount, mfaDisabledCount } = calculateMFAStats(displayUsers);
   const mfaDisabledByRole = calculateMFADisabledByRole(displayUsers);
 
@@ -245,7 +243,6 @@ function Dashboard() {
                       foreignGroupsCount={foreignGroupsCount}
                       servicePrincipalsCount={servicePrincipalsCount}
                       selectedSubscription={selectedSubscription ?? ""}
-                      roleCounts={roleCounts}
                       mfaEnabledCount={mfaEnabledCount}
                       mfaDisabledCount={mfaDisabledCount}
                       mfaDisabledByRole={mfaDisabledByRole}

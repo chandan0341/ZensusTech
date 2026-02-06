@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { 
   Card, Row, Col, Space, Typography, Tag, Timeline, 
-  Button, Segmented, DatePicker, Statistic, Progress, Badge, Table, Empty, Drawer
+  Button, Segmented, Statistic, Progress, Badge, Table, Empty, Drawer
 } from "antd";
 import { 
   TeamOutlined, AppstoreOutlined, HistoryOutlined, 
   CheckCircleFilled, SearchOutlined, GlobalOutlined, 
   ClusterOutlined, RocketOutlined, SafetyCertificateOutlined,
   AuditOutlined, LockOutlined, KeyOutlined, ArrowRightOutlined,
-  WarningOutlined, CheckSquareOutlined // Added missing icon imports
+  WarningOutlined, CheckSquareOutlined
 } from "@ant-design/icons";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { User, AzureApplication, AdminRoleData } from "@/types/dashboard.types";
@@ -17,7 +17,6 @@ import relativeTime from "dayjs/plugin/relativeTime";
 
 dayjs.extend(relativeTime);
 const { Text, Title, Link } = Typography;
-const { RangePicker } = DatePicker;
 
 // --- Financial Risk Banner Component ---
 const FinancialRiskBanner = ({ count }: { count: number }) => (
@@ -57,7 +56,6 @@ interface AzureIdentityTileProps {
   servicePrincipalsCount: number | null;
   selectedSubscription: string;
   selectedTenant: string; 
-  roleCounts: Record<string, number>;
   mfaEnabledCount: number;
   mfaDisabledCount: number;
   mfaDisabledByRole: Array<{ role: string; count: number }>;
@@ -94,14 +92,19 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = ({
     return '#1890ff';
   };
 
+  // Helper to handle time horizon preset clicks
+  const handleTimeHorizonChange = (days: string | number) => {
+    const end = dayjs();
+    const start = dayjs().subtract(Number(days), 'day');
+    setDateRange([start, end]);
+  };
+
   const filteredLogs = auditLogs.filter(log => {
     const matchesCategory = activeFilter === 'All' || 
       log.category?.toLowerCase() === activeFilter.toLowerCase();
     const logDate = dayjs(log.activityDateTime);
     return matchesCategory && logDate.isAfter(dateRange[0].startOf('day')) && logDate.isBefore(dateRange[1].endOf('day'));
   });
-
-  const disabledDate = (current: Dayjs) => current && current > dayjs().endOf('day');
 
   const auditTabs = [
     { label: 'All', value: 'All' },
@@ -119,54 +122,40 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = ({
         <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #f0f0f0', padding: '24px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
           <Row gutter={[24, 24]} align="stretch">
             <Col xs={24} lg={7} style={{ borderRight: '1px solid #f0f0f0' }}>
-  <Statistic 
-    title={<Text strong style={{ color: '#8c8c8c', fontSize: '11px', textTransform: 'uppercase' }}>Total Identity Surface</Text>}
-    value={users.length} 
-    prefix={<TeamOutlined style={{ color: '#1890ff' }} />}
-    valueStyle={{ fontSize: '32px', fontWeight: '800' }}
-  />
+              <Statistic 
+                title={<Text strong style={{ color: '#8c8c8c', fontSize: '11px', textTransform: 'uppercase' }}>Total Identity Surface</Text>}
+                value={users.length} 
+                prefix={<TeamOutlined style={{ color: '#1890ff' }} />}
+                valueStyle={{ fontSize: '32px', fontWeight: '800' }}
+              />
 
-  {/* Tags deleted as requested to remove redundancy */}
-
-  <div style={{ marginTop: '20px', padding: '12px', background: '#fafafa', borderRadius: '10px', border: '1px solid #f0f0f0' }}>
-    <Text type="secondary" style={{ fontSize: '10px', fontWeight: 700, display: 'block', marginBottom: '10px' }}>
-      PRIVILEGED ROLES
-    </Text>
-    <div style={{ maxHeight: '160px', overflowY: 'auto' }}>
-      {adminRolesData?.map((role, idx) => (
-        <div 
-          key={idx} 
-          style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            marginBottom: '8px',
-            cursor: 'pointer', // Added pointer cursor
-            padding: '4px 8px',
-            borderRadius: '6px',
-            transition: 'all 0.2s'
-          }}
-          // Added Hover Effect
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e6f7ff'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-          // Integrated Click Handler
-          onClick={() => onCardClickForUserType(role.role.toLowerCase())}
-        >
-          <Space size={4}>
-            <KeyOutlined style={{ fontSize: '10px', color: '#faad14' }} />
-            <Text style={{ fontSize: '12px' }}>{role.role}</Text>
-            {role.mfaEnabled === "No" && <LockOutlined style={{ color: '#ff4d4f', fontSize: '10px' }} />}
-          </Space>
-          <Badge 
-            count={role.assignedUsers} 
-            size="small" 
-            style={{ backgroundColor: '#e6f7ff', color: '#1890ff', border: '1px solid #91d5ff' }} 
-          />
-        </div>
-      ))}
-    </div>
-  </div>
-</Col>
+              <div style={{ marginTop: '20px', padding: '12px', background: '#fafafa', borderRadius: '10px', border: '1px solid #f0f0f0' }}>
+                <Text type="secondary" style={{ fontSize: '10px', fontWeight: 700, display: 'block', marginBottom: '10px' }}>
+                  PRIVILEGED ROLES
+                </Text>
+                <div style={{ maxHeight: '160px', overflowY: 'auto' }}>
+                  {adminRolesData?.map((role, idx) => (
+                    <div 
+                      key={idx} 
+                      style={{ 
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+                        marginBottom: '8px', cursor: 'pointer', padding: '6px 8px', borderRadius: '6px', transition: 'all 0.2s' 
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e6f7ff'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      onClick={() => onCardClickForUserType(role.role.toLowerCase())}
+                    >
+                      <Space size={4}>
+                        <KeyOutlined style={{ fontSize: '10px', color: '#faad14' }} />
+                        <Text style={{ fontSize: '12px' }}>{role.role}</Text>
+                        {role.mfaEnabled === "No" && <LockOutlined style={{ color: '#ff4d4f', fontSize: '10px' }} />}
+                      </Space>
+                      <Badge count={role.assignedUsers} size="small" style={{ backgroundColor: '#e6f7ff', color: '#1890ff', border: '1px solid #91d5ff' }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Col>
 
             <Col xs={24} lg={8} style={{ padding: '0 24px' }}>
               <Card hoverable size="small" onClick={() => onCardClick('mfa-disabled', 'azure-identity')} style={{ borderRadius: '16px', border: '1px solid #ffccc7', background: 'linear-gradient(180deg, #fffcf6 0%, #fff 100%)', textAlign: 'center' }}>
@@ -190,10 +179,8 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = ({
           </Row>
         </div>
 
-        {/* SECTION: FINANCIAL RISK BANNER (Lead's Pattern) */}
-        {!loading && mfaDisabledCount > 0 && (
-          <FinancialRiskBanner count={mfaDisabledCount} />
-        )}
+        {/* SECTION: FINANCIAL RISK BANNER */}
+        {!loading && mfaDisabledCount > 0 && <FinancialRiskBanner count={mfaDisabledCount} />}
 
         {/* SECTION 2: MFA BREAKDOWN */}
         <Card title={<Space><SafetyCertificateOutlined /> Identity Risk Distribution</Space>} style={{ borderRadius: '16px' }}>
@@ -244,10 +231,25 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = ({
                 </div>
                 <div>
                   <Text type="secondary" style={{ fontSize: '11px', fontWeight: 700, display: 'block', marginBottom: '8px' }}>TIME HORIZON</Text>
-                  <RangePicker style={{ width: '100%' }} value={dateRange} disabledDate={disabledDate} onChange={(v) => v && setDateRange([v[0]!, v[1]!])} />
+                  <Segmented 
+                    block 
+                    options={[
+                      { label: '24H', value: '1' },
+                      { label: '7D', value: '7' },
+                       { label: '10D', value: '10' },
+                        { label: '20D', value: '20' },
+                      { label: '30D', value: '30' }
+                      
+                    ]} 
+                    defaultValue="7"
+                    onChange={handleTimeHorizonChange}
+                  />
                 </div>
                 <div style={{ padding: '24px', background: '#e6f7ff', borderRadius: '12px', textAlign: 'center' }}>
                     <Statistic title="Events Detected" value={filteredLogs.length} prefix={<AuditOutlined />} valueStyle={{ color: '#1890ff' }} />
+                    <Text type="secondary" style={{ fontSize: '11px' }}>
+                      Range: {dateRange[0].format('MMM D')} - {dateRange[1].format('MMM D, YYYY')}
+                    </Text>
                 </div>
               </Space>
             </Card>
