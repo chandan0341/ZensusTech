@@ -75,10 +75,10 @@ interface AzureIdentityTileProps {
 
 export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = ({
   users, applications, foreignGroupsCount, servicePrincipalsCount, 
-  selectedSubscription, roleCounts, mfaEnabledCount, mfaDisabledCount, 
+  selectedSubscription, mfaEnabledCount, mfaDisabledCount, 
   mfaDisabledByRole, auditLogs, activeFilter, setActiveFilter, 
   dateRange, setDateRange, onCardClick, onCardClickForUserType, 
-  onCardClickForMFADisabledRole, selectedTenant, adminRolesData, isAuditLoading, loading 
+  onCardClickForMFADisabledRole, adminRolesData, isAuditLoading, loading 
 }) => {
   
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -119,36 +119,54 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = ({
         <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #f0f0f0', padding: '24px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
           <Row gutter={[24, 24]} align="stretch">
             <Col xs={24} lg={7} style={{ borderRight: '1px solid #f0f0f0' }}>
-              <Statistic 
-                title={<Text strong style={{ color: '#8c8c8c', fontSize: '11px', textTransform: 'uppercase' }}>Total Identity Surface</Text>}
-                value={users.length} 
-                prefix={<TeamOutlined style={{ color: '#1890ff' }} />}
-                valueStyle={{ fontSize: '32px', fontWeight: '800' }}
-              />
-              <div style={{ marginTop: '12px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {Object.entries(roleCounts).map(([role, count]) => (
-                  <Tag key={role} color="blue" bordered={false} style={{ cursor: 'pointer', borderRadius: '4px', fontSize: '11px' }} onClick={() => onCardClickForUserType(role.toLowerCase())}>
-                    {count} {role}
-                  </Tag>
-                ))}
-              </div>
+  <Statistic 
+    title={<Text strong style={{ color: '#8c8c8c', fontSize: '11px', textTransform: 'uppercase' }}>Total Identity Surface</Text>}
+    value={users.length} 
+    prefix={<TeamOutlined style={{ color: '#1890ff' }} />}
+    valueStyle={{ fontSize: '32px', fontWeight: '800' }}
+  />
 
-              <div style={{ marginTop: '20px', padding: '12px', background: '#fafafa', borderRadius: '10px', border: '1px solid #f0f0f0' }}>
-                <Text type="secondary" style={{ fontSize: '10px', fontWeight: 700, display: 'block', marginBottom: '10px' }}>PRIVILEGED ROLES ({selectedTenant})</Text>
-                <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
-                    {adminRolesData?.map((role, idx) => (
-                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                            <Space size={4}>
-                                <KeyOutlined style={{ fontSize: '10px', color: '#faad14' }} />
-                                <Text style={{ fontSize: '12px' }}>{role.role}</Text>
-                                {role.mfaEnabled === "No" && <LockOutlined style={{ color: '#ff4d4f', fontSize: '10px' }} />}
-                            </Space>
-                            <Badge count={role.assignedUsers} size="small" style={{ backgroundColor: '#e6f7ff', color: '#1890ff', border: '1px solid #91d5ff' }} />
-                        </div>
-                    ))}
-                </div>
-              </div>
-            </Col>
+  {/* Tags deleted as requested to remove redundancy */}
+
+  <div style={{ marginTop: '20px', padding: '12px', background: '#fafafa', borderRadius: '10px', border: '1px solid #f0f0f0' }}>
+    <Text type="secondary" style={{ fontSize: '10px', fontWeight: 700, display: 'block', marginBottom: '10px' }}>
+      PRIVILEGED ROLES
+    </Text>
+    <div style={{ maxHeight: '160px', overflowY: 'auto' }}>
+      {adminRolesData?.map((role, idx) => (
+        <div 
+          key={idx} 
+          style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            marginBottom: '8px',
+            cursor: 'pointer', // Added pointer cursor
+            padding: '4px 8px',
+            borderRadius: '6px',
+            transition: 'all 0.2s'
+          }}
+          // Added Hover Effect
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e6f7ff'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          // Integrated Click Handler
+          onClick={() => onCardClickForUserType(role.role.toLowerCase())}
+        >
+          <Space size={4}>
+            <KeyOutlined style={{ fontSize: '10px', color: '#faad14' }} />
+            <Text style={{ fontSize: '12px' }}>{role.role}</Text>
+            {role.mfaEnabled === "No" && <LockOutlined style={{ color: '#ff4d4f', fontSize: '10px' }} />}
+          </Space>
+          <Badge 
+            count={role.assignedUsers} 
+            size="small" 
+            style={{ backgroundColor: '#e6f7ff', color: '#1890ff', border: '1px solid #91d5ff' }} 
+          />
+        </div>
+      ))}
+    </div>
+  </div>
+</Col>
 
             <Col xs={24} lg={8} style={{ padding: '0 24px' }}>
               <Card hoverable size="small" onClick={() => onCardClick('mfa-disabled', 'azure-identity')} style={{ borderRadius: '16px', border: '1px solid #ffccc7', background: 'linear-gradient(180deg, #fffcf6 0%, #fff 100%)', textAlign: 'center' }}>

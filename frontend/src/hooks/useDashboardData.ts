@@ -111,6 +111,8 @@ useEffect(() => {
         setUsers(subData.users || []);
         setForeignGroupsCount(subData.foreignGroupsCount ?? null);
         setServicePrincipalsCount(subData.servicePrincipalsCount ?? null);
+        setAdminRolesData(processAdminRoles(subData.users || []));
+
       } else {
         // Fallback to master list if no sub is selected
         setUsers(allTenantUsers); 
