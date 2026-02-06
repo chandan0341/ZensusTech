@@ -7,7 +7,8 @@ import {
   TeamOutlined, AppstoreOutlined, HistoryOutlined, 
   CheckCircleFilled, SearchOutlined, GlobalOutlined, 
   ClusterOutlined, RocketOutlined, SafetyCertificateOutlined,
-  AuditOutlined, LockOutlined, KeyOutlined, ArrowRightOutlined
+  AuditOutlined, LockOutlined, KeyOutlined, ArrowRightOutlined,
+  WarningOutlined, CheckSquareOutlined // Added missing icon imports
 } from "@ant-design/icons";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { User, AzureApplication, AdminRoleData } from "@/types/dashboard.types";
@@ -17,6 +18,36 @@ import relativeTime from "dayjs/plugin/relativeTime";
 dayjs.extend(relativeTime);
 const { Text, Title, Link } = Typography;
 const { RangePicker } = DatePicker;
+
+// --- Financial Risk Banner Component ---
+const FinancialRiskBanner = ({ count }: { count: number }) => (
+  <Card
+    style={{ backgroundColor: '#fffbe6', border: '1px solid #ffe58f', borderRadius: '12px', marginBottom: '24px' }}
+    bodyStyle={{ padding: '16px 24px' }}
+  >
+    <Row align="middle" gutter={24}>
+      <Col xs={24} md={18}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <WarningOutlined style={{ fontSize: '24px', color: '#faad14', marginTop: '4px' }} />
+          <div>
+            <Title level={4} style={{ color: '#856404', margin: 0 }}>Financial Risk Alert: Microsoft Refund Warning</Title>
+            <Text style={{ fontSize: '14px', color: '#856404', display: 'block', marginTop: '8px' }}>
+              <strong>WARNING:</strong> MFA is disabled for {count} users. Compromise charges may be treated as valid usage. 
+              Microsoft may not refund costs if breached without MFA.
+            </Text>
+          </div>
+        </div>
+      </Col>
+      <Col xs={24} md={6} style={{ borderLeft: '1px solid #ffe58f' }}>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, color: '#856404', fontSize: '12px', lineHeight: '2' }}>
+          <li><CheckSquareOutlined /> Unauthorized Spending</li>
+          <li><CheckSquareOutlined /> Crypto Mining Threat</li>
+          <li><CheckSquareOutlined /> No Refund Without MFA</li>
+        </ul>
+      </Col>
+    </Row>
+  </Card>
+);
 
 interface AzureIdentityTileProps {
   users: User[];
@@ -47,7 +78,7 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = ({
   selectedSubscription, roleCounts, mfaEnabledCount, mfaDisabledCount, 
   mfaDisabledByRole, auditLogs, activeFilter, setActiveFilter, 
   dateRange, setDateRange, onCardClick, onCardClickForUserType, 
-  onCardClickForMFADisabledRole, selectedTenant, adminRolesData, isAuditLoading 
+  onCardClickForMFADisabledRole, selectedTenant, adminRolesData, isAuditLoading, loading 
 }) => {
   
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -72,7 +103,6 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = ({
 
   const disabledDate = (current: Dayjs) => current && current > dayjs().endOf('day');
 
-  // Restored all filter categories
   const auditTabs = [
     { label: 'All', value: 'All' },
     { label: 'Roles', value: 'RoleManagement' },
@@ -142,6 +172,11 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = ({
           </Row>
         </div>
 
+        {/* SECTION: FINANCIAL RISK BANNER (Lead's Pattern) */}
+        {!loading && mfaDisabledCount > 0 && (
+          <FinancialRiskBanner count={mfaDisabledCount} />
+        )}
+
         {/* SECTION 2: MFA BREAKDOWN */}
         <Card title={<Space><SafetyCertificateOutlined /> Identity Risk Distribution</Space>} style={{ borderRadius: '16px' }}>
           <Row gutter={48} align="middle">
@@ -180,7 +215,7 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = ({
           </Row>
         </Card>
 
-        {/* SECTION 3: REVERTED INVESTIGATION & AUDIT LOGS ROW */}
+        {/* SECTION 3: INVESTIGATION & AUDIT LOGS */}
         <Row gutter={[24, 24]}>
           <Col lg={12} xs={24}>
             <Card title={<Space><SearchOutlined /> Investigation Console</Space>} style={{ borderRadius: '16px', height: '100%' }}>
