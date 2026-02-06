@@ -116,6 +116,21 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = ({
 
   return (
     <div style={{ padding: '0px' }}>
+      {/* Header Card */}
+      <Card 
+        style={{ borderRadius: '16px', border: '2px solid #1890ff', overflow: 'hidden', marginBottom: '24px' }} 
+        bodyStyle={{ padding: '0' }}
+      >
+        <div style={{ background: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)', padding: '20px', color: 'white' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <LockOutlined style={{ fontSize: '32px' }} />
+            <div>
+              <Title level={2} style={{ color: 'white', margin: 0 }}>Identity & Access</Title>
+              <Text style={{ color: 'white', opacity: 0.9 }}>Identity & Access Governance Reports</Text>
+            </div>
+          </div>
+        </div>
+      </Card>
       <Space direction="vertical" size={24} style={{ width: "100%" }}>
         
         {/* SECTION 1: TOP SUMMARY */}
