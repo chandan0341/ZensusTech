@@ -11,7 +11,8 @@ export const ENDPOINTS = {
         TANENT_USERS: `${BASE_URL}/tenant/users`,
         TENANT_APPLICATIONS: `${BASE_URL}/tenant/applications`,
         AUDIT_LOGS: `${BASE_URL}/tenant/audit-logs`,
-        ORGANIZATION: `${BASE_URL}/tenant/organization`
+        ORGANIZATION: `${BASE_URL}/tenant/organization`,
+        SECURITY_POSTURE_DETAILS: `${BASE_URL}/security/posture`,
     },
     USERS: {
         DASHBOARD: `${BASE_URL}/users/dashboard`,

@@ -81,7 +81,7 @@ export const SubscriptionSelector = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Text strong style={{ fontSize: '18px', color: '#002766' }}>{displayTitle}</Text>
               <Tag icon={isSynced ? <SyncOutlined spin={false} /> : <GlobalOutlined />} color={isSynced ? "processing" : "default"}>
-                {isSynced ? "Hybrid Sync" : "Cloud Only"}
+               {organization?.country}
               </Tag>
             </div>
             <Space split={<Divider type="vertical" />} style={{ marginTop: '2px' }}>

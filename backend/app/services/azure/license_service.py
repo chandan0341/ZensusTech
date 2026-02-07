@@ -172,6 +172,7 @@ class LicenseService:
         return {
             "overallScore": overall_pct,
             "summaryNote": summary_note,
+            "scoreDetails": score_data,
             "cards": [
                 {
                     "area": "Email", 

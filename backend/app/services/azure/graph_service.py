@@ -1,6 +1,7 @@
 """
 Microsoft Graph API service for user and identity operations.
 """
+import asyncio
 import io
 import httpx
 from datetime import datetime, timedelta, timezone
@@ -265,38 +266,65 @@ class GraphService:
                 logger.error(f"Error fetching privileged users: {str(e)}", exc_info=True)
                 return 0
 
-    async def get_secure_score(self) -> int:
+    async def get_security_posture_batched(self):
         """
-        Get Microsoft Secure Score.
-
-        Returns:
-            Secure score as percentage (0-100)
+        Executes a single batch call to fetch both Secure Score and Control Profiles.
         """
-        url = f"{self.base_url}/security/secureScores?$top=1"
+        batch_url = f"{self.base_url}/$batch"
+        
+        # Define the individual requests to be batched
+        batch_payload = {
+            "requests": [
+                {
+                    "id": "1",
+                    "method": "GET",
+                    "url": "/security/secureScores?$top=1"
+                },
+                {
+                    "id": "2",
+                    "method": "GET",
+                    "url": "/security/secureScoreControlProfiles"
+                }
+            ]
+        }
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=20.0) as client:
             try:
-                response = await client.get(url, headers=self.headers)
+                response = await client.post(
+                    batch_url, 
+                    headers=self.headers, 
+                    json=batch_payload
+                )
                 response.raise_for_status()
+                batch_data = response.json()
 
-                data = response.json().get("value", [])
-                if data:
-                    current = data[0].get("currentScore", 0)
-                    max_score = data[0].get("maxScore", 1)
-                    score = round((current / max_score) * 100)
-                    logger.info(f"Secure score: {score}%")
-                    return score
+                # Extract individual responses by their IDs
+                responses = {res['id']: res for res in batch_data.get('responses', [])}
+                
+                # Handle Score Data (Request ID: 1)
+                score_res = responses.get("1", {})
+                if score_res.get("status") != 200:
+                    return {"error": f"Score API failed: {score_res.get('status')}"}
+                
+                score_data = score_res.get("body", {}).get("value", [{}])[0]
 
-                return 0
+                # Handle Profiles Data (Request ID: 2)
+                profiles_res = responses.get("2", {})
+                profiles_list = profiles_res.get("body", {}).get("value", []) if profiles_res.get("status") == 200 else []
 
-            except httpx.HTTPStatusError as e:
-                logger.warning(f"Could not fetch secure score: {e.response.status_code}")
-                return 0
+                # Merge instructions into the score data
+                profiles_map = {p['id']: p.get('remediation') for p in profiles_list}
+                
+                if "controlScores" in score_data:
+                    for control in score_data["controlScores"]:
+                        c_id = control.get("controlName")
+                        control["remediation"] = profiles_map.get(c_id, "No steps found.")
+
+                return score_data
 
             except Exception as e:
-                logger.error(f"Error fetching secure score: {str(e)}")
-                return 0
-
+                logger.error(f"Batch request failed: {str(e)}")
+                return {"error": str(e)}
     async def get_license_and_usage(self) -> tuple[List[Dict], Optional[List[Dict]], bool]:
         """
         Get license SKUs and usage data.
@@ -342,10 +370,13 @@ class GraphService:
                     {
                         "id": "1",
                         "method": "GET",
-                        "url": "/security/secureScores?$top=1"
+                        "url": "security/secureScores?$top=1"
                     }
                 ]
             }
+            logger.info("Fetching Microsoft 365 secure score details from Graph API")
+            logger.info(f"Batch Request Payload: {payload}")
+            logger.info(f"token: {self.access_token}")  # Log only the beginning of the token for security
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(f"{self.base_url}/$batch", headers=self.headers, json=payload)

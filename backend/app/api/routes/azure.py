@@ -169,3 +169,20 @@ async def get_tenant_organization(
         raise HTTPException(status_code=404, detail="Organization data not found")
         
     return {"organization": organization}
+
+@router.get("/security/posture")
+async def get_security_posture_details(
+    graph_token: str = Depends(get_graph_token)
+):
+    """
+    Get M365 Security Posture details via GET with header tokens.
+    """
+    try:
+
+        service = GraphService(access_token=graph_token)
+        report_data = await service.get_security_posture_batched()
+
+        return report_data
+    except Exception as e:
+        logger.error(f"Error fetching secure score: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch secure score details")

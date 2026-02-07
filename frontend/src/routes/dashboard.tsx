@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react"; // Added useMemo here
 import { Row, Col, Spin, Alert, Empty } from "antd";
 import { DashboardTiles } from "./DashboardTiles";
 import { useCredentials } from "../hooks/useCredentials";
@@ -11,7 +11,7 @@ import { SubscriptionMetadataBar } from "@/components/dashboard/SubscriptionMeta
 import { DetailModal } from "@/components/dashboard/DetailModal";
 import { ModalData } from "@/types/dashboard.types";
 import dayjs from "dayjs";
-import type { Dayjs } from "dayjs"; // Import the type separately
+import type { Dayjs } from "dayjs"; 
 import { 
   calculateMFAStats, 
   calculateMFADisabledByRole 
@@ -32,7 +32,6 @@ import { PatchManagementTile } from "@/components/dashboard/tiles/PatchManagemen
 import { Microsoft365Tile } from "@/components/dashboard/tiles/Microsoft365Tile";
 
 function Dashboard() {
-  // 1. Updated Context: We no longer pull clientId/Secret here for security
   const { tenantId, isConnected } = useCredentials();
   
   const [selectedTenant, setSelectedTenant] = useState<string>(tenantId || "");
@@ -43,15 +42,12 @@ function Dashboard() {
   const [viewMode, setViewMode] = useState<'tenant' | 'subscription'>('tenant');
   const [activeFilter, setActiveFilter] = useState<string>("All");
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>([
-  dayjs().subtract(7, 'day'), 
-  dayjs()
-]);
+    dayjs().subtract(7, 'day'), 
+    dayjs()
+  ]);
 
-
-  // 2. Updated Guard: Redirect to /connection if session isn't initialized
   useEffect(() => {
     if (!isConnected) {
-      // Use window.location or navigate to ensure they go back to connect
       window.location.href = "/connection";
     }
   }, [isConnected]);
@@ -64,8 +60,6 @@ function Dashboard() {
     }
   }, []);
 
-  // 3. Updated Hooks: Removed credentials passing. 
-  // The hooks internally must now use { credentials: 'include' } in their fetches.
   const {
     azureSubscriptions,
     subMetadata,
@@ -89,13 +83,34 @@ function Dashboard() {
     auditLogs,
     isAuditLoading,
     organization,
-  
+    secureScoreRaw, 
   } = useDashboardData({
     selectedTenant,
     selectedSubscription,
-    activeFilter, // Pass to hook
-  dateRange     // Pass to hook
+    activeFilter,
+    dateRange
   });
+  interface SecureScoreData {
+  currentScore: number;
+  maxScore: number;
+  controlScores?: any[];
+}
+
+  // --- CALCULATION LOGIC ---
+  // This derives the 89% from the raw points to fix the 0% display issue
+ // Updated Logic with Safety Checks
+const displayScore = useMemo(() => {
+  // 1. Cast the raw data to our interface
+  const data = secureScoreRaw as SecureScoreData | null;
+
+  // 2. Check if data exists AND maxScore is greater than 0
+  if (data && data.maxScore > 0) {
+    return Math.round((data.currentScore / data.maxScore) * 100);
+  }
+  
+  // 3. Fallback to overallScore or 0
+  return overallScore || 0;
+}, [secureScoreRaw, overallScore]);
 
   useEffect(() => {
     if (selectedSubscription) {
@@ -103,7 +118,7 @@ function Dashboard() {
     }
   }, [selectedSubscription, fetchSubscriptionMetadata]);
 
-  // --- Handlers (Remain largely the same) ---
+  // --- Handlers ---
   const handleViewModeChange = (newMode: 'tenant' | 'subscription') => {
     setViewMode(newMode);
     if (newMode === 'subscription') {
@@ -183,7 +198,7 @@ function Dashboard() {
 
   const loading = subscriptionsLoading || dataLoading;
 
-  if (!isConnected) return null; // Prevent flicker before redirect
+  if (!isConnected) return null;
 
   return (
     <div style={{ padding: "24px", background: "#f5f5f5", minHeight: "100vh" }}>
@@ -247,7 +262,6 @@ function Dashboard() {
                       mfaDisabledCount={mfaDisabledCount}
                       mfaDisabledByRole={mfaDisabledByRole}
                       adminRolesData={adminRolesData}
-                      // ADD THESE FOUR PROPS:
                       selectedTenant={selectedTenant}
                       auditLogs={auditLogs}
                       isAuditLoading={isAuditLoading}
@@ -263,9 +277,16 @@ function Dashboard() {
 
                   {viewMode === 'tenant' && (
                     <>
+                      {selectedTile === 'security' && (
+                        <SecurityTile 
+                          overallScore={displayScore} // USE THE NEW displayScore VARIABLE
+                          secureScoreRaw={secureScoreRaw} 
+                          adminRolesData={adminRolesData} 
+                        />
+                      )}
                       {selectedTile === 'microsoft-365' && (
                         <Microsoft365Tile
-                          overallScore={overallScore}
+                          overallScore={displayScore} // Consistency
                           summaryItems={summaryItems}
                           identityGovernanceData={identityGovernanceData}
                           adminRolesData={adminRolesData}
@@ -279,7 +300,6 @@ function Dashboard() {
 
                   {viewMode === 'subscription' && (
                     <>
-                      {selectedTile === 'security' && <SecurityTile />}
                       {selectedTile === 'cost-management' && <CostManagementTile />}
                       {selectedTile === 'backups-dr' && <BackupsDRTile />}
                       {selectedTile === 'patch-management' && <PatchManagementTile />}

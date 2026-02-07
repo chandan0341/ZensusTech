@@ -32,6 +32,11 @@ export const useDashboardData = ({
   const [auditLogs, setAuditLogs] = useState([]);
   const [isAuditLoading, setIsAuditLoading] = useState(false);
   const [organization, setOrganization] = useState<OrganizationData | null>(null);
+  // Keep existing score for the main dashboard KPI cards
+  
+  // NEW: Create state for the full Azure response
+  const [secureScoreRaw, setSecureScoreRaw] = useState(null); 
+
   
   // Helper to get tokens and manage expiry
   const getAuthHeaders = async (): Promise<Record<string, string>> => {
@@ -78,43 +83,65 @@ useEffect(() => {
     try {
       const authHeaders = await getAuthHeaders();
       
-      // 1. ONLY fetch Tenant Users if we don't have them yet
-      // This prevents the refetch when only selectedSubscription changes
+      // 1. Fetch TENANT-WIDE data (including your new Batched Security API)
       if (selectedTenant && !selectedSubscription) {
-        const [userRes, appRes, orgRes] = await Promise.all([
+        const [userRes, appRes, orgRes, secureScoreRes] = await Promise.all([
           fetch(`${ENDPOINTS.AZURE.TANENT_USERS}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
           fetch(`${ENDPOINTS.AZURE.TENANT_APPLICATIONS}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
-          fetch(`${ENDPOINTS.AZURE.ORGANIZATION}?tenant_id=${selectedTenant}`, { headers: authHeaders as any })
+          fetch(`${ENDPOINTS.AZURE.ORGANIZATION}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
+          // This endpoint now returns the BATCHED score + remediation
+          fetch(`${ENDPOINTS.AZURE.SECURITY_POSTURE_DETAILS}?tenant_id=${selectedTenant}`, { headers: authHeaders as any })
         ]);
+
         const userResData = await userRes.json();
         const appResData = await appRes.json();
         const orgResData = await orgRes.json();
-        const masterList = userResData.users || [];
-        console.log("[API Debug] Raw Organization Response:", orgResData);
-        console.log("[API Debug] Processed Organization Data:", orgResData?.organization);
+        const secureData = await secureScoreRes.json();
 
+       // Inside useDashboardData.ts
+        if (secureData && !secureData.error) {
+          setSecureScoreRaw(secureData); 
+
+          // Use the specific keys from your API response: currentScore and maxScore
+          const current = secureData.currentScore ?? 0;
+          const max = secureData.maxScore ?? 0;
+
+          if (max > 0) {
+            const calculatedPercentage = Math.round((current / max) * 100);
+            setOverallScore(calculatedPercentage);
+            console.log("Hook calculated score:", calculatedPercentage); // Should log 89
+          } else {
+            setOverallScore(0);
+          }
+        }
+
+        const masterList = userResData.users || [];
         setAllTenantUsers(masterList);
         setApplications(appResData.applications || []);
         setOrganization(orgResData.organization);
+        
+        // Reset specific counts
         setForeignGroupsCount(null);
         setServicePrincipalsCount(null);
         setAdminRolesData(processAdminRoles(masterList));
       }
 
-      // 2. Fetch Subscription specific data
+      // 2. Fetch SUBSCRIPTION-specific data
       if (selectedTenant && selectedSubscription) {
         const subRes = await fetch(
           `${ENDPOINTS.AZURE.USERS}?subscription_id=${selectedSubscription}&tenant_id=${selectedTenant}`, 
-          { headers: authHeaders as HeadersInit }
+          { headers: authHeaders as any }
         );
         const subData = await subRes.json();
+        
         setUsers(subData.users || []);
         setForeignGroupsCount(subData.foreignGroupsCount ?? null);
         setServicePrincipalsCount(subData.servicePrincipalsCount ?? null);
+        
+        // Update Admin chart based on the selected subscription's users
         setAdminRolesData(processAdminRoles(subData.users || []));
-
       } else {
-        // Fallback to master list if no sub is selected
+        // Fallback to all tenant users if no subscription is selected
         setUsers(allTenantUsers); 
       }
     } catch (err) {
@@ -125,8 +152,7 @@ useEffect(() => {
   };
 
   fetchData();
-}, [selectedTenant, selectedSubscription, allTenantUsers.length]);
-
+}, [selectedTenant, selectedSubscription]); // Removed allTenantUsers.length to prevent unnecessary loops
   // 4. M365 DATA AGGREGATION
   useEffect(() => {
     const fetchM365Data = async () => {
@@ -245,5 +271,6 @@ useEffect(() => {
     auditLogs,
     isAuditLoading,
     organization,
-  };
+    secureScoreRaw,
+    };
 };
