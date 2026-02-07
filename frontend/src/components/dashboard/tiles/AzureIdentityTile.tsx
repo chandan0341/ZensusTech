@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   Card, Row, Col, Space, Typography, Tag, Timeline, 
-  Button, Segmented, Statistic, Progress, Badge, Table, Drawer
+  Button, Segmented, Statistic, Progress, Badge, Table, Drawer, Empty
 } from "antd";
 import { 
   TeamOutlined, AppstoreOutlined, HistoryOutlined, 
   CheckCircleFilled, SearchOutlined, GlobalOutlined, 
   ClusterOutlined, RocketOutlined, SafetyCertificateOutlined,
   AuditOutlined, LockOutlined, KeyOutlined, ArrowRightOutlined,
-  WarningOutlined, CheckSquareOutlined
+  WarningOutlined, CheckSquareOutlined, InfoCircleOutlined
 } from "@ant-design/icons";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { User, AzureApplication, AdminRoleData } from "@/types/dashboard.types";
@@ -24,15 +24,16 @@ const { Text, Title, Link } = Typography;
 // --- ROBUST FORENSIC LOG PARSER ---
 const getLogForensics = (log: any) => {
   const target = log.targetResources?.[0];
-  const actor = log.initiatedBy?.user?.userPrincipalName || 
+  const actor = log.initiatedBy?.user?.displayName || 
                 log.initiatedBy?.app?.displayName || 
                 "System Process";
+  const homeTenant = log.initiatedBy?.user?.homeTenantName || "";
 
   const targetName = target?.userPrincipalName || target?.displayName || "Unknown Resource";
   let detail = "System configuration updated";
 
   if (target?.modifiedProperties && target.modifiedProperties.length > 0) {
-    // 1. Check for MFA details
+    // 1. Check for MFA details (Based on your logs.txt structure)
     const mfaProp = target.modifiedProperties.find(
       (p: any) => p.displayName === "StrongAuthenticationPhoneAppDetail"
     );
@@ -45,22 +46,14 @@ const getLogForensics = (log: any) => {
         }
       } catch { detail = "MFA Settings Updated"; }
     } 
-    // 2. Check for SPN / App Identity
     else {
-      const spnProp = target.modifiedProperties.find((p: any) => 
-        p.displayName?.includes("ServicePrincipalName") || p.displayName === "AppPrincipalId"
-      );
-      if (spnProp?.newValue) {
-        detail = `Identity Change: ${spnProp.newValue.replace(/[\[\]\" ]/g, '').split(';')[0]}`;
-      } else {
-        // 3. Fallback: Show first property changed
-        const firstProp = target.modifiedProperties[0];
-        detail = `${firstProp.displayName}: ${String(firstProp.newValue).replace(/[\[\]\"]/g, '')}`;
-      }
+      // 2. Fallback: Show first property changed cleanly
+      const firstProp = target.modifiedProperties[0];
+      detail = `${firstProp.displayName}: ${String(firstProp.newValue).replace(/[\[\]\"]/g, '')}`;
     }
   }
 
-  return { detail, actor, target: targetName };
+  return { detail, actor, target: targetName, homeTenant };
 };
 
 // --- SUB-COMPONENT: FINANCIAL RISK BANNER ---
@@ -125,7 +118,6 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
 
   const [drawerVisible, setDrawerVisible] = useState(false);
 
-  // Close drawer and reset view when subscription changes
   useEffect(() => {
     if (selectedSubscription) {
       setDrawerVisible(false);
@@ -139,23 +131,34 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
     return '#1890ff';
   };
 
-  // --- FILTERED LOGS LOGIC ---
-  const filteredLogs = (auditLogs || []).filter(log => {
-    // 1. Date Filtering
-    const logDate = dayjs(log.activityDateTime);
-    const isInDate = logDate.isAfter(dateRange[0].startOf('day')) && 
-                     logDate.isBefore(dateRange[1].endOf('day'));
-    
-    if (!isInDate) return false;
+  // --- UPDATED FILTERED LOGS LOGIC ---
+  const filteredLogs = useMemo(() => {
+    return (auditLogs || []).filter(log => {
+      // 1. Date Filtering
+      const logDate = dayjs(log.activityDateTime);
+      const isInDate = logDate.isAfter(dateRange[0].startOf('day')) && 
+                       logDate.isBefore(dateRange[1].endOf('day'));
+      
+      if (!isInDate) return false;
 
-    // 2. Category Filtering
-    if (activeFilter === 'All') return true;
-    
-    const category = (log.category || "").toLowerCase();
-    
-    // Exact match for UserManagement, ApplicationManagement, etc.
-    return category === activeFilter.toLowerCase();
-  });
+      // 2. Category Filtering (Smart Bridge for Auth)
+      if (activeFilter === 'All') return true;
+      
+      const category = (log.category || "").toLowerCase();
+      const activity = (log.activityDisplayName || "").toLowerCase();
+      const filter = activeFilter.toLowerCase();
+
+      if (filter === 'auth') {
+        // Includes actual Auth logs + MFA registration logs from UserManagement
+        return category === 'authentication' || activity.includes('security info') || activity.includes('mfa') || activity.includes('authenticator');
+      }
+      if (filter === 'user') return category === 'usermanagement';
+      if (filter === 'application') return category === 'applicationmanagement';
+      if (filter === 'role') return category === 'rolemanagement';
+      
+      return category === filter;
+    });
+  }, [auditLogs, activeFilter, dateRange]);
 
   return (
     <div style={{ padding: '0px' }}>
@@ -249,20 +252,17 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
                 <div>
                   <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 8 }}>FILTER CATEGORY</Text>
                   <Segmented 
-  block 
-  options={['All', 'Auth', 'User', 'Application', 'Role']} 
-  value={activeFilter} 
-  onChange={(value) => { // Added "onChange=" here
-    console.log("Selected Tab:", value);
-    setActiveFilter(value as string);
-  }} 
-/>
+                    block 
+                    options={['All', 'Auth', 'User', 'Application', 'Role']} 
+                    value={activeFilter} 
+                    onChange={(value) => setActiveFilter(value as string)} 
+                  />
                 </div>
                 <div>
                   <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 8 }}>TIME HORIZON</Text>
                   <Segmented block options={[{ label: '24H', value: '1' }, { label: '7D', value: '7' }, { label: '30D', value: '30' }]} defaultValue="7" onChange={(v) => {
-                     const start = dayjs().subtract(Number(v), 'day');
-                     setDateRange([start, dayjs()]);
+                       const start = dayjs().subtract(Number(v), 'day');
+                       setDateRange([start, dayjs()]);
                   }} />
                 </div>
                 <div style={{ padding: 20, background: '#f0f5ff', borderRadius: 12, textAlign: 'center' }}>
@@ -290,7 +290,7 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
                   )
                 };
               })} />
-              {filteredLogs.length === 0 && <div style={{ textAlign: 'center', padding: '20px' }}><Text type="secondary">No activities found in this range</Text></div>}
+              {filteredLogs.length === 0 && <div style={{ textAlign: 'center', padding: '20px' }}><Empty description="No activities found" /></div>}
               <Button block icon={<ArrowRightOutlined />} onClick={() => setDrawerVisible(true)} style={{ marginTop: 10 }}>Explore All Logs</Button>
             </Card>
           </Col>
@@ -307,11 +307,11 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
              { title: 'App Name', dataIndex: 'displayName', render: (t) => <Text strong>{t}</Text> },
              { title: 'App ID', dataIndex: 'appId', render: (id) => <Text code style={{ fontSize: 11 }}>{id}</Text> },
              { title: 'Type', dataIndex: 'signInAudience', render: (v) => <Tag color="blue">{v}</Tag> }
-           ]} />
+            ]} />
         </Card>
       </Space>
 
-      {/* FORENSIC DRAWER */}
+      {/* FORENSIC DRAWER - UPDATED WITH EXPANDABLE IMPRESSIVE VIEW */}
       <Drawer title={`${activeFilter} Forensic Explorer`} width="85%" open={drawerVisible} onClose={() => setDrawerVisible(false)}>
         <Table 
           dataSource={filteredLogs} 
@@ -319,11 +319,39 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
           rowKey="id"
           columns={[
             { title: 'Activity', dataIndex: 'activityDisplayName', width: 220 },
-            { title: 'Actor', render: (_, r) => <Text copyable style={{ fontSize: 12 }}>{getLogForensics(r).actor}</Text> },
+            { 
+              title: 'Actor', 
+              render: (_, r) => {
+                const f = getLogForensics(r);
+                return (
+                  <Space direction="vertical" size={0}>
+                    <Text strong style={{ fontSize: 12 }}>{f.actor}</Text>
+                    <Text type="secondary" style={{ fontSize: 10 }}>{f.homeTenant}</Text>
+                  </Space>
+                )
+              } 
+            },
             { title: 'Target Resource', render: (_, r) => <Text style={{ fontSize: 12 }}>{getLogForensics(r).target}</Text> },
             { title: 'Forensic Change', render: (_, r) => <Tag color="blue" style={{ whiteSpace: 'normal', height: 'auto' }}>{getLogForensics(r).detail}</Tag> },
             { title: 'Timestamp', dataIndex: 'activityDateTime', render: (d) => dayjs(d).format('lll') }
           ]}
+          expandable={{
+            expandedRowRender: (record: any) => (
+              <div style={{ padding: '16px', background: '#fafafa', borderRadius: '8px', border: '1px solid #f0f0f0' }}>
+                <Title level={5} style={{ fontSize: '13px' }}><InfoCircleOutlined /> Detailed Property Changes</Title>
+                <Table 
+                  size="small"
+                  pagination={false}
+                  dataSource={record.targetResources?.[0]?.modifiedProperties || []}
+                  columns={[
+                    { title: 'Property', dataIndex: 'displayName', width: '30%' },
+                    { title: 'Old Value', dataIndex: 'oldValue', render: (v) => <Text type="secondary" delete>{v || '-'}</Text> },
+                    { title: 'New Value', dataIndex: 'newValue', render: (v) => <Text code style={{ color: '#c41d7f' }}>{v || '-'}</Text> }
+                  ]}
+                />
+              </div>
+            )
+          }}
         />
       </Drawer>
     </div>
