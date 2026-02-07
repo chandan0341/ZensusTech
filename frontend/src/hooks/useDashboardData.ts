@@ -90,7 +90,7 @@ useEffect(() => {
           fetch(`${ENDPOINTS.AZURE.TENANT_APPLICATIONS}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
           fetch(`${ENDPOINTS.AZURE.ORGANIZATION}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
           // This endpoint now returns the BATCHED score + remediation
-          fetch(`${ENDPOINTS.AZURE.SECURITY_POSTURE_DETAILS}?tenant_id=${selectedTenant}`, { headers: authHeaders as any })
+          fetch(`${ENDPOINTS.AZURE.SECURITY_TENANT_POSTURE_DETAILS}`, { headers: authHeaders as any })
         ]);
 
         const userResData = await userRes.json();
@@ -113,7 +113,7 @@ useEffect(() => {
           } else {
             setOverallScore(0);
           }
-        }
+      }
 
         const masterList = userResData.users || [];
         setAllTenantUsers(masterList);
