@@ -205,11 +205,11 @@ useEffect(() => {
       try {
         const authHeaders = await getAuthHeaders();
         const catMap: Record<string, string> = { 
-          "Role Changes": "RoleManagement", 
-          "User Lifecycle": "UserManagement", 
-          "App Reg/Consent": "ApplicationManagement", 
-          "MFA/Auth": "Authentication" 
-        };
+      "Auth": "Authentication", 
+      "User": "UserManagement", 
+      "Application": "ApplicationManagement", 
+      "Role": "RoleManagement" 
+    };
         
         const apiCat = catMap[activeFilter] || "All";
         const startDate = encodeURIComponent(dateRange[0].toISOString());

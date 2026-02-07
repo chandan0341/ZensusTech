@@ -152,11 +152,6 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
     if (activeFilter === 'All') return true;
     
     const category = (log.category || "").toLowerCase();
-    const activity = (log.activityDisplayName || "").toLowerCase();
-
-    if (activeFilter === 'Authentication') {
-        return category.includes('auth') || activity.includes('mfa') || activity.includes('password');
-    }
     
     // Exact match for UserManagement, ApplicationManagement, etc.
     return category === activeFilter.toLowerCase();
@@ -253,7 +248,15 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
               <Space direction="vertical" style={{ width: '100%' }} size={20}>
                 <div>
                   <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 8 }}>FILTER CATEGORY</Text>
-                  <Segmented block options={['All', 'Authentication', 'UserManagement', 'ApplicationManagement']} value={activeFilter} onChange={(v) => setActiveFilter(v as string)} />
+                  <Segmented 
+  block 
+  options={['All', 'Auth', 'User', 'Application', 'Role']} 
+  value={activeFilter} 
+  onChange={(value) => { // Added "onChange=" here
+    console.log("Selected Tab:", value);
+    setActiveFilter(value as string);
+  }} 
+/>
                 </div>
                 <div>
                   <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 8 }}>TIME HORIZON</Text>
