@@ -266,65 +266,84 @@ class GraphService:
                 logger.error(f"Error fetching privileged users: {str(e)}", exc_info=True)
                 return 0
 
-    async def get_security_posture_batched(self):
+    import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
+async def get_security_posture_batched(self, subscription_id: str):
+    """
+    1. Fetches Identity/Secure Score from Microsoft Graph.
+    2. Fetches Network Findings from Azure Resource Graph (Free).
+    """
+    # --- PART 1: MICROSOFT GRAPH BATCH (Identity) ---
+    graph_batch_url = "https://graph.microsoft.com/v1.0/$batch"
+    graph_payload = {
+        "requests": [
+            {"id": "1", "method": "GET", "url": "/security/secureScores?$top=1"},
+            {"id": "2", "method": "GET", "url": "/security/secureScoreControlProfiles"}
+        ]
+    }
+
+    # --- PART 2: AZURE RESOURCE GRAPH (Network Findings) ---
+    # This query scans for RDP (3389) and SSH (22) open to the internet for free.
+    arg_url = "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01"
+    arg_payload = {
+        "subscriptions": [subscription_id],
+        "query": """
+            Resources 
+            | where type == "microsoft.network/networksecuritygroups" 
+            | mv-expand rules = properties.securityRules 
+            | where rules.properties.access == "Allow" 
+              and rules.properties.direction == "Inbound" 
+              and (rules.properties.destinationPortRange in ("3389", "22") 
+                   or rules.properties.destinationPortRanges has "3389" 
+                   or rules.properties.destinationPortRanges has "22") 
+              and (rules.properties.sourceAddressPrefix in ("*", "0.0.0.0/0", "Internet")) 
+            | summarize Count = count() by Port = tostring(rules.properties.destinationPortRange)
         """
-        Executes a single batch call to fetch both Secure Score and Control Profiles.
-        """
-        batch_url = f"{self.base_url}/$batch"
-        
-        # Define the individual requests to be batched
-        batch_payload = {
-            "requests": [
+    }
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        try:
+            # 1. Execute Graph Batch
+            graph_res = await client.post(graph_batch_url, headers=self.headers, json=graph_payload)
+            graph_res.raise_for_status()
+            
+            # 2. Execute Resource Graph (Network Scan)
+            # Note: Ensure self.headers contains a token with 'https://management.azure.com/.default' scope
+            arg_res = await client.post(arg_url, headers=self.headers, json=arg_payload)
+            arg_res.raise_for_status()
+
+            # --- DATA PROCESSING ---
+            batch_data = graph_res.json()
+            network_data = arg_res.json().get("data", [])
+            
+            responses = {res['id']: res for res in batch_data.get('responses', [])}
+            score_data = responses.get("1", {}).get("body", {}).get("value", [{}])[0]
+            profiles = responses.get("2", {}).get("body", {}).get("value", [])
+
+            # Merge remediation steps
+            profiles_map = {p['id']: p.get('remediation') for p in profiles}
+            if "controlScores" in score_data:
+                for control in score_data["controlScores"]:
+                    c_id = control.get("controlName")
+                    control["remediation"] = profiles_map.get(c_id, "No steps found.")
+
+            # Append Network Findings to the response
+            score_data["networkFindings"] = [
                 {
-                    "id": "1",
-                    "method": "GET",
-                    "url": "/security/secureScores?$top=1"
-                },
-                {
-                    "id": "2",
-                    "method": "GET",
-                    "url": "/security/secureScoreControlProfiles"
-                }
+                    "finding": f"{'RDP' if item['Port'] == '3389' else 'SSH'} open to Internet",
+                    "count": item['Count'],
+                    "severity": "High"
+                } for item in network_data
             ]
-        }
 
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            try:
-                response = await client.post(
-                    batch_url, 
-                    headers=self.headers, 
-                    json=batch_payload
-                )
-                response.raise_for_status()
-                batch_data = response.json()
+            return score_data
 
-                # Extract individual responses by their IDs
-                responses = {res['id']: res for res in batch_data.get('responses', [])}
-                
-                # Handle Score Data (Request ID: 1)
-                score_res = responses.get("1", {})
-                if score_res.get("status") != 200:
-                    return {"error": f"Score API failed: {score_res.get('status')}"}
-                
-                score_data = score_res.get("body", {}).get("value", [{}])[0]
-
-                # Handle Profiles Data (Request ID: 2)
-                profiles_res = responses.get("2", {})
-                profiles_list = profiles_res.get("body", {}).get("value", []) if profiles_res.get("status") == 200 else []
-
-                # Merge instructions into the score data
-                profiles_map = {p['id']: p.get('remediation') for p in profiles_list}
-                
-                if "controlScores" in score_data:
-                    for control in score_data["controlScores"]:
-                        c_id = control.get("controlName")
-                        control["remediation"] = profiles_map.get(c_id, "No steps found.")
-
-                return score_data
-
-            except Exception as e:
-                logger.error(f"Batch request failed: {str(e)}")
-                return {"error": str(e)}
+        except Exception as e:
+            logger.error(f"Security posture fetch failed: {str(e)}")
+            return {"error": str(e)}
     async def get_license_and_usage(self) -> tuple[List[Dict], Optional[List[Dict]], bool]:
         """
         Get license SKUs and usage data.

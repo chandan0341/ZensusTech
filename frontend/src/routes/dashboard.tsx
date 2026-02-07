@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect, useMemo } from "react"; // Added useMemo here
+import { useState, useEffect, useMemo } from "react"; 
 import { Row, Col, Spin, Alert, Empty } from "antd";
 import { DashboardTiles } from "./DashboardTiles";
 import { useCredentials } from "../hooks/useCredentials";
@@ -30,6 +30,13 @@ import { CostManagementTile } from "@/components/dashboard/tiles/CostManagementT
 import { BackupsDRTile } from "@/components/dashboard/tiles/BackupsDRTile";
 import { PatchManagementTile } from "@/components/dashboard/tiles/PatchManagementTile";
 import { Microsoft365Tile } from "@/components/dashboard/tiles/Microsoft365Tile";
+
+// 1. Define the interface to solve TS2339 & TS18047
+interface SecureScoreData {
+  currentScore: number;
+  maxScore: number;
+  controlScores?: any[];
+}
 
 function Dashboard() {
   const { tenantId, isConnected } = useCredentials();
@@ -90,27 +97,27 @@ function Dashboard() {
     activeFilter,
     dateRange
   });
-  interface SecureScoreData {
-  currentScore: number;
-  maxScore: number;
-  controlScores?: any[];
-}
 
   // --- CALCULATION LOGIC ---
-  // This derives the 89% from the raw points to fix the 0% display issue
- // Updated Logic with Safety Checks
-const displayScore = useMemo(() => {
-  // 1. Cast the raw data to our interface
-  const data = secureScoreRaw as SecureScoreData | null;
+  // Fixes the 0% display AND derives Medium/Low/Unhealthy counts
+  const securityMetrics = useMemo(() => {
+    const data = secureScoreRaw as SecureScoreData | null;
+    const controls = data?.controlScores || [];
 
-  // 2. Check if data exists AND maxScore is greater than 0
-  if (data && data.maxScore > 0) {
-    return Math.round((data.currentScore / data.maxScore) * 100);
-  }
-  
-  // 3. Fallback to overallScore or 0
-  return overallScore || 0;
-}, [secureScoreRaw, overallScore]);
+    // Derive Score Percentage
+    const score = (data && data.maxScore > 0) 
+      ? Math.round((data.currentScore / data.maxScore) * 100) 
+      : (overallScore || 0);
+
+    // Derive Severity Counts
+    return {
+      displayScore: score,
+      high: controls.filter(c => (c.scoreInPercentage || 0) === 0).length,
+      medium: controls.filter(c => (c.scoreInPercentage || 0) > 0 && (c.scoreInPercentage || 0) < 50).length,
+      low: controls.filter(c => (c.scoreInPercentage || 0) >= 50 && (c.scoreInPercentage || 0) < 100).length,
+      unhealthy: controls.filter(c => (c.scoreInPercentage || 0) < 100).length,
+    };
+  }, [secureScoreRaw, overallScore]);
 
   useEffect(() => {
     if (selectedSubscription) {
@@ -279,14 +286,20 @@ const displayScore = useMemo(() => {
                     <>
                       {selectedTile === 'security' && (
                         <SecurityTile 
-                          overallScore={displayScore} // USE THE NEW displayScore VARIABLE
+                          overallScore={securityMetrics.displayScore} 
                           secureScoreRaw={secureScoreRaw} 
-                          adminRolesData={adminRolesData} 
+                          adminRolesData={adminRolesData}
+                          // Note: Ensure your SecurityTile component 
+                          // accepts these extra props if you want to pass them directly
+                          highCount={securityMetrics.high}
+                          mediumCount={securityMetrics.medium}
+                          lowCount={securityMetrics.low}
+                          unhealthyCount={securityMetrics.unhealthy}
                         />
                       )}
                       {selectedTile === 'microsoft-365' && (
                         <Microsoft365Tile
-                          overallScore={displayScore} // Consistency
+                          overallScore={securityMetrics.displayScore}
                           summaryItems={summaryItems}
                           identityGovernanceData={identityGovernanceData}
                           adminRolesData={adminRolesData}
