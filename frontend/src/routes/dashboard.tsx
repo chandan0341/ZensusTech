@@ -91,6 +91,7 @@ function Dashboard() {
     isAuditLoading,
     organization,
     secureScoreRaw, 
+    subSecurity, isSubLoading,
   } = useDashboardData({
     selectedTenant,
     selectedSubscription,
@@ -286,16 +287,21 @@ function Dashboard() {
                     <>
                       {selectedTile === 'security' && (
                         <SecurityTile 
-                          overallScore={securityMetrics.displayScore} 
-                          secureScoreRaw={secureScoreRaw} 
-                          adminRolesData={adminRolesData}
-                          // Note: Ensure your SecurityTile component 
-                          // accepts these extra props if you want to pass them directly
-                          highCount={securityMetrics.high}
-                          mediumCount={securityMetrics.medium}
-                          lowCount={securityMetrics.low}
-                          unhealthyCount={securityMetrics.unhealthy}
-                        />
+  // Identity Data (Tenant)
+  overallScore={overallScore} 
+  secureScoreRaw={secureScoreRaw}
+  adminRolesData={adminRolesData}
+
+  // Infrastructure Data (Subscription)
+  subscriptionId={selectedSubscription ?? undefined}
+  networkFindings={subSecurity?.network || []}
+  dataFindings={subSecurity?.data || []}
+  hygieneFindings={subSecurity?.hygiene || []}
+  unhealthyCount={subSecurity?.totalUnhealthy || 0}
+  
+  // Use the new independent flag
+  loading={isSubLoading} 
+/>
                       )}
                       {selectedTile === 'microsoft-365' && (
                         <Microsoft365Tile
@@ -313,6 +319,24 @@ function Dashboard() {
 
                   {viewMode === 'subscription' && (
                     <>
+                    {selectedTile === 'security' && (
+                        <SecurityTile 
+  // Identity Data (Tenant)
+  overallScore={overallScore} 
+  secureScoreRaw={secureScoreRaw}
+  adminRolesData={adminRolesData}
+
+  // Infrastructure Data (Subscription)
+  subscriptionId={selectedSubscription ?? undefined}
+  networkFindings={subSecurity?.network || []}
+  dataFindings={subSecurity?.data || []}
+  hygieneFindings={subSecurity?.hygiene || []}
+  unhealthyCount={subSecurity?.totalUnhealthy || 0}
+  
+  // Use the new independent flag
+  loading={isSubLoading} 
+/>
+                      )}
                       {selectedTile === 'cost-management' && <CostManagementTile />}
                       {selectedTile === 'backups-dr' && <BackupsDRTile />}
                       {selectedTile === 'patch-management' && <PatchManagementTile />}

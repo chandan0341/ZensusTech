@@ -13,6 +13,7 @@ export const ENDPOINTS = {
         AUDIT_LOGS: `${BASE_URL}/tenant/audit-logs`,
         ORGANIZATION: `${BASE_URL}/tenant/organization`,
         SECURITY_TENANT_POSTURE_DETAILS: `${BASE_URL}/security/tenant-posture`,
+        SUB_POSTURE_DETAILS: `${BASE_URL}/api/security/subs-posture`,
     },
     USERS: {
         DASHBOARD: `${BASE_URL}/users/dashboard`,

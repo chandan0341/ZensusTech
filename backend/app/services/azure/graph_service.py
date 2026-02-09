@@ -535,33 +535,67 @@ class GraphService:
                 "createdOn": org.get("createdDateTime")
             }
             
-    async def get_subscription_security(self, subscription_id: str):
-        """SUBSCRIPTION LEVEL: Network & Storage (Resource Graph API)"""
-        url = "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01"
-        
-        # Free query to find Open RDP/SSH and Public Storage
-        query = f"""
-        Resources 
-        | where type =~ 'microsoft.network/networksecuritygroups' or type =~ 'microsoft.storage/storageaccounts'
-        | extend p = properties
-        | project type, name, 
-            isRdpOpen = (type =~ 'microsoft.network/networksecuritygroups' and p.securityRules any (r: r.properties.access == 'Allow' and r.properties.direction == 'Inbound' and r.properties.destinationPortRange == '3389' and (r.properties.sourceAddressPrefix in ('*', '0.0.0.0/0', 'Internet')))),
-            isPublicStorage = (type =~ 'microsoft.storage/storageaccounts' and p.allowBlobPublicAccess == true)
-        | summarize 
-            RdpOpenCount = countif(isRdpOpen == true),
-            PublicStorageCount = countif(isPublicStorage == true)
+    async def get_subscription_security_report(self, subscription_id: str):
+            """
+            Main entry point for the 3 infrastructure cards.
+            """
+            query = """
+            Resources
+            | where subscriptionId =~ '{sub_id}'
+            | where 
+                (type =~ 'microsoft.network/networksecuritygroups') or 
+                (type =~ 'microsoft.storage/storageaccounts') or 
+                (type =~ 'microsoft.compute/disks' and properties.diskState == 'Unattached')
+            | extend category = case(
+                type =~ 'microsoft.network/networksecuritygroups', "network",
+                type =~ 'microsoft.storage/storageaccounts', "data",
+                "hygiene"
+            )
+            | extend finding = case(
+                category == "network", "Management Ports (22/3389) Open to Internet",
+                category == "data", "Public Access Enabled on Storage",
+                "Orphaned Managed Disk"
+            )
+            | extend severity = case(
+                category == "network", "CRITICAL",
+                category == "data", "HIGH",
+                "LOW"
+            )
+            | extend fix = case(
+                category == "network", "Restrict NSG rules to known IP ranges.",
+                category == "data", "Disable 'Allow public access' in configuration.",
+                "Delete unattached disk to stop billing."
+            )
+            | summarize resources = make_list(name), count = count() by category, finding, severity, fix
+            """.format(sub_id=subscription_id)
+
+            return await self._run_resource_graph_query(query, subscription_id)
+
+    async def _run_resource_graph_query(self, query: str, subscription_id: str):
         """
+        Helper function to execute KQL against Azure Resource Graph.
+        """
+        payload = {
+            "subscriptions": [subscription_id],
+            "query": query,
+            "options": {"resultFormat": "objectArray"}
+        }
         
-        payload = {"subscriptions": [subscription_id], "query": query}
-        # Use the standard ARM Token
-        headers = {"Authorization": self.headers.get("Authorization"), "Content-Type": "application/json"}
-        
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+
         async with httpx.AsyncClient() as client:
-            res = await client.post(url, headers=headers, json=payload)
-            data = res.json().get("data", [{}])[0]
-            
-            # Formating to match your report style
-            return [
-                {"finding": "RDP Open to Internet", "count": data.get("RdpOpenCount", 0), "severity": "High"},
-                {"finding": "Public Storage Access", "count": data.get("PublicStorageCount", 0), "severity": "Medium"}
-            ]        
+            try:
+                response = await client.post(self.arg_url, headers=headers, json=payload, timeout=30.0)
+                response.raise_for_status()
+                
+                # The response structure from ARG puts results in a 'data' field
+                return response.json().get("data", [])
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Azure Graph Query Failed: {e.response.text}")
+                return []
+            except Exception as e:
+                logger.error(f"Unexpected error in Graph Query: {str(e)}")
+                return []        

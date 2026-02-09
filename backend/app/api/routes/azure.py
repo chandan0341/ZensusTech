@@ -186,23 +186,26 @@ async def get_tenant_posture(
     except Exception as e:
         logger.error(f"Error fetching secure score: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to fetch secure score details")
+
+@router.get("/api/security/subs-posture")
+async def get_subscription_posture(
+    subscription_id: str,
+    graph_token: str = Depends(get_graph_token)
+):
+    service = GraphService(access_token=graph_token)
+    
+    # Fetch the raw findings
+    raw_findings = await service.get_subscription_security_report(subscription_id)
+
+    # Sort them for the frontend cards
+    report = {
+        "network": [f for f in raw_findings if f['category'] == 'network'],
+        "data": [f for f in raw_findings if f['category'] == 'data'],
+        "hygiene": [f for f in raw_findings if f['category'] == 'hygiene'],
+        "totalUnhealthy": sum(f['count'] for f in raw_findings)
+    }
+
+    return report    
     
 
-# @router.get("/api/security/subs-posture")
-# async def get_subscription_posture(
-#     graph_token: str = Depends(get_graph_token),
-#     subscription_id: str = Query(..., description="The subscription ID")
-    
-# ):
-#     """
-#     Get M365 Security Posture details via GET with header tokens.
-#     """
-#     try:
-
-#         service = GraphService(access_token=graph_token)
-#         report_data = await service.get_subscription_security(subscription_id=subscription_id)
-
-#         return report_data
-#     except Exception as e:
-#         logger.error(f"Error fetching secure score: {str(e)}", exc_info=True)
-#         raise HTTPException(status_code=500, detail="Failed to fetch secure score details")    
+  

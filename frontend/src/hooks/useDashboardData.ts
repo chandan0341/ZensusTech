@@ -1,15 +1,14 @@
 import { useState, useEffect } from "react";
-import { User, AdminRoleData, GovernanceItem, SummaryItem ,AzureApplication,OrganizationData} from "@/types/dashboard.types";
+import { User, AdminRoleData, GovernanceItem, SummaryItem, AzureApplication, OrganizationData } from "@/types/dashboard.types";
 import { ENDPOINTS } from "@/constants/api";
 import { processAdminRoles } from "@/utils/dashboardUtils";
-import type { Dayjs } from "dayjs"; // Fixed dayjs namespace (TS2503 fix)
+import type { Dayjs } from "dayjs";
 
 interface UseDashboardDataProps {
   selectedTenant: string;
   selectedSubscription: string | null;
-  activeFilter: string;           // Add this
-  dateRange: [Dayjs, Dayjs]; // Add this
-  
+  activeFilter: string;
+  dateRange: [Dayjs, Dayjs];
 }
 
 export const useDashboardData = ({
@@ -32,37 +31,28 @@ export const useDashboardData = ({
   const [auditLogs, setAuditLogs] = useState([]);
   const [isAuditLoading, setIsAuditLoading] = useState(false);
   const [organization, setOrganization] = useState<OrganizationData | null>(null);
-  // Keep existing score for the main dashboard KPI cards
-  
-  // NEW: Create state for the full Azure response
-  const [secureScoreRaw, setSecureScoreRaw] = useState(null); 
+  const [subSecurity, setSubSecurity] = useState<any>(null);
+  const [isSubSecurityLoading, setIsSubSecurityLoading] = useState(false);
+  const [secureScoreRaw, setSecureScoreRaw] = useState(null);
 
-  
-  // Helper to get tokens and manage expiry
   const getAuthHeaders = async (): Promise<Record<string, string>> => {
     let mgmtToken = localStorage.getItem("mgmt_token");
     let graphToken = localStorage.getItem("graph_token");
     const expiry = localStorage.getItem("token_expiry");
 
-    // Check if token is expired or about to expire
     const isExpired = expiry && Date.now() > (Number(expiry) - 300000);
 
     if (isExpired || !mgmtToken) {
       try {
         const response = await fetch("/api/auth/refresh", { method: "POST" });
         const newData = await response.json();
-        
         localStorage.setItem("mgmt_token", newData.mgmtToken);
         localStorage.setItem("graph_token", newData.graphToken);
-        const FIFTY_MINUTES_IN_MS = 50 * 60 * 1000;
-        localStorage.setItem("token_expiry", (Date.now() + FIFTY_MINUTES_IN_MS).toString());
-        
+        localStorage.setItem("token_expiry", (Date.now() + 50 * 60 * 1000).toString());
         mgmtToken = newData.mgmtToken;
         graphToken = newData.graphToken;
       } catch (error) {
-        console.error("Session expired.");
         window.location.href = "/login";
-        // Return empty strings instead of empty object to satisfy TypeScript
         return { "Authorization": "", "X-Graph-Token": "", "Content-Type": "application/json" };
       }
     }
@@ -74,22 +64,58 @@ export const useDashboardData = ({
     };
   };
 
-  // CONSOLIDATED USER FETCH: One effect to rule them all
-useEffect(() => {
-  if (!selectedTenant) return;
+  // --- EFFECT 1: SUB-SECURITY FETCH (Triggered by Subscription Change) ---
+  useEffect(() => {
+    // If no sub, reset the security state and exit
+    if (!selectedSubscription) {
+      setSubSecurity(null);
+      return;
+    }
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const authHeaders = await getAuthHeaders();
-      
-      // 1. Fetch TENANT-WIDE data (including your new Batched Security API)
-      if (selectedTenant && !selectedSubscription) {
+    const fetchSubData = async () => {
+      setIsSubSecurityLoading(true);
+      try {
+        const authHeaders = await getAuthHeaders();
+        const response = await fetch(
+          `${ENDPOINTS.AZURE.SUB_POSTURE_DETAILS}?subscription_id=${selectedSubscription}`,
+          { headers: authHeaders as any }
+        );
+        const result = await response.json();
+
+        setSubSecurity({
+          network: result.network || [],
+          data: result.data || [],
+          hygiene: result.hygiene || [],
+          totalUnhealthy: result.totalUnhealthy || 0,
+          // IMPORTANT: Added these so your SecurityTile can read them!
+          highCount: result.highCount || 0,
+          mediumCount: result.mediumCount || 0,
+          lowCount: result.lowCount || 0
+        });
+      } catch (error) {
+        console.error("Sub-posture fetch error:", error);
+      } finally {
+        setIsSubSecurityLoading(false);
+      }
+    };
+
+    fetchSubData();
+  }, [selectedSubscription]); // Watch only the sub ID
+
+  // --- EFFECT 2: IDENTITY & TENANT DATA ---
+  useEffect(() => {
+    if (!selectedTenant) return;
+
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const authHeaders = await getAuthHeaders();
+
+        // Always fetch global tenant info if we don't have it
         const [userRes, appRes, orgRes, secureScoreRes] = await Promise.all([
           fetch(`${ENDPOINTS.AZURE.TANENT_USERS}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
           fetch(`${ENDPOINTS.AZURE.TENANT_APPLICATIONS}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
           fetch(`${ENDPOINTS.AZURE.ORGANIZATION}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
-          // This endpoint now returns the BATCHED score + remediation
           fetch(`${ENDPOINTS.AZURE.SECURITY_TENANT_POSTURE_DETAILS}`, { headers: authHeaders as any })
         ]);
 
@@ -98,85 +124,64 @@ useEffect(() => {
         const orgResData = await orgRes.json();
         const secureData = await secureScoreRes.json();
 
-       // Inside useDashboardData.ts
         if (secureData && !secureData.error) {
-          setSecureScoreRaw(secureData); 
-
-          // Use the specific keys from your API response: currentScore and maxScore
+          setSecureScoreRaw(secureData);
           const current = secureData.currentScore ?? 0;
           const max = secureData.maxScore ?? 0;
-
-          if (max > 0) {
-            const calculatedPercentage = Math.round((current / max) * 100);
-            setOverallScore(calculatedPercentage);
-            console.log("Hook calculated score:", calculatedPercentage); // Should log 89
-          } else {
-            setOverallScore(0);
-          }
-      }
+          setOverallScore(max > 0 ? Math.round((current / max) * 100) : 0);
+        }
 
         const masterList = userResData.users || [];
         setAllTenantUsers(masterList);
         setApplications(appResData.applications || []);
         setOrganization(orgResData.organization);
-        
-        // Reset specific counts
-        setForeignGroupsCount(null);
-        setServicePrincipalsCount(null);
-        setAdminRolesData(processAdminRoles(masterList));
-      }
 
-      // 2. Fetch SUBSCRIPTION-specific data
-      if (selectedTenant && selectedSubscription) {
-        const subRes = await fetch(
-          `${ENDPOINTS.AZURE.USERS}?subscription_id=${selectedSubscription}&tenant_id=${selectedTenant}`, 
-          { headers: authHeaders as any }
-        );
-        const subData = await subRes.json();
-        
-        setUsers(subData.users || []);
-        setForeignGroupsCount(subData.foreignGroupsCount ?? null);
-        setServicePrincipalsCount(subData.servicePrincipalsCount ?? null);
-        
-        // Update Admin chart based on the selected subscription's users
-        setAdminRolesData(processAdminRoles(subData.users || []));
-      } else {
-        // Fallback to all tenant users if no subscription is selected
-        setUsers(allTenantUsers); 
+        // --- SUBSCRIPTION SPECIFIC OVERRIDE ---
+        if (selectedSubscription) {
+          const subRes = await fetch(
+            `${ENDPOINTS.AZURE.USERS}?subscription_id=${selectedSubscription}&tenant_id=${selectedTenant}`,
+            { headers: authHeaders as any }
+          );
+          const subData = await subRes.json();
+          setUsers(subData.users || []);
+          setForeignGroupsCount(subData.foreignGroupsCount ?? null);
+          setServicePrincipalsCount(subData.servicePrincipalsCount ?? null);
+          setAdminRolesData(processAdminRoles(subData.users || []));
+        } else {
+          setUsers(masterList);
+          setAdminRolesData(processAdminRoles(masterList));
+        }
+      } catch (err) {
+        console.error("Data Fetch Error:", err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Data Fetch Error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  fetchData();
-}, [selectedTenant, selectedSubscription]); // Removed allTenantUsers.length to prevent unnecessary loops
-  // 4. M365 DATA AGGREGATION
+    fetchData();
+  }, [selectedTenant, selectedSubscription]);
+
+  // --- EFFECT 3: M365 DATA ---
   useEffect(() => {
+    if (!selectedTenant) return;
     const fetchM365Data = async () => {
-      if (!selectedTenant) return;
       try {
-        const authHeaders = await getAuthHeaders(); 
+        const authHeaders = await getAuthHeaders();
         const tenantQuery = `?tenant_id=${selectedTenant}`;
-
         const [licRes, ssRes] = await Promise.all([
-          fetch(`${ENDPOINTS.MICROSOFT.LICENSE_AND_USAGE_DETAILS}${tenantQuery}`, { headers: authHeaders as HeadersInit }),
-          fetch(`${ENDPOINTS.MICROSOFT.SECURE_SCORE_DETAILS}${tenantQuery}`, { headers: authHeaders as HeadersInit })
+          fetch(`${ENDPOINTS.MICROSOFT.LICENSE_AND_USAGE_DETAILS}${tenantQuery}`, { headers: authHeaders as any }),
+          fetch(`${ENDPOINTS.MICROSOFT.SECURE_SCORE_DETAILS}${tenantQuery}`, { headers: authHeaders as any })
         ]);
 
         const licData = await licRes.json();
         const ssData = await ssRes.json();
 
         setLicenseUsageData(licData.tableData || []);
-        setOverallScore(licData.overallScore || 0);
-
-        // Identity Logic: Correctly reflects 6/7 MFA users
+        
         const total = allTenantUsers.length;
         const mfaEnabled = allTenantUsers.filter(u => u.mfa === "Enabled").length;
         const mfaDisabled = total - mfaEnabled;
-        
+
         const identity: SummaryItem = {
           area: "Identity Security",
           status: total > 0 && mfaEnabled === total ? "Secure" : "Attention Required",
@@ -185,66 +190,30 @@ useEffect(() => {
           note: `MFA status for ${total} users`
         };
 
-        // License Logic: Ensures 4/4 display for Optimized status
-        const updatedSummary = (licData.summaryItems || []).map((item: SummaryItem) => {
-          if (item.area === "License Optimization" && item.status === "Optimized") {
-            const totalPurchased = (licData.tableData || []).reduce((acc: number, curr: any) => acc + (curr.purchased || 0), 0);
-            const totalAssigned = (licData.tableData || []).reduce((acc: number, curr: any) => acc + (curr.assigned || 0), 0);
-            return { ...item, number: `${totalAssigned}/${totalPurchased}` };
-          }
-          return item;
-        });
-
-        setSummaryItems([identity, ...(ssData.cards || []), ...updatedSummary]);
-      } catch (e) { 
-        console.error("M365 Aggregation Error:", e); 
-      } finally {
-        setLoading(false);
+        setSummaryItems([identity, ...(ssData.cards || []), ...(licData.summaryItems || [])]);
+      } catch (e) {
+        console.error("M365 Error:", e);
       }
     };
     fetchM365Data();
-  }, [selectedTenant, allTenantUsers]);
+  }, [selectedTenant, allTenantUsers.length]);
 
-  // 5. GOVERNANCE
+  // --- EFFECT 4: AUDIT LOGS ---
   useEffect(() => {
-    const fetchGov = async () => {
-      if (!selectedTenant) return;
-      try {
-        const authHeaders = await getAuthHeaders();
-        const res = await fetch(`${ENDPOINTS.MICROSOFT.IDENTITY_GOVERNANCE}?tenant_id=${selectedTenant}`, { 
-          method: "GET",
-          headers: authHeaders as HeadersInit 
-        });
-        const data = await res.json();
-        setIdentityGovernanceData(data);
-      } catch (e) { 
-        console.error("Governance Error:", e); 
-      }
-    };
-    fetchGov();
-  }, [selectedTenant]);
-  useEffect(() => {
+    if (!selectedTenant) return;
     const fetchAuditData = async () => {
-      if (!selectedTenant) return;
-
       setIsAuditLoading(true);
       try {
         const authHeaders = await getAuthHeaders();
         const catMap: Record<string, string> = { 
-      "Auth": "Authentication", 
-      "User": "UserManagement", 
-      "Application": "ApplicationManagement", 
-      "Role": "RoleManagement" 
-    };
-        
+          "Auth": "Authentication", "User": "UserManagement", 
+          "Application": "ApplicationManagement", "Role": "RoleManagement" 
+        };
         const apiCat = catMap[activeFilter] || "All";
-        const startDate = encodeURIComponent(dateRange[0].toISOString());
-
         const res = await fetch(
-          `${ENDPOINTS.AZURE.AUDIT_LOGS}?tenant_id=${selectedTenant}&category=${apiCat}&start_date=${startDate}`,
+          `${ENDPOINTS.AZURE.AUDIT_LOGS}?tenant_id=${selectedTenant}&category=${apiCat}&start_date=${dateRange[0].toISOString()}`,
           { headers: authHeaders as any }
         );
-
         const data = await res.json();
         setAuditLogs(data.logs || []);
       } catch (e) {
@@ -253,9 +222,27 @@ useEffect(() => {
         setIsAuditLoading(false);
       }
     };
-
     fetchAuditData();
-  }, [selectedTenant, activeFilter, dateRange]); // Errors gone! These are now tracked dependencies.
+  }, [selectedTenant, activeFilter, dateRange]);
+
+  // --- EFFECT 5: GOVERNANCE ---
+  useEffect(() => {
+    if (!selectedTenant) return;
+    const fetchGov = async () => {
+      try {
+        const authHeaders = await getAuthHeaders();
+        const res = await fetch(`${ENDPOINTS.MICROSOFT.IDENTITY_GOVERNANCE}?tenant_id=${selectedTenant}`, {
+          headers: authHeaders as any
+        });
+        const data = await res.json();
+        setIdentityGovernanceData(data);
+      } catch (e) {
+        console.error("Gov Error:", e);
+      }
+    };
+    fetchGov();
+  }, [selectedTenant]);
+
   return {
     users,
     applications,
@@ -272,5 +259,7 @@ useEffect(() => {
     isAuditLoading,
     organization,
     secureScoreRaw,
-    };
+    subSecurity,
+    isSubLoading: isSubSecurityLoading,
+  };
 };
