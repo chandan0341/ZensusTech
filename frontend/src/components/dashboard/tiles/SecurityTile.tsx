@@ -159,15 +159,6 @@ export const SecurityTile = ({
             {isSubSelected ? `Active Scan: ${subscriptionId}` : "Select a subscription to enable infrastructure auditing"}
           </Text>
         </div>
-        <Button 
-          type="primary" 
-          loading={loading} 
-          icon={<RocketOutlined />} 
-          style={{ background: '#722ed1', borderColor: '#722ed1' }}
-          disabled={!isSubSelected}
-        >
-          {isSubSelected ? 'Deep Audit' : 'Select Sub to Scan'}
-        </Button>
       </div>
 
       {/* QUICK ACTIONS BAR */}

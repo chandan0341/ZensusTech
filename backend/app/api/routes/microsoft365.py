@@ -24,8 +24,6 @@ async def get_license_and_usage_details(
 
         license_service = LicenseService(graph_token=graph_token)
         result = await license_service.get_license_usage_details()
-
-        logger.info(f"License usage report generated with score: {result['overallScore']}%")
         return LicenseUsageResponse(**result)
 
     except (TokenError, AzureAPIError) as e:

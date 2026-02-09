@@ -38,7 +38,6 @@ class LicenseService:
         """
         try:
             skus = await self.graph_service.get_license_and_usage()
-            score = await self.graph_service.get_secure_score()
             
             license_list = []
             total_purchased_units = 0
@@ -86,7 +85,7 @@ class LicenseService:
             }]
 
             return {
-                "overallScore": score,
+                "overallScore": 0,
                 "summaryItems": executive_summary,
                 "tableData": license_list,
             }
