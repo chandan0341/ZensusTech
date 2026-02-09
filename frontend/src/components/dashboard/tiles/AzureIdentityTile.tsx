@@ -225,6 +225,9 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
             </Col>
           </Row>
         </Card>
+        <Card title={<Space><AppstoreOutlined /> Application Inventory</Space>} style={{ borderRadius: '16px' }}>
+           <Table dataSource={applications.slice(0, 5)} pagination={false} rowKey="id" size="middle" columns={[{ title: 'App Name', dataIndex: 'displayName', render: (t) => <Text strong>{t}</Text> }, { title: 'App ID', dataIndex: 'appId', render: (id) => <Text code style={{ fontSize: 11 }}>{id}</Text> }, { title: 'Type', dataIndex: 'signInAudience', render: (v) => <Tag color="blue">{v}</Tag> }]} />
+        </Card>
 
         {/* AUDIT & INVESTIGATION */}
         <Row gutter={[24, 24]}>
@@ -249,9 +252,7 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
           </Col>
         </Row>
 
-        <Card title={<Space><AppstoreOutlined /> Application Inventory</Space>} style={{ borderRadius: '16px' }}>
-           <Table dataSource={applications.slice(0, 5)} pagination={false} rowKey="id" size="middle" columns={[{ title: 'App Name', dataIndex: 'displayName', render: (t) => <Text strong>{t}</Text> }, { title: 'App ID', dataIndex: 'appId', render: (id) => <Text code style={{ fontSize: 11 }}>{id}</Text> }, { title: 'Type', dataIndex: 'signInAudience', render: (v) => <Tag color="blue">{v}</Tag> }]} />
-        </Card>
+        
       </Space>
 
       {/* FORENSIC DRAWER */}

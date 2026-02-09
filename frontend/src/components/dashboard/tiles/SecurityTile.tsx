@@ -9,7 +9,6 @@ import {
   AuditOutlined,
   CheckCircleOutlined,
   SearchOutlined,
-  RocketOutlined,
 } from '@ant-design/icons';
 
 const { Text, Title } = Typography;
