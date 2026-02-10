@@ -34,6 +34,10 @@ export const useDashboardData = ({
   const [secureScoreRaw, setSecureScoreRaw] = useState<any>(null);
   const [securityAuditReport, setSecurityAuditReport] = useState<any>(null);
   const [isSecurityReportLoading, setIsSecurityReportLoading] = useState(false);
+  // 1. For the Executive Summary (Score Card)
+ const [m365Score, setM365Score] = useState<any | null>(null);         // The 'overall' object
+  const [m365ActionPlan, setM365ActionPlan] = useState<any[]>([]);      // The 'action_plan' array
+  const [m365Metadata, setM365Metadata] = useState<any | null>(null);
 
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     let mgmtToken = localStorage.getItem("mgmt_token");
@@ -61,10 +65,7 @@ export const useDashboardData = ({
             const result = await response.json();
 
             // Mapping based on your specific JSON structure [cite: 57, 58]
-            setSecurityAuditReport(result);
-            console.log("111111111111111111111111111111111111111111111111111111111111111111111111")
-            console.log(">>>> [Hook] Raw securityAuditReport:", result);
-            
+            setSecurityAuditReport(result);            
             // Extracting the overall secure score percentage (0.1176 -> 12%) 
             if (result.scoreData?.properties?.score) {
                 setOverallScore(Math.round(result.scoreData.properties.score.percentage * 100));
@@ -114,16 +115,38 @@ export const useDashboardData = ({
 
   // Restored M365 and Audit usage to clear "unused variable" errors
   useEffect(() => {
-    if (!selectedTenant || allTenantUsers.length === 0) return;
-    const fetchM365 = async () => {
-        const authHeaders = await getAuthHeaders();
-        const res = await fetch(`${ENDPOINTS.MICROSOFT.LICENSE_AND_USAGE_DETAILS}?tenant_id=${selectedTenant}`, { headers: authHeaders as any });
-        const data = await res.json();
-        setLicenseUsageData(data.tableData || []);
-        setSummaryItems(data.summaryItems || []);
-    };
-    fetchM365();
-  }, [selectedTenant, allTenantUsers.length, getAuthHeaders]);
+  if (!selectedTenant) return;
+
+  const fetchAllM365Data = async () => {
+    const authHeaders = await getAuthHeaders();
+    const query = `?tenant_id=${selectedTenant}`;
+
+    // Fire both requests at the same time
+    const [securityRes, licenseRes] = await Promise.all([
+      fetch(`${ENDPOINTS.MICROSOFT.SECURE_SCORE_DETAILS}${query}`, { headers: authHeaders as any }),
+      fetch(`${ENDPOINTS.MICROSOFT.LICENSE_AND_USAGE_DETAILS}${query}`, { headers: authHeaders as any })
+    ]);
+
+    const securityData = await securityRes.json();
+    const licenseData = await licenseRes.json();
+
+    // 1. Handle Security Data (API 1)
+    if (securityData.success) {
+      const { overall, action_plan, batch_metadata } = securityData.data;    
+      setM365Score(overall);
+      setM365ActionPlan(action_plan);
+      setM365Metadata(batch_metadata);
+    }
+
+    // 2. Handle License Data (API 2)
+    if (licenseData.success) {
+      setLicenseUsageData(licenseData.tableData || []);
+      setSummaryItems(licenseData.summaryItems || []);
+    }
+  };
+
+  fetchAllM365Data();
+}, [selectedTenant, getAuthHeaders]);
 
   useEffect(() => {
     if (!selectedTenant) return;
@@ -139,7 +162,6 @@ export const useDashboardData = ({
   }, [selectedTenant, activeFilter, dateRange, getAuthHeaders]);
 
  const report = useMemo(() => {
-  console.log(">>>> [Hook] Raw securityAuditReport:", securityAuditReport);
     
   const extracted = securityAuditReport?.value || securityAuditReport || {};
   console.log("Flattening security report data...:",extracted); // This will now only log when data actually updates
@@ -157,6 +179,9 @@ return {
   servicePrincipalsCount, 
   adminRolesData,
   licenseUsageData, 
+  m365Score, 
+  m365ActionPlan,
+  m365Metadata,
   overallScore, 
   summaryItems,
   auditLogs, 

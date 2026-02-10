@@ -91,6 +91,9 @@ function Dashboard() {
     networkData, 
   dataSecData, 
   recommendationsData, 
+  m365Score,           // The 'overall' object with scores & benchmarks
+  m365ActionPlan,      // The array of security recommendations
+  m365Metadata,
  
   failedControlsData,
   kpiData,
@@ -310,6 +313,9 @@ function Dashboard() {
                           summaryItems={summaryItems}
                           adminRolesData={adminRolesData}
                           licenseUsageData={licenseUsageData}
+                          m365Score={m365Score}
+      m365ActionPlan={m365ActionPlan}
+      m365Metadata={m365Metadata}
                           onRowClick={handleRowClick}
                           handleCardClickForMicrosoftUserType={handleCardClickForUserType}
                         />

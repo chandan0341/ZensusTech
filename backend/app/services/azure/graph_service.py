@@ -29,7 +29,30 @@ class GraphService:
         self.headers = {"Authorization": f"Bearer {access_token}"}
         self.base_url = settings.GRAPH_BASE
         self.arg_url = "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01"
+    
+    # Inside graph_service.py
+    async def post_batch(self, payload: dict) -> dict:
+        """
+        Sends a consolidated batch request to Microsoft Graph.
+        """
+        url = "https://graph.microsoft.com/v1.0/$batch"
+        
+        # Use the token that was passed during initialization
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
 
+        # Using httpx.AsyncClient is the standard for modern FastAPI/Python apps
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload, headers=headers)
+            
+            if response.status_code != 200:
+                logger.error(f"Batch API Error: {response.text}")
+                raise Exception(f"Graph Batch API failed: {response.status_code}")
+                
+            return response.json()
+    
     async def _execute_batch_request(
         self,
         client: httpx.AsyncClient,
