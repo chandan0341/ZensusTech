@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { User, AdminRoleData, GovernanceItem, SummaryItem, AzureApplication, OrganizationData } from "@/types/dashboard.types";
 import { ENDPOINTS } from "@/constants/api";
 import { processAdminRoles } from "@/utils/dashboardUtils";
@@ -35,7 +35,8 @@ export const useDashboardData = ({
   const [isSubSecurityLoading, setIsSubSecurityLoading] = useState(false);
   const [secureScoreRaw, setSecureScoreRaw] = useState(null);
 
-  const getAuthHeaders = async (): Promise<Record<string, string>> => {
+  // --- HELPER: AUTH HEADERS ---
+  const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     let mgmtToken = localStorage.getItem("mgmt_token");
     let graphToken = localStorage.getItem("graph_token");
     const expiry = localStorage.getItem("token_expiry");
@@ -62,11 +63,10 @@ export const useDashboardData = ({
       "X-Graph-Token": graphToken || "",
       "Content-Type": "application/json",
     };
-  };
+  }, []);
 
-  // --- EFFECT 1: SUB-SECURITY FETCH (Triggered by Subscription Change) ---
+  // --- EFFECT 1: SUB-SECURITY FETCH ---
   useEffect(() => {
-    // If no sub, reset the security state and exit
     if (!selectedSubscription) {
       setSubSecurity(null);
       return;
@@ -87,7 +87,6 @@ export const useDashboardData = ({
           data: result.data || [],
           hygiene: result.hygiene || [],
           totalUnhealthy: result.totalUnhealthy || 0,
-          // IMPORTANT: Added these so your SecurityTile can read them!
           highCount: result.highCount || 0,
           mediumCount: result.mediumCount || 0,
           lowCount: result.lowCount || 0
@@ -100,9 +99,9 @@ export const useDashboardData = ({
     };
 
     fetchSubData();
-  }, [selectedSubscription]); // Watch only the sub ID
+  }, [selectedSubscription, getAuthHeaders]);
 
-  // --- EFFECT 2: IDENTITY & TENANT DATA ---
+  // --- EFFECT 2: IDENTITY & TENANT DATA (Fix for Tenant Roles) ---
   useEffect(() => {
     if (!selectedTenant) return;
 
@@ -111,7 +110,6 @@ export const useDashboardData = ({
       try {
         const authHeaders = await getAuthHeaders();
 
-        // Always fetch global tenant info if we don't have it
         const [userRes, appRes, orgRes, secureScoreRes] = await Promise.all([
           fetch(`${ENDPOINTS.AZURE.TANENT_USERS}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
           fetch(`${ENDPOINTS.AZURE.TENANT_APPLICATIONS}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
@@ -135,21 +133,33 @@ export const useDashboardData = ({
         setAllTenantUsers(masterList);
         setApplications(appResData.applications || []);
         setOrganization(orgResData.organization);
+        // Use subscription-specific users for roles
+          setAdminRolesData(processAdminRoles(masterList));
 
-        // --- SUBSCRIPTION SPECIFIC OVERRIDE ---
+        // --- ROLE PROCESSING LOGIC ---
         if (selectedSubscription) {
           const subRes = await fetch(
             `${ENDPOINTS.AZURE.USERS}?subscription_id=${selectedSubscription}&tenant_id=${selectedTenant}`,
             { headers: authHeaders as any }
           );
           const subData = await subRes.json();
-          setUsers(subData.users || []);
+          const subUsers = subData.users || [];
+          
+          setUsers(subUsers);
           setForeignGroupsCount(subData.foreignGroupsCount ?? null);
           setServicePrincipalsCount(subData.servicePrincipalsCount ?? null);
-          setAdminRolesData(processAdminRoles(subData.users || []));
+          
+          // Use subscription-specific users for roles
+          setAdminRolesData(processAdminRoles(subUsers));
         } else {
+          // TENANT FALLBACK: Use the masterList for roles when no sub is selected
           setUsers(masterList);
-          setAdminRolesData(processAdminRoles(masterList));
+          const tenantRoles = processAdminRoles(masterList);
+          setAdminRolesData(tenantRoles);
+          
+          // Clear sub-specific metrics
+          setForeignGroupsCount(null);
+          setServicePrincipalsCount(null);
         }
       } catch (err) {
         console.error("Data Fetch Error:", err);
@@ -159,11 +169,12 @@ export const useDashboardData = ({
     };
 
     fetchData();
-  }, [selectedTenant, selectedSubscription]);
+  }, [selectedTenant, selectedSubscription, getAuthHeaders]);
 
   // --- EFFECT 3: M365 DATA ---
   useEffect(() => {
-    if (!selectedTenant) return;
+    if (!selectedTenant || allTenantUsers.length === 0) return;
+
     const fetchM365Data = async () => {
       try {
         const authHeaders = await getAuthHeaders();
@@ -196,7 +207,7 @@ export const useDashboardData = ({
       }
     };
     fetchM365Data();
-  }, [selectedTenant, allTenantUsers.length]);
+  }, [selectedTenant, allTenantUsers.length, getAuthHeaders]);
 
   // --- EFFECT 4: AUDIT LOGS ---
   useEffect(() => {
@@ -223,7 +234,7 @@ export const useDashboardData = ({
       }
     };
     fetchAuditData();
-  }, [selectedTenant, activeFilter, dateRange]);
+  }, [selectedTenant, activeFilter, dateRange, getAuthHeaders]);
 
   // --- EFFECT 5: GOVERNANCE ---
   useEffect(() => {
@@ -241,7 +252,7 @@ export const useDashboardData = ({
       }
     };
     fetchGov();
-  }, [selectedTenant]);
+  }, [selectedTenant, getAuthHeaders]);
 
   return {
     users,

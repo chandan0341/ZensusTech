@@ -2,7 +2,7 @@
 Azure API routes for authentication, subscriptions, and user management using session-based tokens.
 """
 from app.services.azure.graph_service import GraphService
-from fastapi import APIRouter, Depends, HTTPException, Request, Body, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Body, Query,Header
 from typing import Dict, Any, Optional
 
 from app.api.models.responses import UsersResponse, ApplicationsResponse
@@ -190,12 +190,13 @@ async def get_tenant_posture(
 @router.get("/api/security/subs-posture")
 async def get_subscription_posture(
     subscription_id: str,
-    graph_token: str = Depends(get_graph_token)
+    graph_token: str = Depends(get_graph_token),
+    mgmt_token: str = Depends(get_mgmt_token)
 ):
     service = GraphService(access_token=graph_token)
     
     # Fetch the raw findings
-    raw_findings = await service.get_subscription_security_report(subscription_id)
+    raw_findings = await service.get_subscription_security_report(subscription_id, mgmt_token)
 
     # Sort them for the frontend cards
     report = {
@@ -206,6 +207,24 @@ async def get_subscription_posture(
     }
 
     return report    
-    
 
-  
+
+@router.get("/security-audit-report")
+async def get_full_security_audit(
+    subscription_id: str,
+    # Your existing dependency
+    graph_token: str = Depends(get_graph_token), 
+    # New dependency for the management audience
+    mgmt_token: str = Depends(get_mgmt_token) 
+):
+    # Initialize service - we pass tokens into the methods now
+    service = GraphService(access_token=graph_token) 
+    
+    # Call the master method with both "keys"
+    report = await service.get_consolidated_security_report(
+        subscription_id=subscription_id,
+        mgmt_token=mgmt_token,
+        graph_token=graph_token
+    )
+
+    return report

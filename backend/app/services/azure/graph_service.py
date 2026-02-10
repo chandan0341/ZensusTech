@@ -28,6 +28,7 @@ class GraphService:
         self.access_token = access_token
         self.headers = {"Authorization": f"Bearer {access_token}"}
         self.base_url = settings.GRAPH_BASE
+        self.arg_url = "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01"
 
     async def _execute_batch_request(
         self,
@@ -535,7 +536,7 @@ class GraphService:
                 "createdOn": org.get("createdDateTime")
             }
             
-    async def get_subscription_security_report(self, subscription_id: str):
+    async def get_subscription_security_report(self, subscription_id: str, mgmt_token: str):
             """
             Main entry point for the 3 infrastructure cards.
             """
@@ -569,11 +570,11 @@ class GraphService:
             | summarize resources = make_list(name), count = count() by category, finding, severity, fix
             """.format(sub_id=subscription_id)
 
-            return await self._run_resource_graph_query(query, subscription_id)
-
-    async def _run_resource_graph_query(self, query: str, subscription_id: str):
+            return await self._run_resource_graph_query(query, subscription_id, mgmt_token)
+        
+    async def _run_resource_graph_query(self, query: str, subscription_id: str, mgmt_token: str):
         """
-        Helper function to execute KQL against Azure Resource Graph.
+        Executes KQL against Azure Resource Graph using the MANAGEMENT token from headers.
         """
         payload = {
             "subscriptions": [subscription_id],
@@ -581,8 +582,9 @@ class GraphService:
             "options": {"resultFormat": "objectArray"}
         }
         
+        # We use the mgmt_token provided by the frontend
         headers = {
-            "Authorization": f"Bearer {self.access_token}",
+            "Authorization": f"Bearer {mgmt_token}",
             "Content-Type": "application/json"
         }
 
@@ -590,12 +592,173 @@ class GraphService:
             try:
                 response = await client.post(self.arg_url, headers=headers, json=payload, timeout=30.0)
                 response.raise_for_status()
-                
-                # The response structure from ARG puts results in a 'data' field
                 return response.json().get("data", [])
             except httpx.HTTPStatusError as e:
-                logger.error(f"Azure Graph Query Failed: {e.response.text}")
+                logger.error(f"Azure Graph Query Failed (Management Audience): {e.response.text}")
                 return []
             except Exception as e:
                 logger.error(f"Unexpected error in Graph Query: {str(e)}")
                 return []        
+    
+
+    async def get_vm_security_status(self, subscription_id: str, mgmt_token: str):
+        query = """
+        securityresources 
+        | where type == "microsoft.security/assessments"
+        | extend resourceId = tostring(properties.resourceDetails.Id)
+        | where resourceId contains "microsoft.compute/virtualmachines"
+        | summarize 
+            PatchStatus = anyif(iif(name == "5535359a-5136-4076-9d33-72a392a8323a", properties.status.code, "Unknown")),
+            DefenderStatus = anyif(iif(name == "87527653-b09e-4e41-a6c3-16279930f9a2", properties.status.code, "Unknown")),
+            Encryption = anyif(iif(name == "09610967-ecdc-438b-997e-ee084a929532", properties.status.code, "Unknown")),
+            Risk = max(tostring(properties.metadata.severity))
+            by resourceId
+        | extend VMName = tostring(split(resourceId, '/')[-1])
+        | project VMName, PatchStatus, DefenderStatus, Encryption, Risk
+        """
+        return await self._run_resource_graph_query(query, subscription_id, mgmt_token)
+
+    async def get_infra_and_data_findings(self, subscription_id: str, mgmt_token: str):
+        query = """
+        securityresources
+        | where type == "microsoft.security/assessments"
+        | where properties.status.code == "Unhealthy"
+        | extend Category = tostring(properties.metadata.categories[0])
+        | extend Finding = tostring(properties.metadata.displayName)
+        | extend Severity = tostring(properties.metadata.severity)
+        | summarize Count = count() by Finding, Category, Severity
+        | order by Severity desc
+        """
+        return await self._run_resource_graph_query(query, subscription_id, mgmt_token)
+
+    # --- DIRECT MANAGEMENT API CALLS (The 5 APIs) ---
+
+    async def _get_mgmt_data(self, url: str, mgmt_token: str):
+        headers = {"Authorization": f"Bearer {mgmt_token}"}
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                return response.json()
+            except Exception as e:
+                logger.error(f"API Call failed for {url}: {str(e)}")
+                return {"value": []}
+
+    async def get_azure_secure_score(self, subscription_id: str, mgmt_token: str):
+        """API 1: Get Secure Score (Current vs Max)"""
+        url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/secureScores/ascScore?api-version=2020-01-01"
+        data = await self._get_mgmt_data(url, mgmt_token)
+        # Return the object itself for raw data access
+        return data
+
+    async def get_security_assessments(self, subscription_id: str, mgmt_token: str):
+        """API 2: List Security Recommendations"""
+        url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/assessments?api-version=2020-01-01"
+        return await self._get_mgmt_data(url, mgmt_token)
+
+    async def get_secure_score_controls(self, subscription_id: str, mgmt_token: str):
+        """API 3: Secure Score Controls Summary"""
+        url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/secureScoreControls?api-version=2020-01-01"
+        return await self._get_mgmt_data(url, mgmt_token)
+
+    async def get_regulatory_standards(self, subscription_id: str, mgmt_token: str):
+        """API 4: Regulatory Compliance Standards"""
+        url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/regulatoryComplianceStandards?api-version=2019-01-01"
+        return await self._get_mgmt_data(url, mgmt_token)
+
+    async def get_failed_regulatory_controls(self, subscription_id: str, mgmt_token: str):
+        """API 5: Failed Controls (Microsoft Cloud Security Benchmark)"""
+        url = (
+            f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/"
+            f"regulatoryComplianceStandards/Microsoft-cloud-security-benchmark/regulatoryComplianceControls"
+            f"?$filter=properties/state eq 'Failed'&api-version=2019-01-01-preview"
+        )
+        return await self._get_mgmt_data(url, mgmt_token)
+
+    # --- IDENTITY BATCH (GRAPH) ---
+
+    async def get_identity_security_batch(self, graph_token: str):
+        batch_payload = {
+            "requests": [
+                {
+                    "id": "1",
+                    "method": "GET",
+                    "url": "/reports/authenticationMethods/userRegistrationDetails?$filter=isMfaRegistered eq false&$count=true",
+                    "headers": {"ConsistencyLevel": "eventual"}
+                },
+                {
+                    "id": "2",
+                    "method": "GET",
+                    "url": "/directoryRoles?$expand=members"
+                }
+            ]
+        }
+        headers = {"Authorization": f"Bearer {graph_token}", "Content-Type": "application/json"}
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(f"{self.base_url}/$batch", headers=headers, json=batch_payload)
+                if response.status_code != 200:
+                    return {"mfaIssues": 0, "adminCount": 0}
+
+                responses = response.json().get("responses", [])
+                mfa_issues = next((r for r in responses if r["id"] == "1"), {}).get("body", {}).get("@odata.count", 0)
+                role_data = next((r for r in responses if r["id"] == "2"), {}).get("body", {}).get("value", [])
+                global_admins = next((r for r in role_data if r.get("displayName") == "Global Administrator"), {})
+                admin_count = len(global_admins.get("members", []))
+
+                return {
+                    "mfaIssues": mfa_issues,
+                    "adminCount": admin_count,
+                    "status": "Critical" if mfa_issues > 0 else "Secure"
+                }
+            except Exception as e:
+                logger.error(f"Identity Batch failed: {str(e)}")
+                return {"mfaIssues": 0, "adminCount": 0}
+
+    # --- CONSOLIDATED MASTER REPORT ---
+
+    async def get_consolidated_security_report(self, subscription_id: str, mgmt_token: str, graph_token: str):
+        tasks = [
+            self.get_azure_secure_score(subscription_id, mgmt_token),         # 0
+            self.get_security_assessments(subscription_id, mgmt_token),      # 1
+            self.get_secure_score_controls(subscription_id, mgmt_token),     # 2
+            self.get_regulatory_standards(subscription_id, mgmt_token),      # 3
+            self.get_failed_regulatory_controls(subscription_id, mgmt_token),# 4
+            self.get_identity_security_batch(graph_token),                   # 5
+            self.get_vm_security_status(subscription_id, mgmt_token),        # 6
+            self.get_infra_and_data_findings(subscription_id, mgmt_token)    # 7
+        ]
+        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Helper to safely handle exceptions in results
+        def safe_res(idx, default):
+            return results[idx] if not isinstance(results[idx], Exception) else default
+
+        secure_scores_raw   = safe_res(0, {})
+        assessments_raw     = safe_res(1, {"value": []})
+        controls_raw        = safe_res(2, {"value": []})
+        standards_raw       = safe_res(3, {"value": []})
+        failed_controls_raw = safe_res(4, {"value": []})
+        identity_data       = safe_res(5, {})
+        vm_data             = safe_res(6, [])
+        infra_data          = safe_res(7, [])
+
+        return {
+            "scoreData": secure_scores_raw,
+            "allAssessments": assessments_raw,
+            "scoreControls": controls_raw,
+            "complianceStandards": standards_raw,
+            "failedControls": failed_controls_raw,
+            "identitySummary": identity_data,
+            "vmStatus": vm_data,
+            "networkFindings": [f for f in infra_data if isinstance(f, dict) and f.get('Category') == 'Networking'],
+            "dataSecurity": [f for f in infra_data if isinstance(f, dict) and f.get('Category') == 'Data'],
+            "postureKPI": {
+                "currentScore": secure_scores_raw.get('properties', {}).get('score', {}).get('current', 0),
+                "maxScore": secure_scores_raw.get('properties', {}).get('score', {}).get('max', 0),
+                "percentage": secure_scores_raw.get('properties', {}).get('score', {}).get('percentage', 0),
+                "totalFailedControls": len(failed_controls_raw.get('value', []))
+            },
+            "recommendations": infra_data  # This uses the summarized KQL data for the UI
+        }
