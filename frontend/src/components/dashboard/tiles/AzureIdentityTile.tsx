@@ -57,7 +57,9 @@ const getLogForensics = (log: any) => {
       } catch { detail = "MFA Settings Updated"; }
     } else {
       const firstProp = target.modifiedProperties[0];
-      detail = `${firstProp.displayName}: ${String(firstProp.newValue).replace(/[\[\]\"]/g, '')}`;
+      const val = String(firstProp.newValue).replace(/[\[\]\"]/g, '');
+      // Truncate extremely long values to prevent UI stretching
+      detail = `${firstProp.displayName}: ${val.length > 120 ? val.substring(0, 120) + '...' : val}`;
     }
   }
   return { detail, actor, target: targetName, homeTenant };
@@ -139,7 +141,6 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
 
   return (
     <div style={{ padding: '0px' }}>
-      {/* HEADER SECTION */}
       <Card style={{ borderRadius: '16px', border: '2px solid #1890ff', overflow: 'hidden', marginBottom: '24px' }} bodyStyle={{ padding: '0' }}>
         <div style={{ background: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)', padding: '20px', color: 'white' }}>
           <Space size={12}>
@@ -153,10 +154,8 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
       </Card>
 
       <Space direction="vertical" size={24} style={{ width: "100%" }}>
-        {/* TOP STATS BOX */}
         <div style={{ background: '#fff', borderRadius: '16px', border: '1px solid #f0f0f0', padding: '24px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' }}>
           <Row gutter={[24, 24]} align="stretch">
-            {/* CIRCLE 1: TOTAL USERS */}
             <Col xs={24} lg={7} style={{ borderRight: '1px solid #f0f0f0' }}>
               <Statistic title="Total Users" value={users.length} prefix={<TeamOutlined />} valueStyle={{ fontWeight: 800, color: RISK_COLORS.MEDIUM }} />
               <div style={{ marginTop: '15px' }}>
@@ -169,7 +168,6 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
               </div>
             </Col>
             
-            {/* CIRCLE 2: MFA DISABLED */}
             <Col xs={24} lg={8} style={{ textAlign: 'center' }}>
               {(() => {
                 const risk = getMfaRiskConfig(mfaDisabledCount);
@@ -199,7 +197,6 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
 
         {!loading && mfaDisabledCount > 0 && <FinancialRiskBanner count={mfaDisabledCount} />}
 
-        {/* PIE CHART SECTION */}
         <Card title={<Space><SafetyCertificateOutlined /> Identity Risk Distribution</Space>} style={{ borderRadius: '16px' }}>
           <Row gutter={48} align="middle">
             <Col lg={10} xs={24}>
@@ -225,44 +222,111 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
             </Col>
           </Row>
         </Card>
+        
         <Card title={<Space><AppstoreOutlined /> Application Inventory</Space>} style={{ borderRadius: '16px' }}>
            <Table dataSource={applications.slice(0, 5)} pagination={false} rowKey="id" size="middle" columns={[{ title: 'App Name', dataIndex: 'displayName', render: (t) => <Text strong>{t}</Text> }, { title: 'App ID', dataIndex: 'appId', render: (id) => <Text code style={{ fontSize: 11 }}>{id}</Text> }, { title: 'Type', dataIndex: 'signInAudience', render: (v) => <Tag color="blue">{v}</Tag> }]} />
         </Card>
 
-        {/* AUDIT & INVESTIGATION */}
-        <Row gutter={[24, 24]}>
+        {/* --- FIXED HEIGHT AUDIT & INVESTIGATION SECTION --- */}
+        <Row gutter={[24, 24]} align="stretch">
           <Col lg={12} xs={24}>
-            <Card title={<Space><SearchOutlined /> Investigation Console</Space>} style={{ borderRadius: '16px', height: '100%' }}>
+            <Card 
+              title={<Space><SearchOutlined /> Investigation Console</Space>} 
+              style={{ borderRadius: '16px', height: '100%' }}
+            >
               <Space direction="vertical" style={{ width: '100%' }} size={20}>
-                <div><Text type="secondary" style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 8 }}>FILTER CATEGORY</Text><Segmented block options={['All', 'Auth', 'User', 'Application', 'Role']} value={activeFilter} onChange={(v) => setActiveFilter(v as string)} /></div>
-                <div><Text type="secondary" style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 8 }}>TIME HORIZON</Text><Segmented block options={[{ label: '24H', value: '1' }, { label: '7D', value: '7' }, { label: '30D', value: '30' }]} defaultValue="7" onChange={(v) => { const start = dayjs().subtract(Number(v), 'day'); setDateRange([start, dayjs()]); }} /></div>
-                <div style={{ padding: 20, background: '#f0f5ff', borderRadius: 12, textAlign: 'center' }}><Statistic title="Events Detected" value={filteredLogs.length} prefix={<AuditOutlined />} loading={isAuditLoading} /></div>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 8 }}>FILTER CATEGORY</Text>
+                  <Segmented 
+                    block 
+                    options={['All', 'Auth', 'User', 'Application', 'Role']} 
+                    value={activeFilter} 
+                    onChange={(v) => setActiveFilter(v as string)} 
+                  />
+                </div>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, display: 'block', marginBottom: 8 }}>TIME HORIZON</Text>
+                  <Segmented 
+                    block 
+                    options={[{ label: '24H', value: '1' }, { label: '7D', value: '7' }, { label: '30D', value: '30' }]} 
+                    defaultValue="7" 
+                    onChange={(v) => { 
+                      const start = dayjs().subtract(Number(v), 'day'); 
+                      setDateRange([start, dayjs()]); 
+                    }} 
+                  />
+                </div>
+                <div style={{ padding: 20, background: '#f0f5ff', borderRadius: 12, textAlign: 'center' }}>
+                  <Statistic title="Events Detected" value={filteredLogs.length} prefix={<AuditOutlined />} loading={isAuditLoading} />
+                </div>
               </Space>
             </Card>
           </Col>
+
           <Col lg={12} xs={24}>
-            <Card title={<Space><HistoryOutlined /> {activeFilter} Feed</Space>} style={{ borderRadius: '16px', height: '100%' }} extra={<Link onClick={() => setDrawerVisible(true)}>View All</Link>}>
-              <Timeline items={filteredLogs.slice(0, 4).map((log, i) => {
-                const forensic = getLogForensics(log);
-                return { key: i, children: <div><div style={{ display: 'flex', justifyContent: 'space-between' }}><Text strong>{log.activityDisplayName}</Text><Text type="secondary" style={{ fontSize: 10 }}>{dayjs(log.activityDateTime).fromNow()}</Text></div><Tag style={{ fontSize: 9 }}>Actor: {forensic.actor}</Tag><div style={{ background: '#f5f5f5', padding: '4px 8px', borderRadius: 4, fontSize: 11, marginTop: 4 }}><strong>{forensic.detail}</strong></div></div> };
-              })} />
-              {filteredLogs.length === 0 && <Empty description="No activities found" />}
-              <Button block icon={<ArrowRightOutlined />} onClick={() => setDrawerVisible(true)} style={{ marginTop: 10 }}>Explore All Logs</Button>
+            <Card 
+              title={<Space><HistoryOutlined /> {activeFilter} Feed</Space>} 
+              style={{ borderRadius: '16px', height: '100%', display: 'flex', flexDirection: 'column' }}
+              extra={<Link onClick={() => setDrawerVisible(true)}>View All</Link>}
+              bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            >
+              <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px', maxHeight: '450px' }}>
+                <Timeline items={filteredLogs.map((log, i) => {
+                  const forensic = getLogForensics(log);
+                  return { 
+                    key: i, 
+                    children: (
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                          <Text strong style={{ fontSize: '13px' }}>{log.activityDisplayName}</Text>
+                          <Text type="secondary" style={{ fontSize: 10 }}>{dayjs(log.activityDateTime).fromNow()}</Text>
+                        </div>
+                        <Tag style={{ fontSize: 9, marginTop: 4 }}>Actor: {forensic.actor}</Tag>
+                        
+                        <div style={{ 
+                          background: '#f5f5f5', 
+                          padding: '8px', 
+                          borderRadius: '6px', 
+                          fontSize: '11px', 
+                          marginTop: '6px',
+                          maxHeight: '80px',
+                          overflowY: 'auto',
+                          wordBreak: 'break-all',
+                          borderLeft: '3px solid #1890ff',
+                          fontFamily: 'monospace'
+                        }}>
+                          <strong>{forensic.detail}</strong>
+                        </div>
+                      </div>
+                    ) 
+                  };
+                })} />
+                {filteredLogs.length === 0 && <Empty description="No activities found" />}
+              </div>
+
+              <Button block icon={<ArrowRightOutlined />} onClick={() => setDrawerVisible(true)} style={{ marginTop: 12 }}>
+                Explore All Logs
+              </Button>
             </Card>
           </Col>
         </Row>
-
-        
       </Space>
 
       {/* FORENSIC DRAWER */}
       <Drawer title={`${activeFilter} Forensic Explorer`} width="85%" open={drawerVisible} onClose={() => setDrawerVisible(false)}>
-        <Table dataSource={filteredLogs} loading={isAuditLoading} rowKey="id" 
+        <Table 
+          dataSource={filteredLogs} 
+          loading={isAuditLoading} 
+          rowKey="id" 
           columns={[
             { title: 'Activity', dataIndex: 'activityDisplayName' },
             { title: 'Actor', render: (_, r) => { const f = getLogForensics(r); return <Space direction="vertical" size={0}><Text strong style={{ fontSize: 12 }}>{f.actor}</Text><Text type="secondary" style={{ fontSize: 10 }}>{f.homeTenant}</Text></Space>; } },
             { title: 'Target Resource', render: (_, r) => <Text style={{ fontSize: 12 }}>{getLogForensics(r).target}</Text> },
-            { title: 'Forensic Change', render: (_, r) => <Tag color="blue" style={{ whiteSpace: 'normal', height: 'auto' }}>{getLogForensics(r).detail}</Tag> },
+            { title: 'Forensic Change', width: '35%', render: (_, r) => (
+              <div style={{ maxHeight: '100px', overflowY: 'auto', padding: '4px' }}>
+                <Tag color="blue" style={{ whiteSpace: 'normal', height: 'auto', margin: 0 }}>{getLogForensics(r).detail}</Tag>
+              </div>
+            )},
             { title: 'Timestamp', dataIndex: 'activityDateTime', render: (d) => dayjs(d).format('lll') }
           ]}
           expandable={{
@@ -273,7 +337,7 @@ export const AzureIdentityTile: React.FC<AzureIdentityTileProps> = (props) => {
                   columns={[
                     { title: 'Property', dataIndex: 'displayName', width: '30%' },
                     { title: 'Old Value', dataIndex: 'oldValue', render: (v) => <Text type="secondary" delete>{v || '-'}</Text> },
-                    { title: 'New Value', dataIndex: 'newValue', render: (v) => <Text code style={{ color: '#c41d7f' }}>{v || '-'}</Text> }
+                    { title: 'New Value', dataIndex: 'newValue', render: (v) => <Text code style={{ color: '#c41d7f', wordBreak: 'break-all' }}>{v || '-'}</Text> }
                   ]} 
                 />
               </div>

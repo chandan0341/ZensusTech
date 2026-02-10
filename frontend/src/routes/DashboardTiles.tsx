@@ -67,8 +67,6 @@ export const DashboardTiles: React.FC<DashboardTilesProps> = ({
         )}
 
         {/* Tiles visible in BOTH modes */}
-        {renderTile('security', 'Security', 'Posture & Alerts', <SafetyCertificateOutlined />, '#fa541c', '#fff7e6')}
-        {renderTile('cost-management', 'Cost Management', 'FinOps & Spending', <DollarOutlined />, '#13c2c2', '#e6fffb')}
         {renderTile('backups-dr', 'Backups & DR', 'Recovery Points', <CloudSyncOutlined />, '#722ed1', '#f9f0ff')}
         {renderTile('patch-management', 'Patch Management', 'Updates & Compliance', <SafetyCertificateOutlined />, '#faad14', '#fffbe6')}
         
@@ -83,6 +81,14 @@ export const DashboardTiles: React.FC<DashboardTilesProps> = ({
           <>
             {renderTile('microsoft-365', 'Microsoft O365', 'Managed Services', <TeamOutlined />, '#722ed1', '#f9f0ff')}
             {renderTile('domain-overview', 'Domain Overview', 'Health & Security', <GlobalOutlined />, '#52c41a', '#f6ffed')}
+          </>
+        )}
+            {/* Tenant-Only Tiles (Hidden in Subscription Mode) */}
+        {viewMode === 'subscription' && (
+          <>
+        {renderTile('security', 'Security', 'Posture & Alerts', <SafetyCertificateOutlined />, '#fa541c', '#fff7e6')}
+        {renderTile('cost-management', 'Cost Management', 'FinOps & Spending', <DollarOutlined />, '#13c2c2', '#e6fffb')}
+
           </>
         )}
 

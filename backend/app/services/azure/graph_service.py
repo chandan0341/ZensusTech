@@ -724,7 +724,6 @@ class GraphService:
             self.get_secure_score_controls(subscription_id, mgmt_token),     # 2
             self.get_regulatory_standards(subscription_id, mgmt_token),      # 3
             self.get_failed_regulatory_controls(subscription_id, mgmt_token),# 4
-            self.get_identity_security_batch(graph_token),                   # 5
             self.get_vm_security_status(subscription_id, mgmt_token),        # 6
             self.get_infra_and_data_findings(subscription_id, mgmt_token)    # 7
         ]
@@ -740,9 +739,8 @@ class GraphService:
         controls_raw        = safe_res(2, {"value": []})
         standards_raw       = safe_res(3, {"value": []})
         failed_controls_raw = safe_res(4, {"value": []})
-        identity_data       = safe_res(5, {})
-        vm_data             = safe_res(6, [])
-        infra_data          = safe_res(7, [])
+        vm_data             = safe_res(5, [])
+        infra_data          = safe_res(6, [])
 
         return {
             "scoreData": secure_scores_raw,
@@ -750,7 +748,6 @@ class GraphService:
             "scoreControls": controls_raw,
             "complianceStandards": standards_raw,
             "failedControls": failed_controls_raw,
-            "identitySummary": identity_data,
             "vmStatus": vm_data,
             "networkFindings": [f for f in infra_data if isinstance(f, dict) and f.get('Category') == 'Networking'],
             "dataSecurity": [f for f in infra_data if isinstance(f, dict) and f.get('Category') == 'Data'],
