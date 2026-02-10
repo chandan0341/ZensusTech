@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback,useMemo } from "react";
 import { User, AdminRoleData, SummaryItem, AzureApplication, OrganizationData } from "@/types/dashboard.types";
 import { ENDPOINTS } from "@/constants/api";
 import { processAdminRoles } from "@/utils/dashboardUtils";
@@ -32,7 +32,6 @@ export const useDashboardData = ({
   const [organization, setOrganization] = useState<OrganizationData | null>(null);
   
   const [secureScoreRaw, setSecureScoreRaw] = useState<any>(null);
-  const [identityGovernanceData, setIdentityGovernanceData] = useState<any>(null);
   const [securityAuditReport, setSecurityAuditReport] = useState<any>(null);
   const [isSecurityReportLoading, setIsSecurityReportLoading] = useState(false);
 
@@ -55,19 +54,33 @@ export const useDashboardData = ({
   useEffect(() => {
     if (!selectedSubscription) return;
     const fetchAuditReport = async () => {
-      setIsSecurityReportLoading(true);
-      try {
-        const authHeaders = await getAuthHeaders();
-        const response = await fetch(`${ENDPOINTS.AZURE.SECURITY_AUDIT_REPORT}?subscription_id=${selectedSubscription}`, { headers: authHeaders as any });
-        const result = await response.json();
-        setSecurityAuditReport(result);
-        setSecureScoreRaw(result.secureScoreRaw || null);
-        setIdentityGovernanceData(result.identityGovernanceData || null);
-        if (result.postureKPI) setOverallScore(Math.round(result.postureKPI.percentage * 100));
-      } catch (error) { console.error(error); } finally { setIsSecurityReportLoading(false); }
+        setIsSecurityReportLoading(true);
+        try {
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch(`${ENDPOINTS.AZURE.SECURITY_AUDIT_REPORT}?subscription_id=${selectedSubscription}`, { headers: authHeaders as any });
+            const result = await response.json();
+
+            // Mapping based on your specific JSON structure [cite: 57, 58]
+            setSecurityAuditReport(result);
+            console.log("111111111111111111111111111111111111111111111111111111111111111111111111")
+            console.log(">>>> [Hook] Raw securityAuditReport:", result);
+            
+            // Extracting the overall secure score percentage (0.1176 -> 12%) 
+            if (result.scoreData?.properties?.score) {
+                setOverallScore(Math.round(result.scoreData.properties.score.percentage * 100));
+            }
+
+            // You can also store the raw score for the 'X of Y' display (4.0 / 34) 
+            setSecureScoreRaw(result.scoreData?.properties?.score || null);
+
+        } catch (error) { 
+            console.error(error); 
+        } finally { 
+            setIsSecurityReportLoading(false); 
+        }
     };
     fetchAuditReport();
-  }, [selectedSubscription, getAuthHeaders]);
+}, [selectedSubscription, getAuthHeaders]);
 
   useEffect(() => {
     if (!selectedTenant) return;
@@ -125,12 +138,45 @@ export const useDashboardData = ({
     fetchAudit();
   }, [selectedTenant, activeFilter, dateRange, getAuthHeaders]);
 
-  return {
-    users, applications, allTenantUsers, loading,
-    foreignGroupsCount, servicePrincipalsCount, adminRolesData,
-    licenseUsageData, overallScore, summaryItems,
-    identityGovernanceData, auditLogs, isAuditLoading, organization,
-    securityAuditReport, isSecurityReportLoading, secureScoreRaw,
-    subSecurity: securityAuditReport, isSubLoading: isSecurityReportLoading,
-  };
+ const report = useMemo(() => {
+  console.log(">>>> [Hook] Raw securityAuditReport:", securityAuditReport);
+    
+  const extracted = securityAuditReport?.value || securityAuditReport || {};
+  console.log("Flattening security report data...:",extracted); // This will now only log when data actually updates
+  return securityAuditReport?.value || securityAuditReport || {};
+  }, [securityAuditReport]);
+
+// 2. Updated return statement
+return {
+  // Existing fields
+  users, 
+  applications, 
+  allTenantUsers, 
+  loading,
+  foreignGroupsCount, 
+  servicePrincipalsCount, 
+  adminRolesData,
+  licenseUsageData, 
+  overallScore, 
+  summaryItems,
+  auditLogs, 
+  isAuditLoading, 
+  organization,
+  secureScoreRaw,
+
+  // NEW: Flattened Security Data Categories
+  // This maps exactly to the keys found in your JSON file
+  networkData: report.networkFindings || [],         // The 2 findings
+  dataSecData: report.dataSecurity || [],           // The 3 findings
+  recommendationsData: report.recommendations || [], // The 15 recommendations
+  failedControlsData: report.failedControls?.value || [], // The 85 critical items
+  kpiData: report.postureKPI || {},                  // The score/totalFailedControls object
+  allAssessments: report.allAssessments?.value || [], // The total check list
+
+  // Maintain compatibility with existing props
+  securityAuditReport, 
+  isSecurityReportLoading,
+  subSecurity: report, 
+  isSubLoading: isSecurityReportLoading,
 };
+}

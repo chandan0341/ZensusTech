@@ -83,15 +83,20 @@ function Dashboard() {
     foreignGroupsCount,
     servicePrincipalsCount,
     adminRolesData,
-    overallScore,
     summaryItems,
-    identityGovernanceData,
     licenseUsageData,
     auditLogs,
     isAuditLoading,
     organization,
-    secureScoreRaw, 
-    subSecurity, isSubLoading,
+    networkData, 
+  dataSecData, 
+  recommendationsData, 
+ 
+  failedControlsData,
+  kpiData,
+  overallScore,
+  secureScoreRaw,
+  isSecurityReportLoading,
   } = useDashboardData({
     selectedTenant,
     selectedSubscription,
@@ -287,27 +292,22 @@ function Dashboard() {
                     <>
                       {selectedTile === 'security' && (
                         <SecurityTile 
-  // Identity Data (Tenant)
-  overallScore={overallScore} 
-  secureScoreRaw={secureScoreRaw}
-  adminRolesData={adminRolesData}
-
-  // Infrastructure Data (Subscription)
-  subscriptionId={selectedSubscription ?? undefined}
-  networkFindings={subSecurity?.network || []}
-  dataFindings={subSecurity?.data || []}
-  hygieneFindings={subSecurity?.hygiene || []}
-  unhealthyCount={subSecurity?.totalUnhealthy || 0}
-  
-  // Use the new independent flag
-  loading={isSubLoading} 
-/>
+    networkData={networkData}
+    dataSecData={dataSecData}
+    recommendationsData={recommendationsData}
+    failedControlsData={failedControlsData}
+    kpiData={kpiData}
+    adminRolesData={adminRolesData}
+    overallScore={overallScore}
+    secureScoreRaw={secureScoreRaw}
+    loading={isSecurityReportLoading}
+    subscriptionId={selectedSubscription}
+  />
                       )}
                       {selectedTile === 'microsoft-365' && (
                         <Microsoft365Tile
                           overallScore={securityMetrics.displayScore}
                           summaryItems={summaryItems}
-                          identityGovernanceData={identityGovernanceData}
                           adminRolesData={adminRolesData}
                           licenseUsageData={licenseUsageData}
                           onRowClick={handleRowClick}
@@ -320,22 +320,20 @@ function Dashboard() {
                   {viewMode === 'subscription' && (
                     <>
                     {selectedTile === 'security' && (
-                        <SecurityTile 
-  // Identity Data (Tenant)
-  overallScore={overallScore} 
-  secureScoreRaw={secureScoreRaw}
-  adminRolesData={adminRolesData}
 
-  // Infrastructure Data (Subscription)
+<SecurityTile 
+  networkData={networkData}
+  dataSecData={dataSecData}
+  recommendationsData={recommendationsData}
+  kpiData={kpiData}
+  adminRolesData={adminRolesData}
+  overallScore={overallScore}
+  loading={isSecurityReportLoading}
+  failedControlsData={failedControlsData}
+  secureScoreRaw={secureScoreRaw}
   subscriptionId={selectedSubscription ?? undefined}
-  networkFindings={subSecurity?.network || []}
-  dataFindings={subSecurity?.data || []}
-  hygieneFindings={subSecurity?.hygiene || []}
-  unhealthyCount={subSecurity?.totalUnhealthy || 0}
-  
-  // Use the new independent flag
-  loading={isSubLoading} 
 />
+
                       )}
                       {selectedTile === 'cost-management' && <CostManagementTile />}
                       {selectedTile === 'backups-dr' && <BackupsDRTile />}

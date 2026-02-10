@@ -1,12 +1,11 @@
 import { Card, Typography, Divider, Tag } from "antd";
 import { TeamOutlined } from "@ant-design/icons";
 import { TableComponent } from "@/components/TailAdminReports";
-import { SummaryItem, GovernanceItem } from "@/types/dashboard.types";
+import { SummaryItem } from "@/types/dashboard.types";
 
 interface Microsoft365TileProps {
   overallScore: number;
   summaryItems: SummaryItem[];
-  identityGovernanceData: GovernanceItem[];
   adminRolesData: any[];
   licenseUsageData?: any[];
   onRowClick: (record: any, tableType: string) => void;
@@ -16,7 +15,6 @@ interface Microsoft365TileProps {
 export const Microsoft365Tile = ({
   overallScore = 0,
   summaryItems = [], // Enforce default empty array
-  identityGovernanceData = [], // Enforce default empty array
   adminRolesData = [], // Enforce default empty array
   licenseUsageData = [], // Enforce default empty array
   onRowClick,
@@ -248,44 +246,6 @@ export const Microsoft365Tile = ({
         </div>
 
         <Divider style={{ margin: '48px 0' }} />
-
-        {/* Section 4: Identity Governance */}
-        <div style={{ marginBottom: '24px' }}>
-          <Typography.Title level={3} style={{ textAlign: 'center', marginBottom: '24px' }}>
-            User & Identity Governance Report
-          </Typography.Title>
-          <TableComponent
-            title=""
-            data={identityGovernanceData || []} // Crucial safety fix
-            columns={[
-              {
-                key: "category",
-                label: "Category",
-                width: "60%",
-                render: (text: string) => {
-                  const iconMap: Record<string, string> = {
-                    "Total Users": "📊", "Active Users": "👤", "Guest Users": "🌐", 
-                    "Inactive Users (>30 days)": "⏳", "Privileged Users": "🛡️"
-                  };
-                  return (
-                    <span style={{ fontWeight: "600", display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span>{iconMap[text] || "🔹"}</span>{text}
-                    </span>
-                  );
-                }
-              },
-              {
-                key: "count",
-                label: "Count",
-                width: "40%",
-                render: (value: any) => (
-                  <div style={{ fontWeight: "800", fontFamily: 'monospace' }}>{value}</div>
-                )
-              },
-            ]}
-            onRowClick={(record) => onRowClick(record, 'user-identity-governance')}
-          />
-        </div>
       </div>
     </div>
   );
