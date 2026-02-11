@@ -164,7 +164,9 @@ export const useDashboardData = ({
  const report = useMemo(() => {
     
   const extracted = securityAuditReport?.value || securityAuditReport || {};
-  console.log("Flattening security report data...:",extracted); // This will now only log when data actually updates
+  console.log("Flattening security report data...:",extracted); 
+  console.log("scoreControls",extracted.scoreControls?.value||[]);
+  console.log("failedControls",extracted.failedControls?.value || []);
   return securityAuditReport?.value || securityAuditReport || {};
   }, [securityAuditReport]);
 
@@ -195,6 +197,7 @@ return {
   dataSecData: report.dataSecurity || [],           // The 3 findings
   recommendationsData: report.recommendations || [], // The 15 recommendations
   failedControlsData: report.failedControls?.value || [], // The 85 critical items
+  scoreControls:report.scoreControls?.value||[],
   kpiData: report.postureKPI || {},                  // The score/totalFailedControls object
   allAssessments: report.allAssessments?.value || [], // The total check list
 

@@ -94,8 +94,9 @@ function Dashboard() {
   m365Score,           // The 'overall' object with scores & benchmarks
   m365ActionPlan,      // The array of security recommendations
   m365Metadata,
- 
+ allAssessments,
   failedControlsData,
+  scoreControls,
   kpiData,
   overallScore,
   secureScoreRaw,
@@ -293,20 +294,6 @@ function Dashboard() {
 
                   {viewMode === 'tenant' && (
                     <>
-                      {selectedTile === 'security' && (
-                        <SecurityTile 
-    networkData={networkData}
-    dataSecData={dataSecData}
-    recommendationsData={recommendationsData}
-    failedControlsData={failedControlsData}
-    kpiData={kpiData}
-    adminRolesData={adminRolesData}
-    overallScore={overallScore}
-    secureScoreRaw={secureScoreRaw}
-    loading={isSecurityReportLoading}
-    subscriptionId={selectedSubscription}
-  />
-                      )}
                       {selectedTile === 'microsoft-365' && (
                         <Microsoft365Tile
                           overallScore={securityMetrics.displayScore}
@@ -325,22 +312,25 @@ function Dashboard() {
 
                   {viewMode === 'subscription' && (
                     <>
-                    {selectedTile === 'security' && (
 
-<SecurityTile 
-  networkData={networkData}
-  dataSecData={dataSecData}
-  recommendationsData={recommendationsData}
-  kpiData={kpiData}
-  adminRolesData={adminRolesData}
-  overallScore={overallScore}
-  loading={isSecurityReportLoading}
-  failedControlsData={failedControlsData}
-  secureScoreRaw={secureScoreRaw}
-  subscriptionId={selectedSubscription ?? undefined}
-/>
+{selectedTile === 'security' && (
+  <SecurityTile 
+    overallScore={overallScore}
+    secureScoreRaw={secureScoreRaw}
+    networkData={networkData}
+    dataSecData={dataSecData}
+    recommendationsData={recommendationsData}
+    kpiData={kpiData}
+    adminRolesData={adminRolesData}
+    loading={isSecurityReportLoading}
+    failedControlsData={failedControlsData}
+    scoreControls={scoreControls}
+    allAssessments={allAssessments} 
+    subscriptionId={selectedSubscription}
+  />
+)}
 
-                      )}
+                      
                       {selectedTile === 'cost-management' && <CostManagementTile />}
                       {selectedTile === 'backups-dr' && <BackupsDRTile />}
                       {selectedTile === 'patch-management' && <PatchManagementTile />}
