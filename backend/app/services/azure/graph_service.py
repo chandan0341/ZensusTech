@@ -669,7 +669,7 @@ class GraphService:
 
     async def get_azure_secure_score(self, subscription_id: str, mgmt_token: str):
         """API 1: Get Secure Score (Current vs Max)"""
-        url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/secureScores/ascScore?api-version=2020-01-01"
+        url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/secureScores?api-version=2020-01-01"
         data = await self._get_mgmt_data(url, mgmt_token)
         # Return the object itself for raw data access
         return data
@@ -747,8 +747,6 @@ class GraphService:
             self.get_secure_score_controls(subscription_id, mgmt_token),     # 2
             self.get_regulatory_standards(subscription_id, mgmt_token),      # 3
             self.get_failed_regulatory_controls(subscription_id, mgmt_token),# 4
-            self.get_vm_security_status(subscription_id, mgmt_token),        # 6
-            self.get_infra_and_data_findings(subscription_id, mgmt_token)    # 7
         ]
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -762,8 +760,6 @@ class GraphService:
         controls_raw        = safe_res(2, {"value": []})
         standards_raw       = safe_res(3, {"value": []})
         failed_controls_raw = safe_res(4, {"value": []})
-        vm_data             = safe_res(5, [])
-        infra_data          = safe_res(6, [])
 
         return {
             "scoreData": secure_scores_raw,
@@ -771,14 +767,10 @@ class GraphService:
             "scoreControls": controls_raw,
             "complianceStandards": standards_raw,
             "failedControls": failed_controls_raw,
-            "vmStatus": vm_data,
-            "networkFindings": [f for f in infra_data if isinstance(f, dict) and f.get('Category') == 'Networking'],
-            "dataSecurity": [f for f in infra_data if isinstance(f, dict) and f.get('Category') == 'Data'],
             "postureKPI": {
                 "currentScore": secure_scores_raw.get('properties', {}).get('score', {}).get('current', 0),
                 "maxScore": secure_scores_raw.get('properties', {}).get('score', {}).get('max', 0),
                 "percentage": secure_scores_raw.get('properties', {}).get('score', {}).get('percentage', 0),
                 "totalFailedControls": len(failed_controls_raw.get('value', []))
             },
-            "recommendations": infra_data  # This uses the summarized KQL data for the UI
         }
