@@ -5,7 +5,7 @@ import {
   RocketOutlined, BulbOutlined,
   SafetyCertificateOutlined, UserOutlined,
   WarningOutlined, InfoCircleOutlined,
-  SafetyOutlined
+  SafetyOutlined, AuditOutlined
 } from '@ant-design/icons';
 
 const { Text, Title } = Typography;
@@ -32,7 +32,7 @@ export const SecurityTile = ({
 }: SecurityTileProps) => {
   const [activeDetail, setActiveDetail] = useState<string | null>(null);
 
-  // --- MAP SCORE CONTROLS TO FLATTEN DATA ---
+  // --- MAP TECHNICAL PILLARS (The "Why" behind the 12%) ---
   const mappedPillarData = useMemo(() => {
     return (scoreControls || []).map((item, index) => ({
       key: index,
@@ -59,116 +59,114 @@ export const SecurityTile = ({
 
   const securityDetails: Record<string, any> = useMemo(() => ({
     'Governance': {
-      title: "Subscription Governance & Policies",
+      title: "Security Posture & Compliance Audit",
       render: () => (
-        <Tabs items={[
-          {
-            key: '1', label: 'Security Pillars', children: (
-              <Table 
-                dataSource={mappedPillarData} 
-                size="small" 
-                pagination={{pageSize: 8}} 
-                columns={[
-                  { title: 'Control Name', dataIndex: 'name', width: '35%' },
-                  { 
-                    title: 'Score (Current/Max)', 
-                    key: 'score',
-                    render: (record) => (
-                      <Text strong>
-                        {record.current} / {record.max} 
-                        <Text type="secondary" style={{ fontSize: '10px', marginLeft: '4px' }}>pts</Text>
-                      </Text>
-                    ) 
-                  },
-                  { 
-                    title: 'Compliance', 
-                    dataIndex: 'percentage', 
-                    render: (p) => <Progress percent={p} size="small" status={p === 100 ? 'success' : 'normal'} /> 
-                  },
-                  { 
-                    title: 'Unhealthy', 
-                    dataIndex: 'unhealthy', 
-                    render: (u) => <Badge count={u} color={u > 0 ? '#ff4d4f' : '#52c41a'} /> 
-                  }
-                ]} 
-              />
-            )
-          },
-          {
-            key: '2', label: 'Regulatory Controls', children: (
-              <Table 
-                dataSource={failedControlsData} 
-                size="small" 
-                pagination={{ pageSize: 7 }}
-                expandable={{
-                  expandedRowRender: (record) => (
-                    <div style={{ padding: '10px 20px', background: '#fafafa', borderRadius: '4px' }}>
-                      <Text type="secondary"><InfoCircleOutlined /> <strong>Azure Resource ID:</strong></Text>
-                      <br />
-                      <Text code style={{ fontSize: '11px' }}>{record.id}</Text>
-                    </div>
-                  ),
-                }}
-                columns={[
-                  { 
-                    title: 'Control', 
-                    dataIndex: 'name', 
-                    width: '120px',
-                    render: (name) => (
-                      <Tag color="cyan" style={{ fontWeight: 'bold', width: '100%', textAlign: 'center' }}>
-                        {name}
-                      </Tag>
-                    ) 
-                  },
-                  { 
-                    title: 'Audit Objective', 
-                    dataIndex: ['properties', 'description'],
-                    render: (desc) => <Text style={{ fontSize: '13px' }}>{desc}</Text>
-                  },
-                  { 
-                    title: 'Assessment Health', 
-                    key: 'health',
-                    width: '220px',
-                    render: (record) => {
-                      const passed = record.properties?.passedAssessments || 0;
-                      const failed = record.properties?.failedAssessments || 0;
-                      const total = passed + failed;
-                      const rate = total > 0 ? Math.round((passed / total) * 100) : 0;
-                      
-                      return (
-                        <div style={{ minWidth: '150px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                            <Badge status="success" text={`${passed} Pass`} />
-                            <Badge status="error" text={`${failed} Fail`} />
-                          </div>
-                          <Progress percent={rate} size="small" strokeColor={rate === 100 ? '#52c41a' : '#faad14'} showInfo={false} />
-                        </div>
-                      );
+        <Tabs 
+          defaultActiveKey="1"
+          items={[
+            {
+              key: '1', 
+              label: (<span><RocketOutlined /> Technical Pillars</span>), 
+              children: (
+                <Table 
+                  dataSource={mappedPillarData} 
+                  size="small" 
+                  pagination={{pageSize: 8}} 
+                  columns={[
+                    { title: 'Security Domain', dataIndex: 'name', width: '35%' },
+                    { 
+                      title: 'Score Contribution', 
+                      key: 'score',
+                      render: (record) => (
+                        <Text strong>
+                          {record.current} / {record.max} 
+                          <Text type="secondary" style={{ fontSize: '10px', marginLeft: '4px' }}>pts</Text>
+                        </Text>
+                      ) 
+                    },
+                    { 
+                      title: 'Health', 
+                      dataIndex: 'percentage', 
+                      render: (p) => <Progress percent={p} size="small" status={p === 100 ? 'success' : 'normal'} /> 
+                    },
+                    { 
+                      title: 'Resources at Risk', 
+                      dataIndex: 'unhealthy', 
+                      render: (u) => <Badge count={u} color={u > 0 ? '#ff4d4f' : '#52c41a'} /> 
                     }
-                  },
-                  { 
-                    title: 'State', 
-                    dataIndex: ['properties', 'state'],
-                    width: '120px',
-                    align: 'center',
-                    render: (state) => {
-                      const isPassed = state === 'Passed';
-                      return (
+                  ]} 
+                />
+              )
+            },
+            {
+              key: '2', 
+              label: (<span><AuditOutlined /> Regulatory Compliance</span>), 
+              children: (
+                <Table 
+                  dataSource={failedControlsData} 
+                  size="small" 
+                  pagination={{ pageSize: 7 }}
+                  expandable={{
+                    expandedRowRender: (record) => (
+                      <div style={{ padding: '10px 20px', background: '#fafafa', borderLeft: '3px solid #1890ff' }}>
+                        <Text type="secondary"><InfoCircleOutlined /> <strong>Compliance Resource Path:</strong></Text>
+                        <br />
+                        <Text code style={{ fontSize: '11px' }}>{record.id}</Text>
+                      </div>
+                    ),
+                  }}
+                  columns={[
+                    { 
+                      title: 'Control ID', 
+                      dataIndex: 'name', 
+                      width: '120px',
+                      render: (name) => <Tag color="blue" style={{ fontWeight: 'bold' }}>{name}</Tag> 
+                    },
+                    { 
+                      title: 'Requirement Description', 
+                      dataIndex: ['properties', 'description'],
+                      render: (desc) => <Text style={{ fontSize: '13px' }}>{desc}</Text>
+                    },
+                    { 
+                      title: 'Assessment Ratio', 
+                      key: 'health',
+                      width: '200px',
+                      render: (record) => {
+                        const passed = record.properties?.passedAssessments || 0;
+                        const failed = record.properties?.failedAssessments || 0;
+                        const total = passed + failed;
+                        const rate = total > 0 ? Math.round((passed / total) * 100) : 0;
+                        return (
+                          <div style={{ minWidth: '150px' }}>
+                            <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
+                              <Badge status="success" text={`${passed} P`} />
+                              <Badge status="error" text={`${failed} F`} />
+                            </div>
+                            <Progress percent={rate} size="small" showInfo={false} strokeColor={rate === 100 ? '#52c41a' : '#faad14'} />
+                          </div>
+                        );
+                      }
+                    },
+                    { 
+                      title: 'Status', 
+                      dataIndex: ['properties', 'state'],
+                      width: '120px',
+                      render: (state) => (
                         <Tag 
-                          icon={isPassed ? <SafetyOutlined /> : <WarningOutlined />}
-                          color={isPassed ? 'success' : 'error'}
-                          style={{ width: '100%', textAlign: 'center', borderRadius: '12px' }}
+                          icon={state === 'Passed' ? <SafetyOutlined /> : <WarningOutlined />}
+                          color={state === 'Passed' ? 'success' : 'error'}
+                          style={{ borderRadius: '10px', width: '90px', textAlign: 'center' }}
                         >
                           {state.toUpperCase()}
                         </Tag>
-                      );
+                      )
                     }
-                  }
-                ]} 
-              />
-            )
-          }
-        ]} />
+                  ]} 
+                />
+              )
+            }
+          ]} 
+        />
       )
     },
     'Inventory': {
@@ -203,7 +201,7 @@ export const SecurityTile = ({
 
   return (
     <div style={{ marginTop: '20px' }}>
-      <Title level={4}><SafetyCertificateOutlined style={{ color: '#52c41a' }} /> Infrastructure Security Analysis</Title>
+      <Title level={4}><SafetyCertificateOutlined style={{ color: '#52c41a' }} /> Infrastructure Security Posture</Title>
       
       <Row gutter={[12, 12]}>
         {tiles.map(tile => (
@@ -218,7 +216,7 @@ export const SecurityTile = ({
         ))}
       </Row>
 
-      <Drawer title={activeDetail} open={!!activeDetail} onClose={() => setActiveDetail(null)} width={950}>
+      <Drawer title={activeDetail} open={!!activeDetail} onClose={() => setActiveDetail(null)} width={1000}>
         {activeDetail && securityDetails[activeDetail] ? (
           securityDetails[activeDetail].render()
         ) : (
