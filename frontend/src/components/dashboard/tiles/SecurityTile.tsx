@@ -158,10 +158,59 @@ export const SecurityTile = ({
           <Table 
             dataSource={scoreControls} 
             size="small" 
+            rowKey="id"
+            pagination={{ pageSize: 6 }}
             columns={[
-              { title: 'Domain', dataIndex: ['properties', 'displayName'] },
-              { title: 'Score', render: (r) => `${r.properties?.score?.current} / ${r.properties?.score?.max}` },
-              { title: 'Health', render: (r) => <Progress percent={Math.round(r.properties?.score?.percentage * 100)} size="small" /> }
+              { 
+                title: 'Security Control', 
+                key: 'control',
+                render: (record) => (
+                  <Space direction="vertical" size={0}>
+                    <Text strong>{record.properties?.displayName}</Text>
+                    <Text type="secondary" style={{ fontSize: '11px' }}>
+                      Weight: {record.properties?.weight}
+                    </Text>
+                  </Space>
+                )
+              },
+              { 
+                title: 'Resource Health', 
+                key: 'health',
+                render: (record) => (
+                  <Space size="middle">
+                    <Tooltip title="Healthy">
+                      <Tag color="success">{record.properties?.healthyResourceCount || 0}</Tag>
+                    </Tooltip>
+                    <Tooltip title="Unhealthy">
+                      <Tag color="error">{record.properties?.unhealthyResourceCount || 0}</Tag>
+                    </Tooltip>
+                  </Space>
+                )
+              },
+              { 
+                title: 'Score Impact', 
+                key: 'score',
+                render: (record) => {
+                  const percent = Math.round((record.properties?.score?.percentage || 0) * 100);
+                  return (
+                    <div style={{ width: '150px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        {/* FIXED: Removed size="small" prop from Text component */}
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                          {record.properties?.score?.current} / {record.properties?.score?.max} pts
+                        </Text>
+                        <Text strong style={{ fontSize: '12px' }}>{percent}%</Text>
+                      </div>
+                      <Progress 
+                        percent={percent} 
+                        size="small" 
+                        strokeColor={percent === 100 ? '#52c41a' : '#1890ff'}
+                        showInfo={false}
+                      />
+                    </div>
+                  );
+                }
+              }
             ]}
           />
         );
