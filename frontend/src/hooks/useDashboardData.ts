@@ -182,6 +182,7 @@ export const useDashboardData = ({
     scoreControls: report.scoreControls?.value || [],
     kpiData: report.postureKPI || {},
     allAssessments: report.allAssessments?.value || [],
+    complianceStandards:report.complianceStandards?.value||[],
 
     // Meta/Loading states
     securityAuditReport,
