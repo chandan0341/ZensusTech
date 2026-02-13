@@ -107,6 +107,7 @@ export const useDashboardData = ({
           const subData = await subRes.json();
           setUsers(subData.users || []);
           setAdminRolesData(processAdminRoles(subData.users || []));
+          console.log("adminRoleData",adminRolesData)
           setForeignGroupsCount(subData.foreignGroupsCount);
           setServicePrincipalsCount(subData.servicePrincipalsCount);
         }

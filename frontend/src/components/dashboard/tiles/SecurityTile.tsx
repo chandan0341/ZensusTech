@@ -9,7 +9,10 @@ import {
   Drawer,
   Table,
   Progress,
-  List
+  List,
+  Space,
+  Badge,
+  Tooltip
 } from "antd";
 import {
   RocketOutlined,
@@ -18,9 +21,16 @@ import {
   UserOutlined,
   BulbOutlined,
   AuditOutlined,
+  InfoCircleOutlined,
+  FileProtectOutlined,
+  CheckCircleOutlined
 } from "@ant-design/icons";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
 
-const { Title, Text } = Typography;
+dayjs.extend(relativeTime);
+
+const { Title, Text, Paragraph } = Typography;
 
 interface SecurityTileProps {
   overallScore: number;
@@ -56,21 +66,45 @@ export const SecurityTile = ({
     return { label: "HIGH RISK", color: "red", hex: "#ff4d4f" };
   }, [overallScore]);
 
-  // 2️⃣ Severity Parsing
-  const severityStats = useMemo(() => {
-    const stats = { high: 0, medium: 0, low: 0 };
-    (allAssessments || []).forEach((a) => {
-      const topSev = a.properties?.metadata?.severity;
-      if (topSev === "High") stats.high++;
+  // 2️⃣ Flattening all High Severity findings for the Inventory Drawer
+  const criticalFindings = useMemo(() => {
+    const findings: any[] = [];
+    (allAssessments || []).forEach((assessment) => {
+      let cves = [];
       try {
-        const cves = JSON.parse(a.properties?.additionalData?.CvesDetails || "[]");
-        if (cves.some((c: any) => c.Severity === "High")) stats.high++;
-      } catch (e) { /* ignore */ }
+        cves = JSON.parse(assessment.properties?.additionalData?.CvesDetails || "[]");
+      } catch (e) { cves = []; }
+
+      if (cves.length > 0) {
+        cves.forEach((cve: any) => {
+          if (cve.Severity === "High") {
+            findings.push({
+              id: `${assessment.id}-${cve.CveId}`,
+              resource: assessment.properties?.resourceDetails?.ResourceName,
+              software: assessment.properties?.additionalData?.SoftwareName || "System",
+              cveId: cve.CveId,
+              severity: "High",
+              remediation: cve.ExtendedDescription?.Remediation,
+              impact: cve.ExtendedDescription?.Impact,
+              fixedVersion: cve.FixedVersion
+            });
+          }
+        });
+      } else if (assessment.properties?.metadata?.severity === "High") {
+        findings.push({
+          id: assessment.id,
+          resource: assessment.properties?.resourceDetails?.ResourceName,
+          software: assessment.properties?.additionalData?.SoftwareName || "Azure Resource",
+          cveId: assessment.properties?.displayName || "High Risk Finding",
+          severity: "High",
+          remediation: "Review Azure Security Center",
+          impact: "Critical vulnerability detected."
+        });
+      }
     });
-    return stats;
+    return findings;
   }, [allAssessments]);
 
-  // 3️⃣ Configuration for click-to-drawer mapping
   const tiles = [
     { 
         id: "governance", 
@@ -84,7 +118,7 @@ export const SecurityTile = ({
     { 
         id: "inventory", 
         title: "Critical Findings", 
-        value: severityStats.high, 
+        value: criticalFindings.length, 
         prefix: <WarningOutlined />, 
         color: "#ff4d4f",
         extra: "High Severity Issues" 
@@ -115,7 +149,6 @@ export const SecurityTile = ({
     }
   ];
 
-  // 4️⃣ Updated Content Switcher
   const renderDrawerContent = () => {
     if (!activeDrawer) return null;
 
@@ -132,41 +165,208 @@ export const SecurityTile = ({
             ]}
           />
         );
+
       case "inventory":
         return (
           <Table 
-            dataSource={allAssessments} 
+            dataSource={criticalFindings} 
             size="small" 
+            rowKey="id"
             columns={[
-              { title: 'Resource', render: (r) => r.properties?.resourceDetails?.ResourceName || 'Global' },
-              { title: 'Finding', dataIndex: ['properties', 'metadata', 'displayName'] },
-              { title: 'Severity', dataIndex: ['properties', 'metadata', 'severity'], render: (s) => <Tag color={s === 'High' ? 'red' : 'orange'}>{s}</Tag> }
+              { 
+                title: 'High Severity Finding', 
+                render: (f) => (
+                  <Space direction="vertical" size={0}>
+                    <Text strong style={{ color: '#ff4d4f' }}>{f.cveId}</Text>
+                    <Text type="secondary" style={{ fontSize: '11px' }}>{f.software}</Text>
+                  </Space>
+                )
+              },
+              { 
+                title: 'Resource', 
+                dataIndex: 'resource',
+                render: (text) => <Tag color="blue">{text?.toUpperCase()}</Tag>
+              },
+              { 
+                title: 'Status', 
+                render: () => <Tag color="error">UNHEALTHY</Tag>
+              }
             ]}
+            expandable={{
+              expandedRowRender: (f) => (
+                <Card size="small" style={{ background: '#f9f9f9', borderLeft: '4px solid #ff4d4f' }}>
+                  <Row gutter={[24, 12]}>
+                    <Col span={12}>
+                      <Title level={5} style={{ fontSize: '14px' }}><BulbOutlined style={{ color: '#faad14' }} /> Remediation</Title>
+                      <Paragraph style={{ fontSize: '13px' }}>{f.remediation}</Paragraph>
+                      {f.fixedVersion && <Tag color="green">Update to {f.fixedVersion}+</Tag>}
+                    </Col>
+                    <Col span={12}>
+                      <Title level={5} style={{ fontSize: '14px' }}><InfoCircleOutlined style={{ color: '#ff4d4f' }} /> Risk Impact</Title>
+                      <Paragraph style={{ fontSize: '13px' }}>{f.impact}</Paragraph>
+                    </Col>
+                  </Row>
+                </Card>
+              ),
+            }}
           />
         );
+
       case "compliance":
+        // 1️⃣ Calculate Totals from the data
+        const totals = failedControlsData.reduce((acc, curr) => {
+          const state = (curr.properties?.state || "Failed").toLowerCase();
+          if (state === "passed") acc.passed++;
+          else if (state === "skipped") acc.skipped++;
+          else acc.failed++;
+          return acc;
+        }, { passed: 0, failed: 0, skipped: 0 });
+
         return (
-          <Table 
-            dataSource={failedControlsData} 
-            size="small" 
-            columns={[
-              { title: 'Control', dataIndex: 'name' },
-              { title: 'Description', dataIndex: ['properties', 'description'], ellipsis: true },
-              { title: 'Status', render: () => <Tag color="red">FAILED</Tag> }
-            ]}
-          />
+          <>
+            {/* 2️⃣ Summary Statistics Row */}
+            <Row gutter={16} style={{ marginBottom: 20 }}>
+              <Col span={8}>
+                <Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #ff4d4f' }}>
+                  <Statistic 
+                    title="Failed" 
+                    value={totals.failed} 
+                    valueStyle={{ color: '#ff4d4f' }} 
+                    prefix={<WarningOutlined />} 
+                  />
+                </Card>
+              </Col>
+              <Col span={8}>
+                <Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #52c41a' }}>
+                  <Statistic 
+                    title="Passed" 
+                    value={totals.passed} 
+                    valueStyle={{ color: '#52c41a' }} 
+                    prefix={<CheckCircleOutlined />} 
+                  />
+                </Card>
+              </Col>
+              <Col span={8}>
+                <Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #faad14' }}>
+                  <Statistic 
+                    title="Skipped" 
+                    value={totals.skipped} 
+                    valueStyle={{ color: '#faad14' }} 
+                    prefix={<InfoCircleOutlined />} 
+                  />
+                </Card>
+              </Col>
+            </Row>
+
+            {/* 3️⃣ The Data Table */}
+            <Table 
+              dataSource={failedControlsData} 
+              size="small" 
+              rowKey={(r) => r.id || r.name}
+              columns={[
+                { 
+                  title: 'Control Information', 
+                  render: (record) => (
+                    <Space direction="vertical" size={0}>
+                      <Text strong><FileProtectOutlined /> {record.name}</Text>
+                      <Text type="secondary" style={{ fontSize: '11px' }}>
+                        Category: {record.properties?.metadata?.category || "Security"}
+                      </Text>
+                    </Space>
+                  )
+                },
+                { 
+                  title: 'Compliance Status', 
+                  render: (record) => {
+                      const state = (record.properties?.state || "Failed").toLowerCase();
+                      let color = "volcano";
+                      let label = "FAILED";
+
+                      if (state === "passed") {
+                        color = "success";
+                        label = "PASSED";
+                      } else if (state === "skipped") {
+                        color = "orange";
+                        label = "SKIPPED";
+                      }
+
+                      return <Tag color={color}>{label}</Tag>;
+                  }
+                }
+              ]}
+              expandable={{
+                  expandedRowRender: (record) => (
+                    <Card size="small" style={{ background: '#f9f9f9', borderLeft: '4px solid #fa541c' }}>
+                      <Title level={5} style={{ fontSize: '14px' }}>Policy Description</Title>
+                      <Paragraph style={{ fontSize: '13px' }}>
+                        {record.properties?.description || "Policy baseline monitoring."}
+                      </Paragraph>
+                      <Space>
+                          <Tag>Type: {record.properties?.policyType || "BuiltIn"}</Tag>
+                          <Tag color="blue">Effect: {record.properties?.policyRule?.then?.effect || "Audit"}</Tag>
+                      </Space>
+                    </Card>
+                  )
+              }}
+            />
+          </>
         );
       case "identity":
         return (
           <Table 
             dataSource={adminRolesData} 
             size="small" 
+            rowKey={(r, index) => `${r.role}-${index}`}
             columns={[
-              { title: 'User Principal', dataIndex: 'userPrincipalName' },
-              { title: 'MFA', dataIndex: 'mfaEnabled', render: (mfa) => <Tag color={mfa ? 'green' : 'red'}>{mfa ? 'Active' : 'Missing'}</Tag> }
+              { 
+                title: 'Assigned Role', 
+                dataIndex: 'role',
+                key: 'role',
+                render: (role: string) => (
+                  <Space size={[0, 4]} wrap>
+                    {role.split(',').map((r) => (
+                      <Tag color="blue" key={r.trim()}>
+                        {r.trim()}
+                      </Tag>
+                    ))}
+                  </Space>
+                )
+              },
+              { 
+                title: 'Users', 
+                dataIndex: 'assignedUsers',
+                key: 'assignedUsers',
+                align: 'center',
+                render: (count) => (
+                  <Badge 
+                    count={count} 
+                    style={{ backgroundColor: '#108ee9' }} 
+                  />
+                )
+              },
+              { 
+                title: 'MFA Status', 
+                dataIndex: 'mfaEnabled',
+                key: 'mfaEnabled',
+                align: 'center',
+                render: (mfa) => (
+                  <div style={{ fontSize: '18px' }}>
+                    {mfa === "✅" ? (
+                      <Tooltip title="MFA Enabled">
+                        <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                      </Tooltip>
+                    ) : (
+                      <Tooltip title="MFA Missing">
+                        <WarningOutlined style={{ color: '#ff4d4f' }} />
+                      </Tooltip>
+                    )}
+                  </div>
+                )
+              }
             ]}
           />
         );
+
       case "actions":
         return (
           <List 
@@ -180,7 +380,7 @@ export const SecurityTile = ({
           />
         );
       default:
-        return <Text>No details available for this section.</Text>;
+        return <Text>No details available.</Text>;
     }
   };
 
@@ -198,18 +398,8 @@ export const SecurityTile = ({
             <Card 
               hoverable 
               loading={loading} 
-              // We use a wrapper function to ensure state updates
-              onClick={() => {
-                console.log("Opening drawer for:", tile.id);
-                setActiveDrawer(tile.id);
-              }} 
-              style={{ 
-                borderRadius: 12, 
-                borderTop: `4px solid ${tile.color}`, 
-                height: '100%',
-                cursor: 'pointer' 
-              }}
-              // bodyStyle helps ensure the click hits the whole card area
+              onClick={() => setActiveDrawer(tile.id)} 
+              style={{ borderRadius: 12, borderTop: `4px solid ${tile.color}`, height: '100%', cursor: 'pointer' }}
               bodyStyle={{ height: '100%' }}
             >
               {tile.isProgress ? (
@@ -221,14 +411,8 @@ export const SecurityTile = ({
                   <Text strong style={{ fontSize: 10 }}>{tile.extra}</Text>
                 </div>
               ) : (
-                <div style={{ pointerEvents: 'none' }}> 
-                  {/* pointerEvents: none on children ensures the card gets the click */}
-                  <Statistic 
-                    title={<Text type="secondary" style={{ fontSize: 11 }}>{tile.title}</Text>} 
-                    value={tile.value} 
-                    prefix={tile.prefix} 
-                    valueStyle={{ color: tile.color }} 
-                  />
+                <div> 
+                  <Statistic title={<Text type="secondary" style={{ fontSize: 11 }}>{tile.title}</Text>} value={tile.value} prefix={tile.prefix} valueStyle={{ color: tile.color }} />
                   <Text type="secondary" style={{ fontSize: 10 }}>{tile.extra}</Text>
                 </div>
               )}
@@ -241,8 +425,8 @@ export const SecurityTile = ({
         title={`${activeDrawer?.replace(/^\w/, (c) => c.toUpperCase())} Details`} 
         width={950} 
         open={!!activeDrawer} 
-        onClose={() => setActiveDrawer(null)}
-        destroyOnClose={true} // Forces clean re-render when switching cards
+        onClose={() => setActiveDrawer(null)} 
+        destroyOnClose={true}
       >
         {renderDrawerContent()}
       </Drawer>

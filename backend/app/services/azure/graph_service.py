@@ -698,7 +698,7 @@ class GraphService:
 
     async def get_security_assessments(self, subscription_id: str, mgmt_token: str):
         """API 2: List Security Recommendations"""
-        url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/assessments?$top=10&api-version=2020-01-01"
+        url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/assessments?$top=10&api-version=2021-06-01"
         return await self._get_mgmt_data(url, mgmt_token)
 
     async def get_secure_score_controls(self, subscription_id: str, mgmt_token: str):
