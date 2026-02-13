@@ -63,17 +63,18 @@ export const useDashboardData = ({
             const authHeaders = await getAuthHeaders();
             const response = await fetch(`${ENDPOINTS.AZURE.SECURITY_AUDIT_REPORT}?subscription_id=${selectedSubscription}`, { headers: authHeaders as any });
             const result = await response.json();
-           
+            console.log("result",result);
+            console.log(result.scoreData)
 
             // Mapping based on your specific JSON structure [cite: 57, 58]
             setSecurityAuditReport(result);            
             // Extracting the overall secure score percentage (0.1176 -> 12%) 
-            const scoreObj = result.scoreData?.value?.[0]?.properties?.score;
-
-            if (scoreObj) {
-                setOverallScore(Math.round(scoreObj.percentage * 100));
-                setSecureScoreRaw(scoreObj); // optional but recommended
+            if (result.scoreData?.properties?.score) {
+                setOverallScore(Math.round(result.scoreData.properties.score.percentage * 100));
             }
+
+            // You can also store the raw score for the 'X of Y' display (4.0 / 34) 
+            setSecureScoreRaw(result.scoreData?.properties?.score || null);
 
         } catch (error) { 
             console.error(error); 
@@ -163,13 +164,7 @@ export const useDashboardData = ({
   }, [selectedTenant, activeFilter, dateRange, getAuthHeaders]);
 
  const report = useMemo(() => {
-    
-  const extracted = securityAuditReport?.value || securityAuditReport || {};
-  console.log("Flattening security report data...:",extracted); 
-  console.log("scoreControls",extracted.scoreControls?.value||[]);
-  console.log("failedControls",extracted.failedControls?.value || []);
-  console.log("secureScoreRaw",secureScoreRaw)
-  return securityAuditReport?.value || securityAuditReport || {};
+      return securityAuditReport?.value || securityAuditReport || {};
 
   }, [securityAuditReport]);
 

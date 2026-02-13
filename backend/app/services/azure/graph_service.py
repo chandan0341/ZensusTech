@@ -657,15 +657,37 @@ class GraphService:
     # --- DIRECT MANAGEMENT API CALLS (The 5 APIs) ---
 
     async def _get_mgmt_data(self, url: str, mgmt_token: str):
-        headers = {"Authorization": f"Bearer {mgmt_token}"}
-        async with httpx.AsyncClient() as client:
+        headers = {
+            "Authorization": f"Bearer {mgmt_token}"
+        }
+        timeout = httpx.Timeout(30.0)  # 🔥 increase timeout to 30 seconds
+
+
+        async with httpx.AsyncClient(timeout = timeout) as client:
             try:
                 response = await client.get(url, headers=headers)
+
+                logger.info("Azure API URL: %s", url)
+                logger.info("Status Code: %s", response.status_code)
+                logger.info("Response Body: %s", response.text)
+
                 response.raise_for_status()
+
                 return response.json()
+
+            except httpx.HTTPStatusError as e:
+                logger.error(
+                    "Azure API failed | URL: %s | Status: %s | Response: %s",
+                    url,
+                    e.response.status_code,
+                    e.response.text
+                )
+                raise
+
             except Exception as e:
-                logger.error(f"API Call failed for {url}: {str(e)}")
-                return {"value": []}
+                logger.exception("Unexpected error calling Azure API: %s", url)
+                raise
+
 
     async def get_azure_secure_score(self, subscription_id: str, mgmt_token: str):
         """API 1: Get Secure Score (Current vs Max)"""
@@ -676,7 +698,7 @@ class GraphService:
 
     async def get_security_assessments(self, subscription_id: str, mgmt_token: str):
         """API 2: List Security Recommendations"""
-        url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/assessments?api-version=2020-01-01"
+        url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/assessments?$top=10&api-version=2020-01-01"
         return await self._get_mgmt_data(url, mgmt_token)
 
     async def get_secure_score_controls(self, subscription_id: str, mgmt_token: str):
@@ -740,37 +762,56 @@ class GraphService:
 
     # --- CONSOLIDATED MASTER REPORT ---
 
-    async def get_consolidated_security_report(self, subscription_id: str, mgmt_token: str, graph_token: str):
+    async def get_consolidated_security_report(
+        self,
+        subscription_id: str,
+        mgmt_token: str,
+        graph_token: str
+    ):
         tasks = [
-            self.get_azure_secure_score(subscription_id, mgmt_token),         # 0
-            self.get_security_assessments(subscription_id, mgmt_token),      # 1
-            self.get_secure_score_controls(subscription_id, mgmt_token),     # 2
-            self.get_regulatory_standards(subscription_id, mgmt_token),      # 3
-            self.get_failed_regulatory_controls(subscription_id, mgmt_token),# 4
+            self.get_azure_secure_score(subscription_id, mgmt_token),           # 0
+            self.get_security_assessments(subscription_id, mgmt_token),         # 1
+            self.get_secure_score_controls(subscription_id, mgmt_token),        # 2
+            self.get_regulatory_standards(subscription_id, mgmt_token),         # 3
+            self.get_failed_regulatory_controls(subscription_id, mgmt_token),   # 4
         ]
-        
+
+        # Allow failures but detect them
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Helper to safely handle exceptions in results
-        def safe_res(idx, default):
-            return results[idx] if not isinstance(results[idx], Exception) else default
+        # 🔎 Check for exceptions explicitly
+        for idx, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.exception("Task %s failed in consolidated security report", idx)
+                raise result  # Don't silently ignore
 
-        secure_scores_raw   = safe_res(0, {})
-        assessments_raw     = safe_res(1, {"value": []})
-        controls_raw        = safe_res(2, {"value": []})
-        standards_raw       = safe_res(3, {"value": []})
-        failed_controls_raw = safe_res(4, {"value": []})
+        secure_scores_raw   = results[0] or {}
+        assessments_raw     = results[1] or {"value": []}
+        controls_raw        = results[2] or {"value": []}
+        standards_raw       = results[3] or {"value": []}
+        failed_controls_raw = results[4] or {"value": []}
+
+        # 🔥 IMPORTANT FIX
+        # Azure Secure Score API returns list under "value"
+        # You must extract first item
+        secure_score_obj = {}
+        if isinstance(secure_scores_raw, dict):
+            secure_score_obj = (
+                secure_scores_raw.get("value", [{}])[0]
+                if secure_scores_raw.get("value")
+                else {}
+            )
 
         return {
-            "scoreData": secure_scores_raw,
+            "scoreData": secure_score_obj,
             "allAssessments": assessments_raw,
             "scoreControls": controls_raw,
             "complianceStandards": standards_raw,
             "failedControls": failed_controls_raw,
             "postureKPI": {
-                "currentScore": secure_scores_raw.get('properties', {}).get('score', {}).get('current', 0),
-                "maxScore": secure_scores_raw.get('properties', {}).get('score', {}).get('max', 0),
-                "percentage": secure_scores_raw.get('properties', {}).get('score', {}).get('percentage', 0),
-                "totalFailedControls": len(failed_controls_raw.get('value', []))
+                "currentScore": secure_score_obj.get("properties", {}).get("score", {}).get("current", 0),
+                "maxScore": secure_score_obj.get("properties", {}).get("score", {}).get("max", 0),
+                "percentage": secure_score_obj.get("properties", {}).get("score", {}).get("percentage", 0),
+                "totalFailedControls": len(failed_controls_raw.get("value", [])),
             },
         }
