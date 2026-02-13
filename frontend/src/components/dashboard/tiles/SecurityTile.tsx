@@ -9,7 +9,6 @@ import {
   Drawer,
   Table,
   Progress,
-  List,
   Space,
   Badge,
   Tooltip
@@ -37,8 +36,8 @@ interface SecurityTileProps {
   secureScoreRaw: any;
   networkData: any[];
   dataSecData: any[];
-  recommendationsData: any[];
   failedControlsData: any[];
+  recommendationsData: any; // Add this line
   scoreControls: any[];
   kpiData: any;
   allAssessments: any[];
@@ -50,7 +49,6 @@ interface SecurityTileProps {
 export const SecurityTile = ({
   overallScore,
   secureScoreRaw,
-  recommendationsData,
   failedControlsData,
   scoreControls,
   allAssessments,
@@ -65,6 +63,15 @@ export const SecurityTile = ({
     if (overallScore >= 45) return { label: "MODERATE RISK", color: "orange", hex: "#faad14" };
     return { label: "HIGH RISK", color: "red", hex: "#ff4d4f" };
   }, [overallScore]);
+
+  // Update your useMemo for open actions count
+const openActionsCount = useMemo(() => {
+  return (allAssessments || []).filter(asm => 
+    asm.properties?.status?.code === 'Unhealthy' && 
+    asm.properties?.metadata?.severity !== 'High'
+  ).length;
+}, [allAssessments]);
+
 
   // 2️⃣ Flattening all High Severity findings for the Inventory Drawer
   const criticalFindings = useMemo(() => {
@@ -140,13 +147,13 @@ export const SecurityTile = ({
         extra: `${adminRolesData?.filter(a => !a.mfaEnabled).length} No MFA` 
     },
     { 
-        id: "actions", 
-        title: "Open Actions", 
-        value: recommendationsData?.length || 0, 
-        prefix: <BulbOutlined />, 
-        color: "#722ed1",
-        extra: "Remediation Steps" 
-    }
+  id: "actions", 
+  title: "Open Actions", 
+  value: openActionsCount, // Use the new filtered count here
+  prefix: <BulbOutlined />, 
+  color: "#722ed1",
+  extra: "Remediation Steps" 
+}
   ];
 
   const renderDrawerContent = () => {
@@ -416,19 +423,87 @@ export const SecurityTile = ({
           />
         );
 
-      case "actions":
-        return (
-          <List 
-            itemLayout="horizontal"
-            dataSource={recommendationsData} 
-            renderItem={(item: any) => (
-              <List.Item>
-                <List.Item.Meta title={item.RecommendationName} description={item.Description} />
-              </List.Item>
-            )} 
-          />
-        );
-      default:
+     case "actions":
+  // Flatten the data so the Table columns can access properties directly
+  const openActionsData = (allAssessments || [])
+    .filter((asm: any) => 
+      asm.properties?.status?.code === 'Unhealthy' && 
+      asm.properties?.metadata?.severity !== 'High'
+    )
+    .map((asm: any) => ({
+      id: asm.id,
+      displayName: asm.properties?.displayName,
+      resourceName: asm.properties?.resourceDetails?.ResourceName,
+      severity: asm.properties?.metadata?.severity,
+      softwareName: asm.properties?.additionalData?.SoftwareName,
+      fixedVersion: asm.properties?.additionalData?.FixedVersion,
+      description: asm.properties?.description,
+      remediation: asm.properties?.remediationSteps
+    }));
+
+  return (
+    <Table 
+      dataSource={openActionsData} 
+      size="small" 
+      rowKey="id"
+      columns={[
+        { 
+          title: 'Recommendation', 
+          key: 'recommendation',
+          render: (record) => (
+            <Space>
+              <div style={{ 
+                width: 20, height: 20, border: '1px solid #d9d9d9', 
+                borderRadius: '50%', display: 'flex', alignItems: 'center', 
+                justifyContent: 'center', color: '#1890ff', fontSize: '12px' 
+              }}>+</div>
+              {/* FIXED: access record.displayName directly */}
+              <Text strong>{record.displayName}</Text>
+            </Space>
+          )
+        },
+        { 
+          title: 'Resource', 
+          key: 'resource',
+          render: (record) => (
+            <Tag color="blue">
+              {/* FIXED: access record.resourceName directly */}
+              {record.resourceName?.toUpperCase()}
+            </Tag>
+          )
+        },
+        { 
+          title: 'Severity', 
+          key: 'severity',
+          render: (record) => (
+            <Tag color="orange" style={{ fontWeight: 'bold' }}>
+              {record.severity?.toUpperCase() || 'MEDIUM'}
+            </Tag>
+          )
+        }
+      ]}
+      expandable={{
+        expandedRowRender: (record) => (
+          <div style={{ padding: '16px', background: '#f9f9f9', borderLeft: '5px solid #722ed1' }}>
+            <Title level={5} style={{ fontSize: '14px', color: '#722ed1' }}>
+              <BulbOutlined /> WHAT NEEDS TO BE DONE:
+            </Title>
+            <Paragraph style={{ fontSize: '13px' }}>
+              The software <strong>{record.softwareName}</strong> is out of date. 
+              Install version <strong>{record.fixedVersion || 'latest patch'}</strong> to resolve this failure.
+            </Paragraph>
+            <Title level={5} style={{ fontSize: '14px', color: '#1890ff' }}>
+              <InfoCircleOutlined /> WHY IT FAILED:
+            </Title>
+            <Paragraph style={{ fontSize: '13px', marginBottom: 0 }}>
+              {record.description || "This resource is currently unhealthy."}
+            </Paragraph>
+          </div>
+        ),
+      }}
+    />
+  );
+        default:
         return <Text>No details available.</Text>;
     }
   };
