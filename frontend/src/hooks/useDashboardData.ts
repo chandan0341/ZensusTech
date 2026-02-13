@@ -83,6 +83,8 @@ export const useDashboardData = ({
       const userData = await userRes.json();
       setAllTenantUsers(userData.users || []);
       setAdminRolesData(processAdminRoles(userData.users || []));
+       setForeignGroupsCount(null);
+        setServicePrincipalsCount(null);
 
       const appData = await appRes.json();
       setApplications(appData.applications || []);
@@ -116,6 +118,7 @@ export const useDashboardData = ({
         setUsers(subData.users || []);
         setForeignGroupsCount(subData.foreignGroupsCount);
         setServicePrincipalsCount(subData.servicePrincipalsCount);
+        setAdminRolesData(processAdminRoles(subData.users || []));
 
         const auditResult = await auditReportRes.json();
         setSecurityAuditReport(auditResult);
