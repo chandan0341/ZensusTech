@@ -1,28 +1,12 @@
 import { useState, useMemo } from "react";
 import {
-  Card,
-  Row,
-  Col,
-  Statistic,
-  Typography,
-  Tag,
-  Drawer,
-  Table,
-  Progress,
-  Space,
-  Badge,
-  Tooltip
+  Card, Row, Col, Statistic, Typography, Tag, Drawer, Table,
+  Progress, Space, Badge, Tooltip
 } from "antd";
 import {
-  RocketOutlined,
-  WarningOutlined,
-  SafetyCertificateOutlined,
-  UserOutlined,
-  BulbOutlined,
-  AuditOutlined,
-  InfoCircleOutlined,
-  FileProtectOutlined,
-  CheckCircleOutlined
+  RocketOutlined, WarningOutlined, SafetyCertificateOutlined,
+  UserOutlined, BulbOutlined, AuditOutlined, InfoCircleOutlined,
+  FileProtectOutlined, CheckCircleOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -37,7 +21,7 @@ interface SecurityTileProps {
   networkData: any[];
   dataSecData: any[];
   failedControlsData: any[];
-  recommendationsData: any; // Add this line
+  recommendationsData: any;
   scoreControls: any[];
   kpiData: any;
   allAssessments: any[];
@@ -57,23 +41,27 @@ export const SecurityTile = ({
 }: SecurityTileProps) => {
   const [activeDrawer, setActiveDrawer] = useState<string | null>(null);
 
-  // 1️⃣ Risk Tier Logic
+  // Core Math Logic
+  const currentPoints = secureScoreRaw?.current || 0;
+  const maxPoints = secureScoreRaw?.max || 0;
+  const industryStandard = 80;
+  const gapToStandard = Math.max(0, industryStandard - overallScore);
+  const targetPoints = Math.ceil(maxPoints * (industryStandard / 100));
+  const pointsNeeded = Math.max(0, targetPoints - currentPoints);
+
   const riskTier = useMemo(() => {
     if (overallScore >= 75) return { label: "LOW RISK", color: "green", hex: "#52c41a" };
     if (overallScore >= 45) return { label: "MODERATE RISK", color: "orange", hex: "#faad14" };
     return { label: "HIGH RISK", color: "red", hex: "#ff4d4f" };
   }, [overallScore]);
 
-  // Update your useMemo for open actions count
-const openActionsCount = useMemo(() => {
-  return (allAssessments || []).filter(asm => 
-    asm.properties?.status?.code === 'Unhealthy' && 
-    asm.properties?.metadata?.severity !== 'High'
-  ).length;
-}, [allAssessments]);
+  const openActionsCount = useMemo(() => {
+    return (allAssessments || []).filter(asm => 
+      asm.properties?.status?.code === 'Unhealthy' && 
+      asm.properties?.metadata?.severity !== 'High'
+    ).length;
+  }, [allAssessments]);
 
-
-  // 2️⃣ Flattening all High Severity findings for the Inventory Drawer
   const criticalFindings = useMemo(() => {
     const findings: any[] = [];
     (allAssessments || []).forEach((assessment) => {
@@ -113,47 +101,11 @@ const openActionsCount = useMemo(() => {
   }, [allAssessments]);
 
   const tiles = [
-    { 
-        id: "governance", 
-        title: "Secure Score", 
-        value: overallScore, 
-        prefix: <RocketOutlined />, 
-        color: riskTier.hex, 
-        isProgress: true, 
-        extra: `${secureScoreRaw?.current || 0}/${secureScoreRaw?.max || 0} pts` 
-    },
-    { 
-        id: "inventory", 
-        title: "Critical Findings", 
-        value: criticalFindings.length, 
-        prefix: <WarningOutlined />, 
-        color: "#ff4d4f",
-        extra: "High Severity Issues" 
-    },
-    { 
-        id: "compliance", 
-        title: "Failed Controls", 
-        value: failedControlsData?.length || 0, 
-        prefix: <AuditOutlined />, 
-        color: "#fa541c",
-        extra: "Policy Violations" 
-    },
-    { 
-        id: "identity", 
-        title: "Privileged Admins", 
-        value: adminRolesData?.length || 0, 
-        prefix: <UserOutlined />, 
-        color: "#1890ff",
-        extra: `${adminRolesData?.filter(a => !a.mfaEnabled).length} No MFA` 
-    },
-    { 
-  id: "actions", 
-  title: "Open Actions", 
-  value: openActionsCount, // Use the new filtered count here
-  prefix: <BulbOutlined />, 
-  color: "#722ed1",
-  extra: "Remediation Steps" 
-}
+    { id: "governance", title: "Secure Score", value: overallScore, prefix: <RocketOutlined />, color: riskTier.hex, isProgress: true, extra: `${currentPoints}/${maxPoints} pts` },
+    { id: "inventory", title: "Critical Findings", value: criticalFindings.length, prefix: <WarningOutlined />, color: "#ff4d4f", extra: "High Severity Issues" },
+    { id: "compliance", title: "Failed Controls", value: failedControlsData?.length || 0, prefix: <AuditOutlined />, color: "#fa541c", extra: "Policy Violations" },
+    { id: "identity", title: "Privileged Admins", value: adminRolesData?.length || 0, prefix: <UserOutlined />, color: "#1890ff", extra: `${adminRolesData?.filter(a => !a.mfaEnabled).length} No MFA` },
+    { id: "actions", title: "Open Actions", value: openActionsCount, prefix: <BulbOutlined />, color: "#722ed1", extra: "Remediation Steps" }
   ];
 
   const renderDrawerContent = () => {
@@ -170,50 +122,33 @@ const openActionsCount = useMemo(() => {
             columns={[
               { 
                 title: 'Security Control', 
-                key: 'control',
                 render: (record) => (
                   <Space direction="vertical" size={0}>
                     <Text strong>{record.properties?.displayName}</Text>
-                    <Text type="secondary" style={{ fontSize: '11px' }}>
-                      Weight: {record.properties?.weight}
-                    </Text>
+                    <Text type="secondary" style={{ fontSize: '11px' }}>Weight: {record.properties?.weight}</Text>
                   </Space>
                 )
               },
               { 
                 title: 'Resource Health', 
-                key: 'health',
                 render: (record) => (
                   <Space size="middle">
-                    <Tooltip title="Healthy">
-                      <Tag color="success">{record.properties?.healthyResourceCount || 0}</Tag>
-                    </Tooltip>
-                    <Tooltip title="Unhealthy">
-                      <Tag color="error">{record.properties?.unhealthyResourceCount || 0}</Tag>
-                    </Tooltip>
+                    <Tooltip title="Healthy"><Tag color="success">{record.properties?.healthyResourceCount || 0}</Tag></Tooltip>
+                    <Tooltip title="Unhealthy"><Tag color="error">{record.properties?.unhealthyResourceCount || 0}</Tag></Tooltip>
                   </Space>
                 )
               },
               { 
                 title: 'Score Impact', 
-                key: 'score',
                 render: (record) => {
                   const percent = Math.round((record.properties?.score?.percentage || 0) * 100);
                   return (
                     <div style={{ width: '150px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        {/* FIXED: Removed size="small" prop from Text component */}
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                          {record.properties?.score?.current} / {record.properties?.score?.max} pts
-                        </Text>
+                        <Text type="secondary" style={{ fontSize: '12px' }}>{record.properties?.score?.current} / {record.properties?.score?.max} pts</Text>
                         <Text strong style={{ fontSize: '12px' }}>{percent}%</Text>
                       </div>
-                      <Progress 
-                        percent={percent} 
-                        size="small" 
-                        strokeColor={percent === 100 ? '#52c41a' : '#1890ff'}
-                        showInfo={false}
-                      />
+                      <Progress percent={percent} size="small" strokeColor={percent === 100 ? '#52c41a' : '#1890ff'} showInfo={false} />
                     </div>
                   );
                 }
@@ -229,36 +164,25 @@ const openActionsCount = useMemo(() => {
             size="small" 
             rowKey="id"
             columns={[
-              { 
-                title: 'High Severity Finding', 
-                render: (f) => (
-                  <Space direction="vertical" size={0}>
-                    <Text strong style={{ color: '#ff4d4f' }}>{f.cveId}</Text>
-                    <Text type="secondary" style={{ fontSize: '11px' }}>{f.software}</Text>
-                  </Space>
-                )
-              },
-              { 
-                title: 'Resource', 
-                dataIndex: 'resource',
-                render: (text) => <Tag color="blue">{text?.toUpperCase()}</Tag>
-              },
-              { 
-                title: 'Status', 
-                render: () => <Tag color="error">UNHEALTHY</Tag>
-              }
+              { title: 'High Severity Finding', render: (f) => (
+                <Space direction="vertical" size={0}>
+                  <Text strong style={{ color: '#ff4d4f' }}>{f.cveId}</Text>
+                  <Text type="secondary" style={{ fontSize: '11px' }}>{f.software}</Text>
+                </Space>
+              )},
+              { title: 'Resource', dataIndex: 'resource', render: (text) => <Tag color="blue">{text?.toUpperCase()}</Tag> },
+              { title: 'Status', render: () => <Tag color="error">UNHEALTHY</Tag> }
             ]}
             expandable={{
               expandedRowRender: (f) => (
                 <Card size="small" style={{ background: '#f9f9f9', borderLeft: '4px solid #ff4d4f' }}>
                   <Row gutter={[24, 12]}>
                     <Col span={12}>
-                      <Title level={5} style={{ fontSize: '14px' }}><BulbOutlined style={{ color: '#faad14' }} /> Remediation</Title>
+                      <Title level={5} style={{ fontSize: '14px' }}><BulbOutlined /> Remediation</Title>
                       <Paragraph style={{ fontSize: '13px' }}>{f.remediation}</Paragraph>
-                      {f.fixedVersion && <Tag color="green">Update to {f.fixedVersion}+</Tag>}
                     </Col>
                     <Col span={12}>
-                      <Title level={5} style={{ fontSize: '14px' }}><InfoCircleOutlined style={{ color: '#ff4d4f' }} /> Risk Impact</Title>
+                      <Title level={5} style={{ fontSize: '14px' }}><InfoCircleOutlined /> Risk Impact</Title>
                       <Paragraph style={{ fontSize: '13px' }}>{f.impact}</Paragraph>
                     </Col>
                   </Row>
@@ -269,7 +193,6 @@ const openActionsCount = useMemo(() => {
         );
 
       case "compliance":
-        // 1️⃣ Calculate Totals from the data
         const totals = failedControlsData.reduce((acc, curr) => {
           const state = (curr.properties?.state || "Failed").toLowerCase();
           if (state === "passed") acc.passed++;
@@ -280,45 +203,28 @@ const openActionsCount = useMemo(() => {
 
         return (
           <>
-            {/* 2️⃣ Summary Statistics Row */}
             <Row gutter={16} style={{ marginBottom: 20 }}>
               <Col span={8}>
                 <Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #ff4d4f' }}>
-                  <Statistic 
-                    title="Failed" 
-                    value={totals.failed} 
-                    valueStyle={{ color: '#ff4d4f' }} 
-                    prefix={<WarningOutlined />} 
-                  />
+                  <Statistic title="Failed" value={totals.failed} valueStyle={{ color: '#ff4d4f' }} prefix={<WarningOutlined />} />
                 </Card>
               </Col>
               <Col span={8}>
                 <Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #52c41a' }}>
-                  <Statistic 
-                    title="Passed" 
-                    value={totals.passed} 
-                    valueStyle={{ color: '#52c41a' }} 
-                    prefix={<CheckCircleOutlined />} 
-                  />
+                  <Statistic title="Passed" value={totals.passed} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} />
                 </Card>
               </Col>
               <Col span={8}>
                 <Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #faad14' }}>
-                  <Statistic 
-                    title="Skipped" 
-                    value={totals.skipped} 
-                    valueStyle={{ color: '#faad14' }} 
-                    prefix={<InfoCircleOutlined />} 
-                  />
+                  <Statistic title="Skipped" value={totals.skipped} valueStyle={{ color: '#faad14' }} prefix={<InfoCircleOutlined />} />
                 </Card>
               </Col>
             </Row>
 
-            {/* 3️⃣ The Data Table */}
             <Table 
               dataSource={failedControlsData} 
               size="small" 
-              rowKey={(r) => r.id || r.name}
+              rowKey={(r) => r.id || r.name || Math.random().toString()}
               columns={[
                 { 
                   title: 'Control Information', 
@@ -337,15 +243,8 @@ const openActionsCount = useMemo(() => {
                       const state = (record.properties?.state || "Failed").toLowerCase();
                       let color = "volcano";
                       let label = "FAILED";
-
-                      if (state === "passed") {
-                        color = "success";
-                        label = "PASSED";
-                      } else if (state === "skipped") {
-                        color = "orange";
-                        label = "SKIPPED";
-                      }
-
+                      if (state === "passed") { color = "success"; label = "PASSED"; }
+                      else if (state === "skipped") { color = "orange"; label = "SKIPPED"; }
                       return <Tag color={color}>{label}</Tag>;
                   }
                 }
@@ -354,9 +253,7 @@ const openActionsCount = useMemo(() => {
                   expandedRowRender: (record) => (
                     <Card size="small" style={{ background: '#f9f9f9', borderLeft: '4px solid #fa541c' }}>
                       <Title level={5} style={{ fontSize: '14px' }}>Policy Description</Title>
-                      <Paragraph style={{ fontSize: '13px' }}>
-                        {record.properties?.description || "Policy baseline monitoring."}
-                      </Paragraph>
+                      <Paragraph style={{ fontSize: '13px' }}>{record.properties?.description || "Policy baseline monitoring."}</Paragraph>
                       <Space>
                           <Tag>Type: {record.properties?.policyType || "BuiltIn"}</Tag>
                           <Tag color="blue">Effect: {record.properties?.policyRule?.then?.effect || "Audit"}</Tag>
@@ -367,143 +264,90 @@ const openActionsCount = useMemo(() => {
             />
           </>
         );
+
+      case "actions":
+        const openActionsData = (allAssessments || [])
+          .filter((asm: any) => 
+            asm.properties?.status?.code === 'Unhealthy' && 
+            asm.properties?.metadata?.severity !== 'High'
+          )
+          .map((asm: any) => ({
+            id: asm.id,
+            displayName: asm.properties?.displayName,
+            resourceName: asm.properties?.resourceDetails?.ResourceName,
+            severity: asm.properties?.metadata?.severity,
+            softwareName: asm.properties?.additionalData?.SoftwareName,
+            fixedVersion: asm.properties?.additionalData?.FixedVersion,
+            description: asm.properties?.description,
+            remediation: asm.properties?.remediationSteps
+          }));
+
+        return (
+          <Table 
+            dataSource={openActionsData} 
+            size="small" 
+            rowKey="id"
+            columns={[
+              { 
+                title: 'Recommendation', 
+                render: (record) => (
+                  <Space>
+                    {/* RESTORED: The + button indicator */}
+                    <div style={{ 
+                      width: 20, height: 20, border: '1px solid #d9d9d9', 
+                      borderRadius: '50%', display: 'flex', alignItems: 'center', 
+                      justifyContent: 'center', color: '#1890ff', fontSize: '12px' 
+                    }}>+</div>
+                    <Text strong>{record.displayName}</Text>
+                  </Space>
+                )
+              },
+              { 
+                title: 'Resource', 
+                render: (record) => <Tag color="blue">{record.resourceName?.toUpperCase()}</Tag>
+              },
+              { 
+                title: 'Severity', 
+                render: (record) => <Tag color="orange" style={{ fontWeight: 'bold' }}>{record.severity?.toUpperCase() || 'MEDIUM'}</Tag>
+              }
+            ]}
+            expandable={{
+              expandedRowRender: (record) => (
+                <div style={{ padding: '16px', background: '#f9f9f9', borderLeft: '5px solid #722ed1' }}>
+                  <Title level={5} style={{ fontSize: '14px', color: '#722ed1' }}><BulbOutlined /> WHAT NEEDS TO BE DONE:</Title>
+                  <Paragraph style={{ fontSize: '13px' }}>
+                    The software <strong>{record.softwareName}</strong> is out of date. 
+                    Install version <strong>{record.fixedVersion || 'latest patch'}</strong> to resolve this failure.
+                  </Paragraph>
+                  <Title level={5} style={{ fontSize: '14px', color: '#1890ff' }}><InfoCircleOutlined /> WHY IT FAILED:</Title>
+                  <Paragraph style={{ fontSize: '13px', marginBottom: 0 }}>{record.description || "This resource is currently unhealthy."}</Paragraph>
+                </div>
+              ),
+            }}
+          />
+        );
+
       case "identity":
         return (
           <Table 
             dataSource={adminRolesData} 
             size="small" 
-            rowKey={(r, index) => `${r.role}-${index}`}
+            rowKey={(_, index) => index ?? 0}
             columns={[
-              { 
-                title: 'Assigned Role', 
-                dataIndex: 'role',
-                key: 'role',
-                render: (role: string) => (
-                  <Space size={[0, 4]} wrap>
-                    {role.split(',').map((r) => (
-                      <Tag color="blue" key={r.trim()}>
-                        {r.trim()}
-                      </Tag>
-                    ))}
-                  </Space>
-                )
-              },
-              { 
-                title: 'Users', 
-                dataIndex: 'assignedUsers',
-                key: 'assignedUsers',
-                align: 'center',
-                render: (count) => (
-                  <Badge 
-                    count={count} 
-                    style={{ backgroundColor: '#108ee9' }} 
-                  />
-                )
-              },
-              { 
-                title: 'MFA Status', 
-                dataIndex: 'mfaEnabled',
-                key: 'mfaEnabled',
-                align: 'center',
-                render: (mfa) => (
-                  <div style={{ fontSize: '18px' }}>
-                    {mfa === "✅" ? (
-                      <Tooltip title="MFA Enabled">
-                        <CheckCircleOutlined style={{ color: '#52c41a' }} />
-                      </Tooltip>
-                    ) : (
-                      <Tooltip title="MFA Missing">
-                        <WarningOutlined style={{ color: '#ff4d4f' }} />
-                      </Tooltip>
-                    )}
-                  </div>
-                )
-              }
+              { title: 'Assigned Role', dataIndex: 'role', render: (role: string) => (
+                <Space size={[0, 4]} wrap>
+                  {role.split(',').map((r) => <Tag color="blue" key={r.trim()}>{r.trim()}</Tag>)}
+                </Space>
+              )},
+              { title: 'Users', dataIndex: 'assignedUsers', align: 'center', render: (count) => <Badge count={count} style={{ backgroundColor: '#108ee9' }} /> },
+              { title: 'MFA Status', dataIndex: 'mfaEnabled', align: 'center', render: (mfa) => mfa === "✅" ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : <WarningOutlined style={{ color: '#ff4d4f' }} /> }
             ]}
           />
         );
 
-     case "actions":
-  // Flatten the data so the Table columns can access properties directly
-  const openActionsData = (allAssessments || [])
-    .filter((asm: any) => 
-      asm.properties?.status?.code === 'Unhealthy' && 
-      asm.properties?.metadata?.severity !== 'High'
-    )
-    .map((asm: any) => ({
-      id: asm.id,
-      displayName: asm.properties?.displayName,
-      resourceName: asm.properties?.resourceDetails?.ResourceName,
-      severity: asm.properties?.metadata?.severity,
-      softwareName: asm.properties?.additionalData?.SoftwareName,
-      fixedVersion: asm.properties?.additionalData?.FixedVersion,
-      description: asm.properties?.description,
-      remediation: asm.properties?.remediationSteps
-    }));
+      
 
-  return (
-    <Table 
-      dataSource={openActionsData} 
-      size="small" 
-      rowKey="id"
-      columns={[
-        { 
-          title: 'Recommendation', 
-          key: 'recommendation',
-          render: (record) => (
-            <Space>
-              <div style={{ 
-                width: 20, height: 20, border: '1px solid #d9d9d9', 
-                borderRadius: '50%', display: 'flex', alignItems: 'center', 
-                justifyContent: 'center', color: '#1890ff', fontSize: '12px' 
-              }}>+</div>
-              {/* FIXED: access record.displayName directly */}
-              <Text strong>{record.displayName}</Text>
-            </Space>
-          )
-        },
-        { 
-          title: 'Resource', 
-          key: 'resource',
-          render: (record) => (
-            <Tag color="blue">
-              {/* FIXED: access record.resourceName directly */}
-              {record.resourceName?.toUpperCase()}
-            </Tag>
-          )
-        },
-        { 
-          title: 'Severity', 
-          key: 'severity',
-          render: (record) => (
-            <Tag color="orange" style={{ fontWeight: 'bold' }}>
-              {record.severity?.toUpperCase() || 'MEDIUM'}
-            </Tag>
-          )
-        }
-      ]}
-      expandable={{
-        expandedRowRender: (record) => (
-          <div style={{ padding: '16px', background: '#f9f9f9', borderLeft: '5px solid #722ed1' }}>
-            <Title level={5} style={{ fontSize: '14px', color: '#722ed1' }}>
-              <BulbOutlined /> WHAT NEEDS TO BE DONE:
-            </Title>
-            <Paragraph style={{ fontSize: '13px' }}>
-              The software <strong>{record.softwareName}</strong> is out of date. 
-              Install version <strong>{record.fixedVersion || 'latest patch'}</strong> to resolve this failure.
-            </Paragraph>
-            <Title level={5} style={{ fontSize: '14px', color: '#1890ff' }}>
-              <InfoCircleOutlined /> WHY IT FAILED:
-            </Title>
-            <Paragraph style={{ fontSize: '13px', marginBottom: 0 }}>
-              {record.description || "This resource is currently unhealthy."}
-            </Paragraph>
-          </div>
-        ),
-      }}
-    />
-  );
-        default:
+      default:
         return <Text>No details available.</Text>;
     }
   };
@@ -511,27 +355,29 @@ const openActionsCount = useMemo(() => {
   return (
     <div style={{ marginTop: 24 }}>
       <Card style={{ borderRadius: 12, marginBottom: 16, borderLeft: `6px solid ${riskTier.hex}` }}>
-        <Title level={4}><SafetyCertificateOutlined /> Security Posture Overview</Title>
-        <Tag color={riskTier.color} style={{ fontSize: 14, padding: "4px 12px" }}>{riskTier.label}</Tag>
-        <Text style={{ marginLeft: 12 }}>Secure Score: <strong>{overallScore}%</strong></Text>
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Space>
+            <Title level={4} style={{ margin: 0 }}><SafetyCertificateOutlined /> Security Maturity Benchmark</Title>
+            <Tag color={riskTier.color} style={{ fontWeight: 'bold' }}>{riskTier.label}</Tag>
+          </Space>
+          <Text style={{ fontSize: 16 }}>Secure Score: <strong>{overallScore}%</strong></Text>
+          <Paragraph style={{ marginBottom: 0 }}>
+            Status: <Text strong style={{ color: riskTier.hex }}>CRITICAL GAP</Text>. 
+            Current Score: <Text strong>{currentPoints} / {maxPoints} pts</Text>. 
+            You are <Text strong type="danger">{gapToStandard}%</Text> below the industry standard. 
+            Need <Text strong>{pointsNeeded} more points</Text> to hit the 80% target.
+          </Paragraph>
+        </Space>
       </Card>
 
       <Row gutter={[16, 16]}>
         {tiles.map((tile) => (
           <Col xs={24} md={tile.id === "governance" ? 8 : 4} key={tile.id}>
-            <Card 
-              hoverable 
-              loading={loading} 
-              onClick={() => setActiveDrawer(tile.id)} 
-              style={{ borderRadius: 12, borderTop: `4px solid ${tile.color}`, height: '100%', cursor: 'pointer' }}
-              bodyStyle={{ height: '100%' }}
-            >
+            <Card hoverable loading={loading} onClick={() => setActiveDrawer(tile.id)} style={{ borderRadius: 12, borderTop: `4px solid ${tile.color}`, height: '100%' }}>
               {tile.isProgress ? (
                 <div style={{ textAlign: 'center' }}>
-                  <Text type="secondary" style={{ fontSize: 11 }}>{tile.title}</Text>
-                  <br />
-                  <Progress type="circle" percent={Number(tile.value)} width={80} strokeColor={tile.color} />
-                  <br />
+                  <Text type="secondary" style={{ fontSize: 11 }}>{tile.title}</Text><br />
+                  <Progress type="circle" percent={Number(tile.value)} width={80} strokeColor={tile.color} /><br />
                   <Text strong style={{ fontSize: 10 }}>{tile.extra}</Text>
                 </div>
               ) : (
@@ -545,13 +391,7 @@ const openActionsCount = useMemo(() => {
         ))}
       </Row>
 
-      <Drawer 
-        title={`${activeDrawer?.replace(/^\w/, (c) => c.toUpperCase())} Details`} 
-        width={950} 
-        open={!!activeDrawer} 
-        onClose={() => setActiveDrawer(null)} 
-        destroyOnClose={true}
-      >
+      <Drawer title={`${activeDrawer?.toUpperCase()} Details`} width={950} open={!!activeDrawer} onClose={() => setActiveDrawer(null)} destroyOnClose>
         {renderDrawerContent()}
       </Drawer>
     </div>
