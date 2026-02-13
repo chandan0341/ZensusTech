@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import {
   Card, Row, Col, Statistic, Typography, Tag, Drawer, Table,
-  Progress, Space, Badge, Tooltip, Divider
+  Progress, Space, Badge, Tooltip, Divider, Select
 } from "antd";
 import {
   RocketOutlined, WarningOutlined, SafetyCertificateOutlined,
@@ -14,6 +14,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 dayjs.extend(relativeTime);
 
 const { Title, Text, Paragraph } = Typography;
+const { Option } = Select;
 
 interface SecurityTileProps {
   overallScore: number;
@@ -28,7 +29,6 @@ interface SecurityTileProps {
   adminRolesData: any[];
   loading: boolean;
   subscriptionId?: string | null;
-  // NEW: Shared data for regulatory standards
   complianceStandards?: any[]; 
 }
 
@@ -43,6 +43,9 @@ export const SecurityTile = ({
   complianceStandards = [] 
 }: SecurityTileProps) => {
   const [activeDrawer, setActiveDrawer] = useState<string | null>(null);
+  
+  // NEW: State for filtering specific regulatory frameworks
+  const [selectedFramework, setSelectedFramework] = useState<string>("all");
 
   // Core Math Logic
   const currentPoints = secureScoreRaw?.current || 0;
@@ -58,17 +61,21 @@ export const SecurityTile = ({
     return { label: "HIGH RISK", color: "red", hex: "#ff4d4f" };
   }, [overallScore]);
 
-  // Logic for the NEW Chart using the shared data
+  // Logic for the Dynamic Compliance Chart
   const standardStats = useMemo(() => {
+    const filtered = selectedFramework === "all" 
+      ? complianceStandards 
+      : complianceStandards.filter(std => std.name === selectedFramework);
+
     const totals = { passed: 0, failed: 0, skipped: 0, total: 0 };
-    complianceStandards.forEach(std => {
+    filtered.forEach(std => {
       totals.passed += std.properties?.passedControls || 0;
       totals.failed += std.properties?.failedControls || 0;
       totals.skipped += std.properties?.skippedControls || 0;
     });
     totals.total = totals.passed + totals.failed + totals.skipped || 1;
     return totals;
-  }, [complianceStandards]);
+  }, [complianceStandards, selectedFramework]);
 
   const openActionsCount = useMemo(() => {
     return (allAssessments || []).filter(asm => 
@@ -128,29 +135,36 @@ export const SecurityTile = ({
 
     switch (activeDrawer) {
       case "compliance":
-        const totals = failedControlsData.reduce((acc, curr) => {
-          const state = (curr.properties?.state || "Failed").toLowerCase();
-          if (state === "passed") acc.passed++;
-          else if (state === "skipped") acc.skipped++;
-          else acc.failed++;
-          return acc;
-        }, { passed: 0, failed: 0, skipped: 0 });
-
         return (
           <>
-            {/* NEW PRESENTATION: Regulatory Standards Chart */}
-            <Title level={4}><PieChartOutlined /> Framework Compliance Status</Title>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Title level={4} style={{ margin: 0 }}><PieChartOutlined /> Framework Compliance Status</Title>
+              <Space>
+                <Text type="secondary">Filter Framework:</Text>
+                <Select 
+                  defaultValue="all" 
+                  style={{ width: 200 }} 
+                  onChange={(value) => setSelectedFramework(value)}
+                >
+                  <Option value="all">All Frameworks</Option>
+                  {complianceStandards.map(std => (
+                    <Option key={std.name} value={std.name}>{std.name}</Option>
+                  ))}
+                </Select>
+              </Space>
+            </div>
+
             <Card style={{ background: '#fcfcfc', border: '1px solid #f0f0f0', borderRadius: '8px', marginBottom: 24 }}>
               <Row gutter={48} align="middle">
                 <Col span={10} style={{ textAlign: 'center' }}>
                   <Progress 
                     type="dashboard" 
                     percent={Math.round((standardStats.passed / standardStats.total) * 100)} 
-                    strokeColor={{ '0%': '#ff4d4f', '100%': '#52c41a' }}
+                    strokeColor={standardStats.passed / standardStats.total > 0.7 ? '#52c41a' : '#faad14'}
                     width={180}
                   />
                   <div style={{ marginTop: 8 }}>
-                    <Text type="secondary">Global Compliance Avg</Text>
+                    <Text strong>{selectedFramework === 'all' ? 'Global Average' : selectedFramework}</Text>
                   </div>
                 </Col>
                 <Col span={14}>
@@ -171,17 +185,17 @@ export const SecurityTile = ({
             <Row gutter={16} style={{ marginBottom: 20 }}>
               <Col span={8}>
                 <Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #ff4d4f' }}>
-                  <Statistic title="Failed" value={totals.failed} valueStyle={{ color: '#ff4d4f' }} prefix={<WarningOutlined />} />
+                  <Statistic title="Failed" value={standardStats.failed} valueStyle={{ color: '#ff4d4f' }} prefix={<WarningOutlined />} />
                 </Card>
               </Col>
               <Col span={8}>
                 <Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #52c41a' }}>
-                  <Statistic title="Passed" value={totals.passed} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} />
+                  <Statistic title="Passed" value={standardStats.passed} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} />
                 </Card>
               </Col>
               <Col span={8}>
                 <Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #faad14' }}>
-                  <Statistic title="Skipped" value={totals.skipped} valueStyle={{ color: '#faad14' }} prefix={<InfoCircleOutlined />} />
+                  <Statistic title="Skipped" value={standardStats.skipped} valueStyle={{ color: '#faad14' }} prefix={<InfoCircleOutlined />} />
                 </Card>
               </Col>
             </Row>
@@ -191,7 +205,7 @@ export const SecurityTile = ({
             <Table 
               dataSource={failedControlsData} 
               size="small" 
-              rowKey={(r) => r.id || r.name || Math.random().toString()}
+              rowKey={(r) => r.id || r.name}
               columns={[
                 { 
                   title: 'Control Information', 
@@ -387,9 +401,8 @@ export const SecurityTile = ({
           <Text style={{ fontSize: 16 }}>Secure Score: <strong>{overallScore}%</strong></Text>
           <Paragraph style={{ marginBottom: 0 }}>
             Status: <Text strong style={{ color: riskTier.hex }}>{overallScore < 45 ? 'CRITICAL GAP' : 'MODERATE'}</Text>. 
-            Current Score: <Text strong>{currentPoints} / {maxPoints} pts</Text>. 
+            Current Score: <Text strong>{currentPoints}/{maxPoints} pts</Text>. 
             You are <Text strong type="danger">{gapToStandard}%</Text> below the industry standard. 
-            {/* TS6133 FIX: pointsNeeded is now used here */}
             Need <Text strong>{pointsNeeded} more points</Text> to hit the 80% target.
           </Paragraph>
         </Space>
@@ -416,7 +429,16 @@ export const SecurityTile = ({
         ))}
       </Row>
 
-      <Drawer title={`${activeDrawer?.toUpperCase()} Details`} width={950} open={!!activeDrawer} onClose={() => setActiveDrawer(null)} destroyOnClose>
+      <Drawer 
+        title={`${activeDrawer?.toUpperCase()} Details`} 
+        width={950} 
+        open={!!activeDrawer} 
+        onClose={() => {
+          setActiveDrawer(null);
+          setSelectedFramework("all"); // Reset filter on close
+        }} 
+        destroyOnClose
+      >
         {renderDrawerContent()}
       </Drawer>
     </div>
