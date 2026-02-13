@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback,useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { User, AdminRoleData, SummaryItem, AzureApplication, OrganizationData } from "@/types/dashboard.types";
 import { ENDPOINTS } from "@/constants/api";
 import { processAdminRoles } from "@/utils/dashboardUtils";
@@ -14,8 +14,8 @@ interface UseDashboardDataProps {
 export const useDashboardData = ({
   selectedTenant,
   selectedSubscription,
-  activeFilter, // Now used in Effect 4
-  dateRange,    // Now used in Effect 4
+  activeFilter,
+  dateRange,
 }: UseDashboardDataProps) => {
   const [users, setUsers] = useState<User[]>([]);
   const [allTenantUsers, setAllTenantUsers] = useState<User[]>([]);
@@ -30,180 +30,163 @@ export const useDashboardData = ({
   const [auditLogs, setAuditLogs] = useState([]);
   const [isAuditLoading, setIsAuditLoading] = useState(false);
   const [organization, setOrganization] = useState<OrganizationData | null>(null);
-  
+
   const [secureScoreRaw, setSecureScoreRaw] = useState<any>(null);
   const [securityAuditReport, setSecurityAuditReport] = useState<any>(null);
   const [isSecurityReportLoading, setIsSecurityReportLoading] = useState(false);
-  // 1. For the Executive Summary (Score Card)
- const [m365Score, setM365Score] = useState<any | null>(null);         // The 'overall' object
-  const [m365ActionPlan, setM365ActionPlan] = useState<any[]>([]);      // The 'action_plan' array
+
+  const [m365Score, setM365Score] = useState<any | null>(null);
+  const [m365ActionPlan, setM365ActionPlan] = useState<any[]>([]);
   const [m365Metadata, setM365Metadata] = useState<any | null>(null);
 
+  // --- Auth Helper ---
   const getAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
     let mgmtToken = localStorage.getItem("mgmt_token");
     let graphToken = localStorage.getItem("graph_token");
     const expiry = localStorage.getItem("token_expiry");
+
     if (expiry && Date.now() > (Number(expiry) - 300000) || !mgmtToken) {
-        const response = await fetch("/api/auth/refresh", { method: "POST" });
-        const newData = await response.json();
-        localStorage.setItem("mgmt_token", newData.mgmtToken);
-        localStorage.setItem("graph_token", newData.graphToken);
-        localStorage.setItem("token_expiry", (Date.now() + 50 * 60 * 1000).toString());
-        mgmtToken = newData.mgmtToken;
-        graphToken = newData.graphToken;
+      const response = await fetch("/api/auth/refresh", { method: "POST" });
+      const newData = await response.json();
+      localStorage.setItem("mgmt_token", newData.mgmtToken);
+      localStorage.setItem("graph_token", newData.graphToken);
+      localStorage.setItem("token_expiry", (Date.now() + 50 * 60 * 1000).toString());
+      mgmtToken = newData.mgmtToken;
+      graphToken = newData.graphToken;
     }
-    return { "Authorization": `Bearer ${mgmtToken}`, "X-Graph-Token": graphToken || "", "Content-Type": "application/json" };
+    return {
+      "Authorization": `Bearer ${mgmtToken}`,
+      "X-Graph-Token": graphToken || "",
+      "Content-Type": "application/json"
+    };
   }, []);
 
-  useEffect(() => {
-    if (!selectedSubscription) return;
-    const fetchAuditReport = async () => {
+  // --- THE REFETCH FUNCTION (Fixes TS2339) ---
+  const refetchData = useCallback(async () => {
+    if (!selectedTenant) return;
+
+    setLoading(true);
+    try {
+      const authHeaders = await getAuthHeaders();
+      const queryParams = `?tenant_id=${selectedTenant}`;
+
+      // 1. Fetch Tenant-level Data (Users, Apps, Org, M365 Security/License)
+      const [userRes, appRes, orgRes, securityRes, licenseRes] = await Promise.all([
+        fetch(`${ENDPOINTS.AZURE.TANENT_USERS}${queryParams}`, { headers: authHeaders as any }),
+        fetch(`${ENDPOINTS.AZURE.TENANT_APPLICATIONS}${queryParams}`, { headers: authHeaders as any }),
+        fetch(`${ENDPOINTS.AZURE.ORGANIZATION}${queryParams}`, { headers: authHeaders as any }),
+        fetch(`${ENDPOINTS.MICROSOFT.SECURE_SCORE_DETAILS}${queryParams}`, { headers: authHeaders as any }),
+        fetch(`${ENDPOINTS.MICROSOFT.LICENSE_AND_USAGE_DETAILS}${queryParams}`, { headers: authHeaders as any })
+      ]);
+
+      // Process Tenant Identity
+      const userData = await userRes.json();
+      setAllTenantUsers(userData.users || []);
+      setAdminRolesData(processAdminRoles(userData.users || []));
+
+      const appData = await appRes.json();
+      setApplications(appData.applications || []);
+
+      const orgData = await orgRes.json();
+      setOrganization(orgData.organization);
+
+      // Process M365 Data
+      const securityData = await securityRes.json();
+      if (securityData.success) {
+        setM365Score(securityData.data.overall);
+        setM365ActionPlan(securityData.data.action_plan);
+        setM365Metadata(securityData.data.batch_metadata);
+      }
+
+      const licenseData = await licenseRes.json();
+      if (licenseData.success) {
+        setLicenseUsageData(licenseData.tableData || []);
+        setSummaryItems(licenseData.summaryItems || []);
+      }
+
+      // 2. Fetch Subscription Specific Data
+      if (selectedSubscription) {
         setIsSecurityReportLoading(true);
-        try {
-            const authHeaders = await getAuthHeaders();
-            const response = await fetch(`${ENDPOINTS.AZURE.SECURITY_AUDIT_REPORT}?subscription_id=${selectedSubscription}`, { headers: authHeaders as any });
-            const result = await response.json();
-            console.log("result",result);
-            console.log(result.scoreData)
-
-            // Mapping based on your specific JSON structure [cite: 57, 58]
-            setSecurityAuditReport(result);            
-            // Extracting the overall secure score percentage (0.1176 -> 12%) 
-            if (result.scoreData?.properties?.score) {
-                setOverallScore(Math.round(result.scoreData.properties.score.percentage * 100));
-            }
-
-            // You can also store the raw score for the 'X of Y' display (4.0 / 34) 
-            setSecureScoreRaw(result.scoreData?.properties?.score || null);
-
-        } catch (error) { 
-            console.error(error); 
-        } finally { 
-            setIsSecurityReportLoading(false); 
-        }
-    };
-    fetchAuditReport();
-}, [selectedSubscription, getAuthHeaders]);
-
-  useEffect(() => {
-    if (!selectedTenant) return;
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const authHeaders = await getAuthHeaders();
-        const [userRes, appRes, orgRes] = await Promise.all([
-          fetch(`${ENDPOINTS.AZURE.TANENT_USERS}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
-          fetch(`${ENDPOINTS.AZURE.TENANT_APPLICATIONS}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
-          fetch(`${ENDPOINTS.AZURE.ORGANIZATION}?tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
+        const [subRes, auditReportRes] = await Promise.all([
+          fetch(`${ENDPOINTS.AZURE.USERS}?subscription_id=${selectedSubscription}&tenant_id=${selectedTenant}`, { headers: authHeaders as any }),
+          fetch(`${ENDPOINTS.AZURE.SECURITY_AUDIT_REPORT}?subscription_id=${selectedSubscription}`, { headers: authHeaders as any })
         ]);
-        const userData = await userRes.json();
-        setAllTenantUsers(userData.users || []);
-        setApplications((await appRes.json()).applications || []);
-        setOrganization((await orgRes.json()).organization);
-        setAdminRolesData(processAdminRoles(userData.users || []));
 
-        if (selectedSubscription) {
-          const subRes = await fetch(`${ENDPOINTS.AZURE.USERS}?subscription_id=${selectedSubscription}&tenant_id=${selectedTenant}`, { headers: authHeaders as any });
-          const subData = await subRes.json();
-          setUsers(subData.users || []);
-          setAdminRolesData(processAdminRoles(subData.users || []));
-          console.log("adminRoleData",adminRolesData)
-          setForeignGroupsCount(subData.foreignGroupsCount);
-          setServicePrincipalsCount(subData.servicePrincipalsCount);
+        const subData = await subRes.json();
+        setUsers(subData.users || []);
+        setForeignGroupsCount(subData.foreignGroupsCount);
+        setServicePrincipalsCount(subData.servicePrincipalsCount);
+
+        const auditResult = await auditReportRes.json();
+        setSecurityAuditReport(auditResult);
+        if (auditResult.scoreData?.properties?.score) {
+          setOverallScore(Math.round(auditResult.scoreData.properties.score.percentage * 100));
+          setSecureScoreRaw(auditResult.scoreData.properties.score);
         }
-      } catch (e) { console.error(e); } finally { setLoading(false); }
-    };
-    fetchData();
-  }, [selectedTenant, selectedSubscription, getAuthHeaders]);
+        setIsSecurityReportLoading(false);
+      }
 
-  // Restored M365 and Audit usage to clear "unused variable" errors
-  useEffect(() => {
-  if (!selectedTenant) return;
+      // 3. Fetch Audit Logs
+      setIsAuditLoading(true);
+      const auditRes = await fetch(
+        `${ENDPOINTS.AZURE.AUDIT_LOGS}${queryParams}&category=${activeFilter}&start_date=${dateRange[0].toISOString()}`,
+        { headers: authHeaders as any }
+      );
+      const auditData = await auditRes.json();
+      setAuditLogs(auditData.logs || []);
+      setIsAuditLoading(false);
 
-  const fetchAllM365Data = async () => {
-    const authHeaders = await getAuthHeaders();
-    const query = `?tenant_id=${selectedTenant}`;
-
-    // Fire both requests at the same time
-    const [securityRes, licenseRes] = await Promise.all([
-      fetch(`${ENDPOINTS.MICROSOFT.SECURE_SCORE_DETAILS}${query}`, { headers: authHeaders as any }),
-      fetch(`${ENDPOINTS.MICROSOFT.LICENSE_AND_USAGE_DETAILS}${query}`, { headers: authHeaders as any })
-    ]);
-
-    const securityData = await securityRes.json();
-    const licenseData = await licenseRes.json();
-
-    // 1. Handle Security Data (API 1)
-    if (securityData.success) {
-      const { overall, action_plan, batch_metadata } = securityData.data;    
-      setM365Score(overall);
-      setM365ActionPlan(action_plan);
-      setM365Metadata(batch_metadata);
+    } catch (error) {
+      console.error("Dashboard Data Fetch Error:", error);
+    } finally {
+      setLoading(false);
     }
+  }, [selectedTenant, selectedSubscription, activeFilter, dateRange, getAuthHeaders]);
 
-    // 2. Handle License Data (API 2)
-    if (licenseData.success) {
-      setLicenseUsageData(licenseData.tableData || []);
-      setSummaryItems(licenseData.summaryItems || []);
-    }
-  };
-
-  fetchAllM365Data();
-}, [selectedTenant, getAuthHeaders]);
-
+  // Initial trigger and dependency update trigger
   useEffect(() => {
-    if (!selectedTenant) return;
-    const fetchAudit = async () => {
-        setIsAuditLoading(true);
-        const authHeaders = await getAuthHeaders();
-        const res = await fetch(`${ENDPOINTS.AZURE.AUDIT_LOGS}?tenant_id=${selectedTenant}&category=${activeFilter}&start_date=${dateRange[0].toISOString()}`, { headers: authHeaders as any });
-        const data = await res.json();
-        setAuditLogs(data.logs || []);
-        setIsAuditLoading(false);
-    };
-    fetchAudit();
-  }, [selectedTenant, activeFilter, dateRange, getAuthHeaders]);
+    refetchData();
+  }, [refetchData]);
 
- const report = useMemo(() => {
-      return securityAuditReport?.value || securityAuditReport || {};
-
+  const report = useMemo(() => {
+    return securityAuditReport?.value || securityAuditReport || {};
   }, [securityAuditReport]);
 
-// 2. Updated return statement
-return {
-  // Existing fields
-  users, 
-  applications, 
-  allTenantUsers, 
-  loading,
-  foreignGroupsCount, 
-  servicePrincipalsCount, 
-  adminRolesData,
-  licenseUsageData, 
-  m365Score, 
-  m365ActionPlan,
-  m365Metadata,
-  overallScore, 
-  summaryItems,
-  auditLogs, 
-  isAuditLoading, 
-  organization,
-  secureScoreRaw,
+  return {
+    users,
+    applications,
+    allTenantUsers,
+    loading,
+    foreignGroupsCount,
+    servicePrincipalsCount,
+    adminRolesData,
+    licenseUsageData,
+    m365Score,
+    m365ActionPlan,
+    m365Metadata,
+    overallScore,
+    summaryItems,
+    auditLogs,
+    isAuditLoading,
+    organization,
+    secureScoreRaw,
 
-  // NEW: Flattened Security Data Categories
-  // This maps exactly to the keys found in your JSON file
-  networkData: report.networkFindings || [],         // The 2 findings
-  dataSecData: report.dataSecurity || [],           // The 3 findings
-  recommendationsData: report.recommendations || [], // The 15 recommendations
-  failedControlsData: report.failedControls?.value || [], // The 85 critical items
-  scoreControls:report.scoreControls?.value||[],
-  kpiData: report.postureKPI || {},                  // The score/totalFailedControls object
-  allAssessments: report.allAssessments?.value || [], // The total check list
+    // Flattened Security Data Categories
+    networkData: report.networkFindings || [],
+    dataSecData: report.dataSecurity || [],
+    recommendationsData: report.recommendations || [],
+    failedControlsData: report.failedControls?.value || [],
+    scoreControls: report.scoreControls?.value || [],
+    kpiData: report.postureKPI || {},
+    allAssessments: report.allAssessments?.value || [],
 
-  // Maintain compatibility with existing props
-  securityAuditReport, 
-  isSecurityReportLoading,
-  subSecurity: report, 
-  isSubLoading: isSecurityReportLoading,
+    // Meta/Loading states
+    securityAuditReport,
+    isSecurityReportLoading,
+    subSecurity: report,
+    isSubLoading: isSecurityReportLoading,
+
+    // REFETCH FUNCTION EXPORT
+    refetchData,
+  };
 };
-}

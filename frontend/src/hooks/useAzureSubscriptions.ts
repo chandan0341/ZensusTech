@@ -16,8 +16,8 @@ export const useAzureSubscriptions = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 1. Fetch Subscriptions List
-  const fetchSubscriptions = useCallback(async () => {
+  // 1. Fetch Subscriptions List (Now explicitly named refreshSubscriptions for the dashboard)
+  const refreshSubscriptions = useCallback(async () => {
     if (!selectedTenant) {
       setAzureSubscriptions([]);
       setLoading(false);
@@ -29,24 +29,18 @@ export const useAzureSubscriptions = ({
 
     try {
       // --- TOKEN RETRIEVAL ---
-      // Get the management token saved during the /connect phase
       const mgmtToken = localStorage.getItem('mgmt_token');
 
       if (!mgmtToken) {
         throw new Error("No active session found. Please reconnect.");
       }
 
-      /**
-       * We now pass the token in the Authorization header.
-       * This avoids the 4KB cookie size limit entirely.
-       */
       const response = await fetch(`/api/v1/subscriptions?tenant_id=${selectedTenant}`, {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${mgmtToken}`,
           "Content-Type": "application/json"
         }
-        // credentials: 'include' is removed as we are not using cookies
       });
 
       if (response.status === 401 || response.status === 403) {
@@ -86,7 +80,6 @@ export const useAzureSubscriptions = ({
     try {
       const mgmtToken = localStorage.getItem('mgmt_token');
 
-      // Updated path: Ensure this matches the router path in your FastAPI azure.py
       const response = await fetch(`/api/v1/subscriptions/${subscriptionId}/metadata`, {
         method: "GET",
         headers: {
@@ -105,9 +98,10 @@ export const useAzureSubscriptions = ({
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
-    fetchSubscriptions();
-  }, [fetchSubscriptions]);
+    refreshSubscriptions();
+  }, [refreshSubscriptions]);
 
   return {
     azureSubscriptions,
@@ -115,5 +109,6 @@ export const useAzureSubscriptions = ({
     loading,
     error,
     fetchSubscriptionMetadata,
+    refreshSubscriptions, // <--- ADDED THIS LINE to fix TS2339
   };
 };

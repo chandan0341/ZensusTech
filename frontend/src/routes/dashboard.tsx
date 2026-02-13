@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect, useMemo } from "react"; 
+import { useState, useEffect, useMemo, useCallback } from "react"; // Added useCallback
 import { Row, Col, Spin, Alert, Empty } from "antd";
 import { DashboardTiles } from "./DashboardTiles";
 import { useCredentials } from "../hooks/useCredentials";
@@ -31,7 +31,6 @@ import { BackupsDRTile } from "@/components/dashboard/tiles/BackupsDRTile";
 import { PatchManagementTile } from "@/components/dashboard/tiles/PatchManagementTile";
 import { Microsoft365Tile } from "@/components/dashboard/tiles/Microsoft365Tile";
 
-// 1. Define the interface to solve TS2339 & TS18047
 interface SecureScoreData {
   currentScore: number;
   maxScore: number;
@@ -73,6 +72,7 @@ function Dashboard() {
     loading: subscriptionsLoading,
     error: subscriptionsError,
     fetchSubscriptionMetadata,
+    refreshSubscriptions, // Ensure your hook exports this refetch function
   } = useAzureSubscriptions({ selectedTenant });
 
   const {
@@ -89,18 +89,19 @@ function Dashboard() {
     isAuditLoading,
     organization,
     networkData, 
-  dataSecData, 
-  recommendationsData, 
-  m365Score,           // The 'overall' object with scores & benchmarks
-  m365ActionPlan,      // The array of security recommendations
-  m365Metadata,
- allAssessments,
-  failedControlsData,
-  scoreControls,
-  kpiData,
-  overallScore,
-  secureScoreRaw,
-  isSecurityReportLoading,
+    dataSecData, 
+    recommendationsData, 
+    m365Score,           
+    m365ActionPlan,      
+    m365Metadata,
+    allAssessments,
+    failedControlsData,
+    scoreControls,
+    kpiData,
+    overallScore,
+    secureScoreRaw,
+    isSecurityReportLoading,
+    refetchData, // Ensure your useDashboardData hook exports a refetch function
   } = useDashboardData({
     selectedTenant,
     selectedSubscription,
@@ -108,18 +109,20 @@ function Dashboard() {
     dateRange
   });
 
-  // --- CALCULATION LOGIC ---
-  // Fixes the 0% display AND derives Medium/Low/Unhealthy counts
+  // --- REFRESH LOGIC ---
+  const handleRefresh = useCallback(async () => {
+    // Refresh both subscription list and dashboard metrics
+    if (refreshSubscriptions) await refreshSubscriptions();
+    if (refetchData) await refetchData();
+  }, [refreshSubscriptions, refetchData]);
+
   const securityMetrics = useMemo(() => {
     const data = secureScoreRaw as SecureScoreData | null;
     const controls = data?.controlScores || [];
-
-    // Derive Score Percentage
     const score = (data && data.maxScore > 0) 
       ? Math.round((data.currentScore / data.maxScore) * 100) 
       : (overallScore || 0);
 
-    // Derive Severity Counts
     return {
       displayScore: score,
       high: controls.filter(c => (c.scoreInPercentage || 0) === 0).length,
@@ -161,8 +164,8 @@ function Dashboard() {
 
   const handleSubscriptionChange = (subscriptionId: string | null) => {
     setSelectedSubscription(subscriptionId);
-    setViewMode(subscriptionId ? 'subscription' : 'tenant');
-    setSelectedTile('azure-identity');
+    // Logic: Keep current mode but update selection
+    // If user clicks a sub, we stay in sub mode.
   };
 
   const isSubModeWithoutSelection = viewMode === 'subscription' && !selectedSubscription;
@@ -173,7 +176,7 @@ function Dashboard() {
   const { mfaEnabledCount, mfaDisabledCount } = calculateMFAStats(displayUsers);
   const mfaDisabledByRole = calculateMFADisabledByRole(displayUsers);
 
-  // Modal Handlers
+  // Modal Handlers ... (Keep your existing modal handlers here)
   const handleCardClick = (cardType: string, currentTile: string) => {
     if (isSubModeWithoutSelection) return;
     let modalData = null;
@@ -229,9 +232,10 @@ function Dashboard() {
           selectedTenant={selectedTenant}
           selectedSubscription={selectedSubscription}
           azureSubscriptions={azureSubscriptions}
-          loading={subscriptionsLoading}
+          loading={loading} // Changed to overall loading
           onTenantChange={handleTenantChange}
           onSubscriptionChange={handleSubscriptionChange}
+          onRefresh={handleRefresh} // RESTORED REFRESH PROP
           tenantId={tenantId || undefined}
         />
 
@@ -292,45 +296,38 @@ function Dashboard() {
                     />
                   )}
 
-                  {viewMode === 'tenant' && (
-                    <>
-                      {selectedTile === 'microsoft-365' && (
-                        <Microsoft365Tile
-                          overallScore={securityMetrics.displayScore}
-                          summaryItems={summaryItems}
-                          adminRolesData={adminRolesData}
-                          licenseUsageData={licenseUsageData}
-                          m365Score={m365Score}
-      m365ActionPlan={m365ActionPlan}
-      m365Metadata={m365Metadata}
-                          onRowClick={handleRowClick}
-                          handleCardClickForMicrosoftUserType={handleCardClickForUserType}
-                        />
-                      )}
-                    </>
+                  {viewMode === 'tenant' && selectedTile === 'microsoft-365' && (
+                    <Microsoft365Tile
+                      overallScore={securityMetrics.displayScore}
+                      summaryItems={summaryItems}
+                      adminRolesData={adminRolesData}
+                      licenseUsageData={licenseUsageData}
+                      m365Score={m365Score}
+                      m365ActionPlan={m365ActionPlan}
+                      m365Metadata={m365Metadata}
+                      onRowClick={handleRowClick}
+                      handleCardClickForMicrosoftUserType={handleCardClickForUserType}
+                    />
                   )}
 
                   {viewMode === 'subscription' && (
                     <>
-
-{selectedTile === 'security' && (
-  <SecurityTile 
-    overallScore={overallScore}
-    secureScoreRaw={secureScoreRaw}
-    networkData={networkData}
-    dataSecData={dataSecData}
-    recommendationsData={recommendationsData}
-    kpiData={kpiData}
-    adminRolesData={adminRolesData}
-    loading={isSecurityReportLoading}
-    failedControlsData={failedControlsData}
-    scoreControls={scoreControls}
-    allAssessments={allAssessments} 
-    subscriptionId={selectedSubscription}
-  />
-)}
-
-                      
+                      {selectedTile === 'security' && (
+                        <SecurityTile 
+                          overallScore={overallScore}
+                          secureScoreRaw={secureScoreRaw}
+                          networkData={networkData}
+                          dataSecData={dataSecData}
+                          recommendationsData={recommendationsData}
+                          kpiData={kpiData}
+                          adminRolesData={adminRolesData}
+                          loading={isSecurityReportLoading}
+                          failedControlsData={failedControlsData}
+                          scoreControls={scoreControls}
+                          allAssessments={allAssessments} 
+                          subscriptionId={selectedSubscription}
+                        />
+                      )}
                       {selectedTile === 'cost-management' && <CostManagementTile />}
                       {selectedTile === 'backups-dr' && <BackupsDRTile />}
                       {selectedTile === 'patch-management' && <PatchManagementTile />}

@@ -1,4 +1,4 @@
-import { Select, Segmented, Space, Typography, Tooltip, Progress, Tag, Divider } from "antd";
+import { Select, Segmented, Space, Typography, Tooltip, Progress, Tag, Divider, Button } from "antd";
 import { 
   GlobalOutlined, 
   DatabaseOutlined, 
@@ -21,6 +21,7 @@ interface SubscriptionSelectorProps {
   loading: boolean;
   onTenantChange: (tenantId: string) => void;
   onSubscriptionChange: (subscriptionId: string | null) => void;
+  onRefresh?: () => void; // Added this line
   tenantId?: string;
   organization?: OrganizationData | null;
 }
@@ -34,6 +35,7 @@ export const SubscriptionSelector = ({
   loading,
   onTenantChange,
   onSubscriptionChange,
+  onRefresh, // Added this line
   tenantId,
   organization,
 }: SubscriptionSelectorProps) => {
@@ -97,16 +99,35 @@ export const SubscriptionSelector = ({
           </div>
         </div>
 
-        {/* CENTER: VIEW MODE TOGGLE */}
-        <div style={{ background: '#f5f5f5', padding: '4px', borderRadius: '8px' }}>
-          <Segmented
-            value={viewMode}
-            onChange={(val) => onViewModeChange(val as 'tenant' | 'subscription')}
-            options={[
-              { label: <Space><GlobalOutlined /> Tenant</Space>, value: 'tenant' },
-              { label: <Space><DatabaseOutlined /> Subscription</Space>, value: 'subscription' },
-            ]}
-          />
+        {/* RIGHT: VIEW MODE TOGGLE + REFRESH */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ background: '#f5f5f5', padding: '4px', borderRadius: '8px' }}>
+            <Segmented
+              value={viewMode}
+              onChange={(val) => onViewModeChange(val as 'tenant' | 'subscription')}
+              options={[
+                { label: <Space><GlobalOutlined /> Tenant</Space>, value: 'tenant' },
+                { label: <Space><DatabaseOutlined /> Subscription</Space>, value: 'subscription' },
+              ]}
+            />
+          </div>
+          
+          {/* REFRESH BUTTON */}
+          <Tooltip title="Refresh Dashboard Data">
+            <Button 
+              icon={<SyncOutlined spin={loading} />} 
+              onClick={onRefresh}
+              loading={loading}
+              style={{ 
+                borderRadius: '8px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center' 
+              }}
+            >
+              Refresh
+            </Button>
+          </Tooltip>
         </div>
       </div>
 
