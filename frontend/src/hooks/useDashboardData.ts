@@ -63,16 +63,17 @@ export const useDashboardData = ({
             const authHeaders = await getAuthHeaders();
             const response = await fetch(`${ENDPOINTS.AZURE.SECURITY_AUDIT_REPORT}?subscription_id=${selectedSubscription}`, { headers: authHeaders as any });
             const result = await response.json();
+           
 
             // Mapping based on your specific JSON structure [cite: 57, 58]
             setSecurityAuditReport(result);            
             // Extracting the overall secure score percentage (0.1176 -> 12%) 
-            if (result.scoreData?.properties?.score) {
-                setOverallScore(Math.round(result.scoreData.properties.score.percentage * 100));
-            }
+            const scoreObj = result.scoreData?.value?.[0]?.properties?.score;
 
-            // You can also store the raw score for the 'X of Y' display (4.0 / 34) 
-            setSecureScoreRaw(result.scoreData?.properties?.score || null);
+            if (scoreObj) {
+                setOverallScore(Math.round(scoreObj.percentage * 100));
+                setSecureScoreRaw(scoreObj); // optional but recommended
+            }
 
         } catch (error) { 
             console.error(error); 
@@ -167,7 +168,9 @@ export const useDashboardData = ({
   console.log("Flattening security report data...:",extracted); 
   console.log("scoreControls",extracted.scoreControls?.value||[]);
   console.log("failedControls",extracted.failedControls?.value || []);
+  console.log("secureScoreRaw",secureScoreRaw)
   return securityAuditReport?.value || securityAuditReport || {};
+
   }, [securityAuditReport]);
 
 // 2. Updated return statement
