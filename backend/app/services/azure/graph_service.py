@@ -722,7 +722,7 @@ class GraphService:
 
     # --- IDENTITY BATCH (GRAPH) ---
 
-    async def get_identity_security_batch(self, graph_token: str):
+    async def get_identity_security_batch(self, graph_token: str,):
         batch_payload = {
             "requests": [
                 {
@@ -760,6 +760,14 @@ class GraphService:
                 logger.error(f"Identity Batch failed: {str(e)}")
                 return {"mfaIssues": 0, "adminCount": 0}
 
+    async def get_resource_count(self, subscription_id, mgmt_token: str):
+        url = f"https://management.azure.com/subscriptions/{subscription_id}/resources?api-version=2021-04-01"
+        # Implementation using your preferred async client (e.g., httpx.get)
+        return await self._get_mgmt_data(url, mgmt_token)
+
+    async def get_security_alerts(self, subscription_id, mgmt_token: str):
+        url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/alerts?api-version=2022-01-01"
+        return await self._get_mgmt_data(url, mgmt_token)
     # --- CONSOLIDATED MASTER REPORT ---
 
     async def get_consolidated_security_report(
@@ -774,6 +782,8 @@ class GraphService:
             self.get_secure_score_controls(subscription_id, mgmt_token),        # 2
             self.get_regulatory_standards(subscription_id, mgmt_token),         # 3
             self.get_failed_regulatory_controls(subscription_id, mgmt_token),   # 4
+            self.get_resource_count(subscription_id, mgmt_token),               # 5 (New)
+            self.get_security_alerts(subscription_id, mgmt_token),
         ]
 
         # Allow failures but detect them
@@ -790,6 +800,8 @@ class GraphService:
         controls_raw        = results[2] or {"value": []}
         standards_raw       = results[3] or {"value": []}
         failed_controls_raw = results[4] or {"value": []}
+        resources_raw       = results[5] or {"value": []}
+        alerts_raw          = results[6] or {"value": []}
 
         # 🔥 IMPORTANT FIX
         # Azure Secure Score API returns list under "value"
@@ -808,6 +820,8 @@ class GraphService:
             "scoreControls": controls_raw,
             "complianceStandards": standards_raw,
             "failedControls": failed_controls_raw,
+            "resourceInventory": resources_raw,
+            "activeAlerts": alerts_raw,
             "postureKPI": {
                 "currentScore": secure_score_obj.get("properties", {}).get("score", {}).get("current", 0),
                 "maxScore": secure_score_obj.get("properties", {}).get("score", {}).get("max", 0),
