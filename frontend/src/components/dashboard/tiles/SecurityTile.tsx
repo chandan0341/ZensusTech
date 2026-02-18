@@ -1,7 +1,9 @@
 import { useState, useMemo } from "react";
 import {
   Card, Row, Col, Statistic, Typography, Tag, Drawer, Table,
-  Progress, Space, Badge, Tooltip, Divider, Select
+  Progress, Space, Badge, Tooltip, Divider, Select,// Add these two:
+  Descriptions, 
+  Button
 } from "antd";
 import {
   RocketOutlined, WarningOutlined, SafetyCertificateOutlined,
@@ -9,7 +11,7 @@ import {
   FileProtectOutlined, CheckCircleOutlined, PieChartOutlined,
   AppstoreOutlined, CloudServerOutlined, GlobalOutlined,
   SecurityScanOutlined, DatabaseOutlined, AlertOutlined,
-  CheckSquareFilled, PushpinOutlined
+  CheckSquareFilled, PushpinOutlined,ExportOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -71,6 +73,33 @@ export const SecurityTile = ({
   const gapToStandard = Math.max(0, industryStandard - overallScore);
   const targetPoints = Math.ceil(maxPoints * (industryStandard / 100));
   const pointsNeeded = Math.max(0, targetPoints - currentPoints);
+
+  const groupedAlerts = useMemo(() => {
+  const groups = new Map();
+
+  // FIX: Explicitly type 'alert' as 'any' to stop the red error
+  (activeAlerts.value || []).forEach((alert: any) => {
+    const alertName = alert.properties?.alertDisplayName || "Unknown Alert";
+    const intent = alert.properties?.intent || "N/A";
+    
+    // Create a key based on the Alert Name and the Intent
+    const key = `${alertName}-${intent}`;
+    
+    if (groups.has(key)) {
+      const existing = groups.get(key);
+      existing.count += 1;
+    } else {
+      groups.set(key, {
+        ...alert,
+        count: 1,
+        // Ensure a unique key for the Ant Design Table
+        key: alert.id || Math.random().toString() 
+      });
+    }
+  });
+
+  return Array.from(groups.values());
+}, [activeAlerts.value]);
 
   const dynamicMonitoringData = useMemo(() => {
     const alerts = activeAlerts?.value || [];
@@ -150,41 +179,58 @@ export const SecurityTile = ({
   }, [allAssessments]);
 
   const criticalFindings = useMemo(() => {
-    const findings: any[] = [];
+    const groupedMap = new Map();
+
     (allAssessments || []).forEach((assessment) => {
       let cves = [];
       try {
         cves = JSON.parse(assessment.properties?.additionalData?.CvesDetails || "[]");
       } catch (e) { cves = []; }
 
+      const resourceName = assessment.properties?.resourceDetails?.ResourceName || "Unknown";
+      const softwareName = assessment.properties?.additionalData?.SoftwareName || "System";
+      
+      // Create a unique key for grouping (Resource + Software)
+      const groupKey = `${resourceName}-${softwareName}`;
+
       if (cves.length > 0) {
         cves.forEach((cve: any) => {
           if (cve.Severity === "High") {
-            findings.push({
-              id: `${assessment.id}-${cve.CveId}`,
-              resource: assessment.properties?.resourceDetails?.ResourceName,
-              software: assessment.properties?.additionalData?.SoftwareName || "System",
-              cveId: cve.CveId,
-              severity: "High",
-              remediation: cve.ExtendedDescription?.Remediation,
-              impact: cve.ExtendedDescription?.Impact,
-              fixedVersion: cve.FixedVersion
-            });
+            if (!groupedMap.has(groupKey)) {
+              groupedMap.set(groupKey, {
+                id: groupKey,
+                resource: resourceName,
+                software: softwareName,
+                severity: "High",
+                cveCount: 0,
+                cveList: [],
+                remediation: cve.ExtendedDescription?.Remediation,
+                impact: cve.ExtendedDescription?.Impact
+              });
+            }
+            const existing = groupedMap.get(groupKey);
+            existing.cveCount += 1;
+            existing.cveList.push(cve.CveId);
           }
         });
       } else if (assessment.properties?.metadata?.severity === "High") {
-        findings.push({
-          id: assessment.id,
-          resource: assessment.properties?.resourceDetails?.ResourceName,
-          software: assessment.properties?.additionalData?.SoftwareName || "Azure Resource",
-          cveId: assessment.properties?.displayName || "High Risk Finding",
-          severity: "High",
-          remediation: "Review Azure Security Center",
-          impact: "Critical vulnerability detected."
-        });
+        // Handle non-CVE high severity findings
+        if (!groupedMap.has(groupKey)) {
+          groupedMap.set(groupKey, {
+            id: groupKey,
+            resource: resourceName,
+            software: softwareName,
+            severity: "High",
+            cveCount: 1,
+            cveList: [assessment.properties?.displayName || "High Risk Finding"],
+            remediation: "Review Azure Security Center",
+            impact: "Critical vulnerability detected."
+          });
+        }
       }
     });
-    return findings;
+
+    return Array.from(groupedMap.values());
   }, [allAssessments]);
 
   const tiles = [
@@ -237,97 +283,101 @@ export const SecurityTile = ({
               Expand a row to view technical identifiers such as Source IPs, compromised accounts, and host details.
             </Paragraph>
             <Table 
-              dataSource={activeAlerts.value} 
-              size="small" 
-              rowKey={(record: any) => record.id || Math.random().toString()}
-              columns={[
-                { 
-                  title: 'Alert Name', 
-                  render: (record: any) => (
-                    <Space direction="vertical" size={0}>
-                      <Text strong>{record.properties?.alertDisplayName}</Text>
-                      <Text type="secondary" style={{ fontSize: '11px' }}>Intent: {record.properties?.intent || 'Unknown'}</Text>
-                    </Space>
-                  ) 
-                },
-                { 
-                  title: 'Severity', 
-                  dataIndex: ['properties', 'severity'], 
-                  render: (s) => <Tag color={s === 'High' ? 'red' : 'orange'}>{s}</Tag> 
-                },
-                { 
-                  title: 'Status', 
-                  dataIndex: ['properties', 'status'], 
-                  render: (st) => <Badge status={st === 'Active' ? 'error' : 'default'} text={st} /> 
-                }
-              ]}
-              expandable={{
-                expandedRowRender: (record: any) => {
-                  // Extract entities like IPs and Account names
-                  const entities = record.properties?.entities || [];
-                  const ipEntities = entities.filter((e: any) => e.type === 'ip');
-                  const accountEntities = entities.filter((e: any) => e.type === 'account');
-                  const hostEntities = entities.filter((e: any) => e.type === 'host');
+      dataSource={groupedAlerts} // Use the grouped data here
+      columns={[
+        { 
+          title: 'Alert Name', 
+          render: (record) => (
+            <Space>
+              <Text strong>{record.properties?.alertDisplayName}</Text>
+              {record.count > 1 && <Badge count={record.count} style={{ backgroundColor: '#52c41a' }} />}
+            </Space>
+          ) 
+        },
+        { 
+          title: 'Intent', 
+          dataIndex: ['properties', 'intent'],
+          render: (intent) => <Tag color="purple">{intent}</Tag>
+        },
+        { 
+          title: 'Severity', 
+          dataIndex: ['properties', 'severity'], 
+          render: (s) => <Tag color={s === 'High' ? 'red' : 'orange'}>{s}</Tag> 
+        }
+      ]}
+             expandable={{
+  expandedRowRender: (record: any) => {
+    const props = record.properties || {};
+    const ext = props.extendedProperties || {};
+    
+    // Extract technical details from your JSON
+    const processName = ext.ProcessName || "N/A";
+    const pid = ext.ProcessId || ext.ParentPid || "N/A";
+    const commandLine = ext.CommandLine || "No command line captured";
+    const m365Link = ext.MicrosoftDefenderforEndpointlink ? JSON.parse(ext.MicrosoftDefenderforEndpointlink).value : null;
 
-                  return (
-                    <div style={{ padding: '16px', background: '#f9f9f9', borderLeft: '4px solid #1890ff' }}>
-                      <Row gutter={[24, 16]}>
-                        {/* 1. Description Section */}
-                        <Col span={24}>
-                          <Text strong><InfoCircleOutlined /> Description</Text>
-                          <Paragraph style={{ marginTop: 8, fontSize: '13px' }}>
-                            {record.properties?.description}
-                          </Paragraph>
-                        </Col>
+    return (
+      <div style={{ padding: '20px', background: '#fafafa', borderLeft: '5px solid #1890ff' }}>
+        <Row gutter={[32, 24]}>
+          {/* Section 1: Alert Overview */}
+          <Col span={24}>
+            <Title level={5}><InfoCircleOutlined /> Description</Title>
+            <Paragraph>{props.description}</Paragraph>
+          </Col>
 
-                        {/* 2. Source/Entity Section - THIS IS WHAT YOU ASKED FOR */}
-                        <Col span={12}>
-                          <Text strong><SecurityScanOutlined /> Source / Entity Info</Text>
-                          <div style={{ marginTop: 8 }}>
-                            {ipEntities.length > 0 && (
-                              <div style={{ marginBottom: 4 }}>
-                                <Text type="secondary">IP Addresses: </Text>
-                                {ipEntities.map((ip: any, i: number) => (
-                                  <Tag key={i} color="volcano">{ip.address}</Tag>
-                                ))}
-                              </div>
-                            )}
-                            {accountEntities.length > 0 && (
-                              <div style={{ marginBottom: 4 }}>
-                                <Text type="secondary">Accounts: </Text>
-                                {accountEntities.map((acc: any, i: number) => (
-                                  <Tag key={i} color="blue">{acc.name || acc.accountName}</Tag>
-                                ))}
-                              </div>
-                            )}
-                            {hostEntities.length > 0 && (
-                              <div>
-                                <Text type="secondary">Host: </Text>
-                                <Tag color="green">{hostEntities[0].hostname}</Tag>
-                              </div>
-                            )}
-                           {entities.length === 0 && (
-      <Text type="secondary"> {/* FIXED: Changed "disabled" to "secondary" */}
-        No specific entity identifiers found in metadata.
-      </Text>
-    )}
-                          </div>
-                        </Col>
+          {/* Section 2: Technical Evidence (New!) */}
+          <Col span={16}>
+            <Card size="small" title="Technical Evidence" headStyle={{ background: '#f0f5ff' }}>
+              <Descriptions column={2} size="small">
+                <Descriptions.Item label="Process">{processName}</Descriptions.Item>
+                <Descriptions.Item label="PID">{pid}</Descriptions.Item>
+                <Descriptions.Item label="Domain">{ext.DomainName || "WORKGROUP"}</Descriptions.Item>
+                <Descriptions.Item label="User">{ext.UserName || "N/A"}</Descriptions.Item>
+              </Descriptions>
+              <div style={{ marginTop: 12 }}>
+                <Text type="secondary" strong>Command Line:</Text>
+                <pre style={{ 
+                  background: '#001529', 
+                  color: '#d4d4d4', 
+                  padding: '10px', 
+                  borderRadius: '4px',
+                  overflowX: 'auto',
+                  fontSize: '11px',
+                  marginTop: '5px'
+                }}>
+                  {commandLine}
+                </pre>
+              </div>
+            </Card>
+          </Col>
 
-                        {/* 3. Remediation Section */}
-                        <Col span={12}>
-                          <Text strong><BulbOutlined /> Remediation Steps</Text>
-                          <div style={{ marginTop: 8 }}>
-                            <Paragraph style={{ fontSize: '12px' }}>
-                              {record.properties?.remediationSteps?.[0] || "Manual investigation required in Azure Portal."}
-                            </Paragraph>
-                          </div>
-                        </Col>
-                      </Row>
-                    </div>
-                  );
-                },
-              }}
+          {/* Section 3: Remediation & Links */}
+          <Col span={8}>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Text strong><BulbOutlined /> Remediation Steps</Text>
+              <ul style={{ paddingLeft: '20px', fontSize: '12px' }}>
+                {props.remediationSteps?.map((step: string, i: number) => (
+                  <li key={i}>{step}</li>
+                ))}
+              </ul>
+              <Divider style={{ margin: '12px 0' }} />
+              {/* Add the External Link from the JSON */}
+              <Button 
+                type="primary" 
+                icon={<ExportOutlined />} 
+                href={m365Link || props.alertUri} 
+                target="_blank" 
+                block
+              >
+                Investigate in Azure Portal
+              </Button>
+            </Space>
+          </Col>
+        </Row>
+      </div>
+    );
+  }
+}}
             />
           </>
         );
@@ -382,7 +432,59 @@ export const SecurityTile = ({
       case "governance":
         return (<Table dataSource={scoreControls} size="small" rowKey="id" pagination={{ pageSize: 6 }} columns={[{ title: 'Security Control', render: (record) => (<Space direction="vertical" size={0}><Text strong>{record.properties?.displayName}</Text><Text type="secondary" style={{ fontSize: '11px' }}>Weight: {record.properties?.weight}</Text></Space>) }, { title: 'Resource Health', render: (record) => (<Space size="middle"><Tooltip title="Healthy"><Tag color="success">{record.properties?.healthyResourceCount || 0}</Tag></Tooltip><Tooltip title="Unhealthy"><Tag color="error">{record.properties?.unhealthyResourceCount || 0}</Tag></Tooltip></Space>) }, { title: 'Score Impact', render: (record) => { const percent = Math.round((record.properties?.score?.percentage || 0) * 100); return (<div style={{ width: '150px' }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}><Text type="secondary" style={{ fontSize: '12px' }}>{record.properties?.score?.current} / {record.properties?.score?.max} pts</Text><Text strong style={{ fontSize: '12px' }}>{percent}%</Text></div><Progress percent={percent} size="small" strokeColor={percent === 100 ? '#52c41a' : '#1890ff'} showInfo={false} /></div>); } }]} />);
       case "inventory":
-        return (<Table dataSource={criticalFindings} size="small" rowKey="id" columns={[{ title: 'High Severity Finding', render: (f) => (<Space direction="vertical" size={0}><Text strong style={{ color: '#ff4d4f' }}>{f.cveId}</Text><Text type="secondary" style={{ fontSize: '11px' }}>{f.software}</Text></Space>) }, { title: 'Resource', dataIndex: 'resource', render: (text) => <Tag color="blue">{text?.toUpperCase()}</Tag> }, { title: 'Status', render: () => <Tag color="error">UNHEALTHY</Tag> }]} expandable={{ expandedRowRender: (f) => (<Card size="small" style={{ background: '#f9f9f9', borderLeft: '4px solid #ff4d4f' }}><Row gutter={[24, 12]}><Col span={12}><Title level={5} style={{ fontSize: '14px' }}><BulbOutlined /> Remediation</Title><Paragraph style={{ fontSize: '13px' }}>{f.remediation}</Paragraph></Col><Col span={12}><Title level={5} style={{ fontSize: '14px' }}><InfoCircleOutlined /> Risk Impact</Title><Paragraph style={{ fontSize: '13px' }}>{f.impact}</Paragraph></Col></Row></Card>), }} />);
+        return (
+          <Table 
+            dataSource={criticalFindings} 
+            size="small" 
+            rowKey="id" 
+            columns={[
+              { 
+                title: 'High Severity Finding', 
+                render: (f) => (
+                  <Space direction="vertical" size={0}>
+                    <Text strong style={{ color: '#ff4d4f' }}>
+                      {f.software} ({f.cveCount} Vulnerabilities)
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: '11px' }}>
+                      {f.cveList.slice(0, 2).join(", ")}{f.cveList.length > 2 ? "..." : ""}
+                    </Text>
+                  </Space>
+                ) 
+              }, 
+              { 
+                title: 'Resource', 
+                dataIndex: 'resource', 
+                render: (text) => <Tag color="blue">{text?.toUpperCase()}</Tag> 
+              }, 
+              { 
+                title: 'Status', 
+                render: () => <Tag color="error">UNHEALTHY</Tag> 
+              }
+            ]} 
+            expandable={{ 
+              expandedRowRender: (f) => (
+                <Card size="small" style={{ background: '#f9f9f9', borderLeft: '4px solid #ff4d4f' }}>
+                  <Row gutter={[24, 12]}>
+                    <Col span={24}>
+                      <Text strong>Full CVE List:</Text><br/>
+                      <Space wrap style={{ marginTop: 8 }}>
+                        {f.cveList.map((cve: string) => <Tag key={cve} color="red">{cve}</Tag>)}
+                      </Space>
+                    </Col>
+                    <Col span={12} style={{ marginTop: 12 }}>
+                      <Title level={5} style={{ fontSize: '14px' }}><BulbOutlined /> Remediation</Title>
+                      <Paragraph style={{ fontSize: '13px' }}>{f.remediation}</Paragraph>
+                    </Col>
+                    <Col span={12} style={{ marginTop: 12 }}>
+                      <Title level={5} style={{ fontSize: '14px' }}><InfoCircleOutlined /> Risk Impact</Title>
+                      <Paragraph style={{ fontSize: '13px' }}>{f.impact}</Paragraph>
+                    </Col>
+                  </Row>
+                </Card>
+              ), 
+            }} 
+          />
+        );
       case "actions":
         const openActionsData = (allAssessments || []).filter((asm: any) => asm.properties?.status?.code === 'Unhealthy' && asm.properties?.metadata?.severity !== 'High').map((asm: any) => ({ id: asm.id, displayName: asm.properties?.displayName, resourceName: asm.properties?.resourceDetails?.ResourceName, severity: asm.properties?.metadata?.severity, softwareName: asm.properties?.additionalData?.SoftwareName, fixedVersion: asm.properties?.additionalData?.FixedVersion, description: asm.properties?.description, remediation: asm.properties?.remediationSteps }));
         return (<Table dataSource={openActionsData} size="small" rowKey="id" columns={[{ title: 'Recommendation', render: (record) => (<Space><div style={{ width: 20, height: 20, border: '1px solid #d9d9d9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1890ff', fontSize: '12px' }}>+</div><Text strong>{record.displayName}</Text></Space>) }, { title: 'Resource', render: (record) => <Tag color="blue">{record.resourceName?.toUpperCase()}</Tag> }, { title: 'Severity', render: (record) => <Tag color="orange" style={{ fontWeight: 'bold' }}>{record.severity?.toUpperCase() || 'MEDIUM'}</Tag> }]} expandable={{ expandedRowRender: (record) => (<div style={{ padding: '16px', background: '#f9f9f9', borderLeft: '5px solid #722ed1' }}><Title level={5} style={{ fontSize: '14px', color: '#722ed1' }}><BulbOutlined /> WHAT NEEDS TO BE DONE:</Title><Paragraph style={{ fontSize: '13px' }}>The software <strong>{record.softwareName}</strong> is out of date. Install version <strong>{record.fixedVersion || 'latest patch'}</strong> to resolve this failure.</Paragraph><Title level={5} style={{ fontSize: '14px', color: '#1890ff' }}><InfoCircleOutlined /> WHY IT FAILED:</Title><Paragraph style={{ fontSize: '13px', marginBottom: 0 }}>{record.description || "This resource is currently unhealthy."}</Paragraph></div>), }} />);
@@ -412,7 +514,9 @@ export const SecurityTile = ({
           <Col xs={24} lg={6} style={{ textAlign: 'center' }}>
             <Progress type="circle" percent={100} strokeColor="#1890ff" format={() => (
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#000' }}>{processedInventory.total}</div>
+<div style={{ fontSize: '24px', fontWeight: 'bold', color: '#000' }}>
+  {processedInventory.compute.length + processedInventory.network.length + processedInventory.backup.length + processedInventory.security.length}
+</div>
                   <div style={{ fontSize: '12px', color: 'rgba(0,0,0,0.45)' }}>TOTAL ASSETS</div>
                 </div>
               )}
@@ -478,40 +582,68 @@ export const SecurityTile = ({
         size="small"
       >
         <Table 
-          dataSource={activeAlerts.value?.slice(0, 5)} 
-          pagination={false} 
-          size="small"
-          rowKey={(record: any) => record.id || Math.random()}
-          onRow={() => ({
-            onClick: () => setActiveDrawer('alerts'),
-            style: { cursor: 'pointer' }
-          })}
-          columns={[
-            { title: 'Alert Name', dataIndex: ['properties', 'alertDisplayName'], render: (t) => <Text strong>{t}</Text> },
-            { title: 'Severity', dataIndex: ['properties', 'severity'], render: (s) => <Tag color={s === 'High' ? 'red' : 'orange'}>{s}</Tag> },
-            { title: 'Resource', dataIndex: ['properties', 'resourceDetails', 0, 'name'], render: (r) => <Tag color="blue">{r || 'N/A'}</Tag> },
-            { title: 'Detected', dataIndex: ['properties', 'timeGenerated'], render: (t) => dayjs(t).fromNow() }
-          ]}
-          footer={() => (
-            <div style={{ textAlign: 'center' }}>
-              <span 
-                onClick={(e) => {
-                  e.stopPropagation(); // Prevent double triggers
-                  setActiveDrawer('alerts');
-                }} 
-                style={{ 
-                  fontSize: '12px', 
-                  fontWeight: 'bold', 
-                  color: '#1890ff', 
-                  cursor: 'pointer',
-                  textDecoration: 'underline' 
-                }}
-              >
-                View All {activeAlerts.value?.length || 0} Alerts
-              </span>
-            </div>
+  // Use groupedAlerts here so the main page doesn't show duplicates
+  dataSource={groupedAlerts.slice(0, 5)} 
+  pagination={false} 
+  size="small"
+  rowKey={(record: any) => record.id || Math.random()}
+  onRow={() => ({
+    onClick: () => setActiveDrawer('alerts'),
+    style: { cursor: 'pointer' }
+  })}
+  columns={[
+    { 
+      title: 'Alert Name', 
+      render: (record: any) => (
+        <Space>
+          <Text strong>{record.properties?.alertDisplayName}</Text>
+          {/* Add a small count badge so users know it's a grouped alert */}
+          {record.count > 1 && (
+            <Badge 
+              count={record.count} 
+              style={{ backgroundColor: '#108ee9', fontSize: '10px' }} 
+              size="small" 
+            />
           )}
-        />
+        </Space>
+      ) 
+    },
+    { 
+      title: 'Severity', 
+      dataIndex: ['properties', 'severity'], 
+      render: (s) => <Tag color={s === 'High' ? 'red' : 'orange'}>{s}</Tag> 
+    },
+    { 
+      title: 'Resource', 
+      dataIndex: ['properties', 'resourceDetails', 0, 'name'], 
+      render: (r) => <Tag color="blue">{r || 'N/A'}</Tag> 
+    },
+    { 
+      title: 'Detected', 
+      dataIndex: ['properties', 'timeGenerated'], 
+      render: (t) => dayjs(t).fromNow() 
+    }
+  ]}
+  footer={() => (
+    <div style={{ textAlign: 'center' }}>
+      <span 
+        onClick={(e) => {
+          e.stopPropagation();
+          setActiveDrawer('alerts');
+        }} 
+        style={{ 
+          fontSize: '12px', 
+          fontWeight: 'bold', 
+          color: '#1890ff', 
+          cursor: 'pointer',
+          textDecoration: 'underline' 
+        }}
+      >
+        View All {activeAlerts.value?.length || 0} Alerts
+      </span>
+    </div>
+  )}
+/>
       </Card>
      
       <Drawer title={`${activeDrawer?.toUpperCase()} Details`} width={950} open={!!activeDrawer} onClose={() => { setActiveDrawer(null); setSelectedFramework("all"); if(onCategoryChange) onCategoryChange(null); }} destroyOnClose>
