@@ -34,6 +34,9 @@ interface SecurityTileProps {
   complianceStandards?: any[];
   resourceInventory?: any[];
   activeAlerts?: any;
+  // New props for filtering
+  activeInventoryCategory?: string | null;
+  onCategoryChange?: (category: string | null) => void;
 }
 
 export const SecurityTile = ({
@@ -47,12 +50,22 @@ export const SecurityTile = ({
   subscriptionId,
   complianceStandards = [],
   resourceInventory = [],
-  activeAlerts = { value: [] }
+  activeAlerts = { value: [] },
+  activeInventoryCategory, // Received from Dashboard
+  onCategoryChange          // Received from Dashboard
 }: SecurityTileProps) => {
   const [activeDrawer, setActiveDrawer] = useState<string | null>(null);
   const [selectedFramework, setSelectedFramework] = useState<string>("all");
 
-  // Core Math Logic
+  // Local handler to manage both the drawer state and the filter state
+  const handleInventoryTileClick = (category: string) => {
+    if (onCategoryChange) {
+      onCategoryChange(category);
+    }
+    setActiveDrawer('inventory_summary');
+  };
+
+  // ... (Math Logic and useMemos for riskTier, standardStats, etc. remain the same)
   const currentPoints = secureScoreRaw?.current || 0;
   const maxPoints = secureScoreRaw?.max || 0;
   const industryStandard = 80;
@@ -191,14 +204,27 @@ export const SecurityTile = ({
       case "inventory_summary":
         return (
           <div style={{ paddingBottom: 40 }}>
-            <Title level={4}><AppstoreOutlined /> Infrastructure Coverage Report</Title>
+            <Title level={4}>
+              <AppstoreOutlined /> 
+              {activeInventoryCategory ? ` ${activeInventoryCategory.charAt(0).toUpperCase() + activeInventoryCategory.slice(1)} Resources` : " Infrastructure Coverage Report"}
+            </Title>
             <Divider />
-            {renderInventoryTable(processedInventory.compute, "Compute Resources", <CloudServerOutlined />)}
-            {renderInventoryTable(processedInventory.network, "Networking Resources", <GlobalOutlined />)}
-            {renderInventoryTable(processedInventory.security, "Security & Monitoring", <SecurityScanOutlined />)}
-            {renderInventoryTable(processedInventory.backup, "Backup & Recovery", <DatabaseOutlined />)}
+            {/* Logic: Only render the specific category if activeInventoryCategory is set, else show all */}
+            {(!activeInventoryCategory || activeInventoryCategory === 'compute') && 
+              renderInventoryTable(processedInventory.compute, "Compute Resources", <CloudServerOutlined />)}
+            
+            {(!activeInventoryCategory || activeInventoryCategory === 'network') && 
+              renderInventoryTable(processedInventory.network, "Networking Resources", <GlobalOutlined />)}
+            
+            {(!activeInventoryCategory || activeInventoryCategory === 'security') && 
+              renderInventoryTable(processedInventory.security, "Security & Monitoring", <SecurityScanOutlined />)}
+            
+            {(!activeInventoryCategory || activeInventoryCategory === 'backup') && 
+              renderInventoryTable(processedInventory.backup, "Backup & Recovery", <DatabaseOutlined />)}
           </div>
         );
+      
+      // ... (Other cases: alerts, compliance, governance, inventory, actions, identity remain unchanged)
       case "alerts":
         return (
           <>
@@ -470,7 +496,6 @@ export const SecurityTile = ({
             ]}
           />
         );
-
       default:
         return <Text>No details available.</Text>;
     }
@@ -478,6 +503,7 @@ export const SecurityTile = ({
 
   return (
     <div style={{ marginTop: 24 }}>
+      {/* ... (Security Maturity Benchmark card remains the same) */}
       <Card style={{ borderRadius: 12, marginBottom: 16, borderLeft: `6px solid ${riskTier.hex}` }}>
         <Space direction="vertical" style={{ width: '100%' }}>
           <Space>
@@ -503,11 +529,13 @@ export const SecurityTile = ({
           </Col>
           <Col xs={24} lg={18}>
             <Row gutter={[16, 16]}>
-              <Col span={6}><Card size="small" hoverable onClick={() => setActiveDrawer('inventory_summary')} style={{ background: '#e6f7ff' }}><Statistic title="Compute" value={processedInventory.compute.length} prefix={<CloudServerOutlined />} /></Card></Col>
-              <Col span={6}><Card size="small" hoverable onClick={() => setActiveDrawer('inventory_summary')} style={{ background: '#f6ffed' }}><Statistic title="Network" value={processedInventory.network.length} prefix={<GlobalOutlined />} /></Card></Col>
-              <Col span={6}><Card size="small" hoverable onClick={() => setActiveDrawer('inventory_summary')} style={{ background: '#fff7e6' }}><Statistic title="Backup" value={processedInventory.backup.length} prefix={<DatabaseOutlined />} /></Card></Col>
-              <Col span={6}><Card size="small" hoverable onClick={() => setActiveDrawer('inventory_summary')} style={{ background: '#fff0f6' }}><Statistic title="Security" value={processedInventory.security.length} prefix={<SecurityScanOutlined />} /></Card></Col>
+              {/* UPDATED ONCLICK HANDLERS */}
+              <Col span={6}><Card size="small" hoverable onClick={() => handleInventoryTileClick('compute')} style={{ background: '#e6f7ff' }}><Statistic title="Compute" value={processedInventory.compute.length} prefix={<CloudServerOutlined />} /></Card></Col>
+              <Col span={6}><Card size="small" hoverable onClick={() => handleInventoryTileClick('network')} style={{ background: '#f6ffed' }}><Statistic title="Network" value={processedInventory.network.length} prefix={<GlobalOutlined />} /></Card></Col>
+              <Col span={6}><Card size="small" hoverable onClick={() => handleInventoryTileClick('backup')} style={{ background: '#fff7e6' }}><Statistic title="Backup" value={processedInventory.backup.length} prefix={<DatabaseOutlined />} /></Card></Col>
+              <Col span={6}><Card size="small" hoverable onClick={() => handleInventoryTileClick('security')} style={{ background: '#fff0f6' }}><Statistic title="Security" value={processedInventory.security.length} prefix={<SecurityScanOutlined />} /></Card></Col>
             </Row>
+            {/* ... (Rest of card content) */}
             <Divider style={{ margin: '16px 0' }} />
             <Row gutter={24}>
               <Col span={12}>
@@ -525,10 +553,16 @@ export const SecurityTile = ({
         </Row>
       </Card>
 
+      {/* ... (Bottom tiles loop) */}
       <Row gutter={[16, 16]}>
         {tiles.map((tile) => (
           <Col xs={24} md={tile.id === "governance" ? 8 : 4} key={tile.id}>
-            <Card hoverable loading={loading} onClick={() => setActiveDrawer(tile.id)} style={{ borderRadius: 12, borderTop: `4px solid ${tile.color}`, height: '100%' }}>
+            <Card hoverable loading={loading} 
+              onClick={() => {
+                if(onCategoryChange) onCategoryChange(null); // Reset filter when clicking main tiles
+                setActiveDrawer(tile.id);
+              }} 
+              style={{ borderRadius: 12, borderTop: `4px solid ${tile.color}`, height: '100%' }}>
               {tile.isProgress ? (
                 <div style={{ textAlign: 'center' }}>
                   <Text type="secondary" style={{ fontSize: 11 }}>{tile.title}</Text><br />
@@ -552,7 +586,8 @@ export const SecurityTile = ({
         open={!!activeDrawer}
         onClose={() => {
           setActiveDrawer(null);
-          setSelectedFramework("all"); // Reset filter on close
+          setSelectedFramework("all");
+          if(onCategoryChange) onCategoryChange(null); // Reset filter state on close
         }}
         destroyOnClose
       >

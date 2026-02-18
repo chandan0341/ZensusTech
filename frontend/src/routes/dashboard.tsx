@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect, useMemo, useCallback } from "react"; // Added useCallback
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Row, Col, Spin, Alert, Empty } from "antd";
 import { DashboardTiles } from "./DashboardTiles";
 import { useCredentials } from "../hooks/useCredentials";
@@ -40,6 +40,7 @@ interface SecureScoreData {
 function Dashboard() {
   const { tenantId, isConnected } = useCredentials();
   
+  // --- State ---
   const [selectedTenant, setSelectedTenant] = useState<string>(tenantId || "");
   const [selectedSubscription, setSelectedSubscription] = useState<string | null>(null);
   const [selectedTile, setSelectedTile] = useState<string>("azure-identity");
@@ -47,17 +48,20 @@ function Dashboard() {
   const [selectedCardData, setSelectedCardData] = useState<ModalData | null>(null);
   const [viewMode, setViewMode] = useState<'tenant' | 'subscription'>('tenant');
   const [activeFilter, setActiveFilter] = useState<string>("All");
+  const [activeInventoryCategory, setActiveInventoryCategory] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>([
     dayjs().subtract(7, 'day'), 
     dayjs()
   ]);
 
+  // --- Redirect if not connected ---
   useEffect(() => {
     if (!isConnected) {
       window.location.href = "/connection";
     }
   }, [isConnected]);
 
+  // --- Clean URL Params ---
   useEffect(() => {
     const url = new URL(window.location.href);
     if (url.searchParams.has('from')) {
@@ -66,13 +70,14 @@ function Dashboard() {
     }
   }, []);
 
+  // --- Data Fetching ---
   const {
     azureSubscriptions,
     subMetadata,
     loading: subscriptionsLoading,
     error: subscriptionsError,
     fetchSubscriptionMetadata,
-    refreshSubscriptions, // Ensure your hook exports this refetch function
+    refreshSubscriptions,
   } = useAzureSubscriptions({ selectedTenant });
 
   const {
@@ -103,7 +108,7 @@ function Dashboard() {
     isSecurityReportLoading,
     complianceStandards,
     resourceInventory,
-    refetchData, // Ensure your useDashboardData hook exports a refetch function
+    refetchData,
   } = useDashboardData({
     selectedTenant,
     selectedSubscription,
@@ -111,13 +116,44 @@ function Dashboard() {
     dateRange
   });
 
-  // --- REFRESH LOGIC ---
+  // --- Handlers ---
   const handleRefresh = useCallback(async () => {
-    // Refresh both subscription list and dashboard metrics
     if (refreshSubscriptions) await refreshSubscriptions();
     if (refetchData) await refetchData();
   }, [refreshSubscriptions, refetchData]);
 
+  const handleViewModeChange = (newMode: 'tenant' | 'subscription') => {
+    setViewMode(newMode);
+    if (newMode === 'subscription') {
+      if (azureSubscriptions?.length > 0 && !selectedSubscription) {
+        const firstSub = azureSubscriptions[0];
+        const subId = (firstSub as any).subscriptionId || (firstSub as any).id;
+        if (subId) setSelectedSubscription(subId);
+      }
+      if (selectedTile === 'microsoft-365' || selectedTile === 'domain-overview') {
+        setSelectedTile('azure-identity');
+      }
+    } else {
+      setSelectedSubscription(null);
+    }
+  };
+
+  const handleTenantChange = (tId: string) => {
+    setSelectedTenant(tId);
+    setSelectedSubscription(null);
+    setViewMode('tenant');
+    setSelectedTile('azure-identity'); 
+  };
+
+  const handleSubscriptionChange = (subscriptionId: string | null) => {
+    setSelectedSubscription(subscriptionId);
+  };
+
+  const handleCategoryChange = (category: string | null) => {
+    setActiveInventoryCategory(category);
+  };
+
+  // --- Memoized Calculations ---
   const securityMetrics = useMemo(() => {
     const data = secureScoreRaw as SecureScoreData | null;
     const controls = data?.controlScores || [];
@@ -140,45 +176,7 @@ function Dashboard() {
     }
   }, [selectedSubscription, fetchSubscriptionMetadata]);
 
-  // --- Handlers ---
-  const handleViewModeChange = (newMode: 'tenant' | 'subscription') => {
-    setViewMode(newMode);
-    if (newMode === 'subscription') {
-      if (azureSubscriptions?.length > 0 && !selectedSubscription) {
-        const firstSub = azureSubscriptions[0];
-        const subId = (firstSub as any).subscriptionId || (firstSub as any).id;
-        if (subId) handleSubscriptionChange(subId);
-      }
-      if (selectedTile === 'microsoft-365' || selectedTile === 'domain-overview') {
-        setSelectedTile('azure-identity');
-      }
-    } else {
-      handleSubscriptionChange(null);
-    }
-  };
-
-  const handleTenantChange = (tId: string) => {
-    setSelectedTenant(tId);
-    setSelectedSubscription(null);
-    setViewMode('tenant');
-    setSelectedTile('azure-identity'); 
-  };
-
-  const handleSubscriptionChange = (subscriptionId: string | null) => {
-    setSelectedSubscription(subscriptionId);
-    // Logic: Keep current mode but update selection
-    // If user clicks a sub, we stay in sub mode.
-  };
-
-  const isSubModeWithoutSelection = viewMode === 'subscription' && !selectedSubscription;
-  const displayUsers = isSubModeWithoutSelection 
-    ? [] 
-    : (viewMode === 'tenant' ? (allTenantUsers || []) : (users || []));
-
-  const { mfaEnabledCount, mfaDisabledCount } = calculateMFAStats(displayUsers);
-  const mfaDisabledByRole = calculateMFADisabledByRole(displayUsers);
-
-  // Modal Handlers ... (Keep your existing modal handlers here)
+  // --- Modal Click Handlers ---
   const handleCardClick = (cardType: string, currentTile: string) => {
     if (isSubModeWithoutSelection) return;
     let modalData = null;
@@ -218,6 +216,13 @@ function Dashboard() {
     }
   };
 
+  const isSubModeWithoutSelection = viewMode === 'subscription' && !selectedSubscription;
+  const displayUsers = isSubModeWithoutSelection 
+    ? [] 
+    : (viewMode === 'tenant' ? (allTenantUsers || []) : (users || []));
+
+  const { mfaEnabledCount, mfaDisabledCount } = calculateMFAStats(displayUsers);
+  const mfaDisabledByRole = calculateMFADisabledByRole(displayUsers);
   const loading = subscriptionsLoading || dataLoading;
 
   if (!isConnected) return null;
@@ -234,10 +239,10 @@ function Dashboard() {
           selectedTenant={selectedTenant}
           selectedSubscription={selectedSubscription}
           azureSubscriptions={azureSubscriptions}
-          loading={loading} // Changed to overall loading
+          loading={loading}
           onTenantChange={handleTenantChange}
           onSubscriptionChange={handleSubscriptionChange}
-          onRefresh={handleRefresh} // RESTORED REFRESH PROP
+          onRefresh={handleRefresh}
           tenantId={tenantId || undefined}
         />
 
@@ -330,6 +335,8 @@ function Dashboard() {
                           complianceStandards={complianceStandards}
                           resourceInventory={resourceInventory}
                           subscriptionId={selectedSubscription}
+                          activeInventoryCategory={activeInventoryCategory} 
+                          onCategoryChange={handleCategoryChange}
                         />
                       )}
                       {selectedTile === 'cost-management' && <CostManagementTile />}
