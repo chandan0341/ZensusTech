@@ -722,7 +722,7 @@ class GraphService:
 
     # --- IDENTITY BATCH (GRAPH) ---
 
-    async def get_identity_security_batch(self, graph_token: str,):
+    async def get_identity_security_batch(self, graph_token: str):
         batch_payload = {
             "requests": [
                 {
@@ -760,6 +760,7 @@ class GraphService:
                 logger.error(f"Identity Batch failed: {str(e)}")
                 return {"mfaIssues": 0, "adminCount": 0}
 
+    # --- CONSOLIDATED MASTER REPORT ---
     async def get_resource_count(self, subscription_id, mgmt_token: str):
         url = f"https://management.azure.com/subscriptions/{subscription_id}/resources?api-version=2021-04-01"
         # Implementation using your preferred async client (e.g., httpx.get)
@@ -768,7 +769,8 @@ class GraphService:
     async def get_security_alerts(self, subscription_id, mgmt_token: str):
         url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/alerts?api-version=2022-01-01"
         return await self._get_mgmt_data(url, mgmt_token)
-    # --- CONSOLIDATED MASTER REPORT ---
+
+
 
     async def get_consolidated_security_report(
         self,
@@ -776,6 +778,7 @@ class GraphService:
         mgmt_token: str,
         graph_token: str
     ):
+        # 1. Define all concurrent tasks
         tasks = [
             self.get_azure_secure_score(subscription_id, mgmt_token),           # 0
             self.get_security_assessments(subscription_id, mgmt_token),         # 1
@@ -783,18 +786,20 @@ class GraphService:
             self.get_regulatory_standards(subscription_id, mgmt_token),         # 3
             self.get_failed_regulatory_controls(subscription_id, mgmt_token),   # 4
             self.get_resource_count(subscription_id, mgmt_token),               # 5 (New)
-            self.get_security_alerts(subscription_id, mgmt_token),
+            self.get_security_alerts(subscription_id, mgmt_token),              # 6 (New)
         ]
 
-        # Allow failures but detect them
+        # 2. Execute tasks concurrently
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # 🔎 Check for exceptions explicitly
+        # 3. Explicit Exception Handling
         for idx, result in enumerate(results):
             if isinstance(result, Exception):
-                logger.exception("Task %s failed in consolidated security report", idx)
-                raise result  # Don't silently ignore
+                logger.exception(f"Task index {idx} failed during report consolidation")
+                # You can choose to raise here or provide a fallback
+                raise result 
 
+        # 4. Extract and Normalize Data
         secure_scores_raw   = results[0] or {}
         assessments_raw     = results[1] or {"value": []}
         controls_raw        = results[2] or {"value": []}
@@ -803,17 +808,13 @@ class GraphService:
         resources_raw       = results[5] or {"value": []}
         alerts_raw          = results[6] or {"value": []}
 
-        # 🔥 IMPORTANT FIX
-        # Azure Secure Score API returns list under "value"
-        # You must extract first item
+        # Extract the first item from the list-based Secure Score response
         secure_score_obj = {}
         if isinstance(secure_scores_raw, dict):
-            secure_score_obj = (
-                secure_scores_raw.get("value", [{}])[0]
-                if secure_scores_raw.get("value")
-                else {}
-            )
+            value_list = secure_scores_raw.get("value", [])
+            secure_score_obj = value_list[0] if value_list else {}
 
+        # 5. Build Consolidated Response
         return {
             "scoreData": secure_score_obj,
             "allAssessments": assessments_raw,
@@ -827,5 +828,7 @@ class GraphService:
                 "maxScore": secure_score_obj.get("properties", {}).get("score", {}).get("max", 0),
                 "percentage": secure_score_obj.get("properties", {}).get("score", {}).get("percentage", 0),
                 "totalFailedControls": len(failed_controls_raw.get("value", [])),
+                "totalResources": len(resources_raw.get("value", [])),
+                "activeAlertCount": len(alerts_raw.get("value", [])),
             },
         }

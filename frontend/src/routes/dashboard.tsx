@@ -102,6 +102,7 @@ function Dashboard() {
     secureScoreRaw,
     isSecurityReportLoading,
     complianceStandards,
+    resourceInventory,
     refetchData, // Ensure your useDashboardData hook exports a refetch function
   } = useDashboardData({
     selectedTenant,
@@ -327,6 +328,7 @@ function Dashboard() {
                           scoreControls={scoreControls}
                           allAssessments={allAssessments} 
                           complianceStandards={complianceStandards}
+                          resourceInventory={resourceInventory}
                           subscriptionId={selectedSubscription}
                         />
                       )}

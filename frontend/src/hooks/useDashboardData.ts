@@ -152,7 +152,10 @@ export const useDashboardData = ({
   }, [refetchData]);
 
   const report = useMemo(() => {
+    const data = securityAuditReport?.value
+    console.log(data)
     return securityAuditReport?.value || securityAuditReport || {};
+
   }, [securityAuditReport]);
 
   return {
@@ -183,6 +186,7 @@ export const useDashboardData = ({
     kpiData: report.postureKPI || {},
     allAssessments: report.allAssessments?.value || [],
     complianceStandards:report.complianceStandards?.value||[],
+    resourceInventory:report.resourceInventory?.value||[],
 
     // Meta/Loading states
     securityAuditReport,
