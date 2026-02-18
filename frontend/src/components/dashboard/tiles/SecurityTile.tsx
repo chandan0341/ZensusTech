@@ -68,7 +68,6 @@ export const SecurityTile = ({
   const maxPoints = secureScoreRaw?.max || 0;
   const industryStandard = 80;
   
-  // FIXED: Logic restored and variable used below
   const gapToStandard = Math.max(0, industryStandard - overallScore);
   const targetPoints = Math.ceil(maxPoints * (industryStandard / 100));
   const pointsNeeded = Math.max(0, targetPoints - currentPoints);
@@ -233,13 +232,102 @@ export const SecurityTile = ({
       case "alerts":
         return (
           <>
-            <Title level={4}><AlertOutlined /> Active Security Alerts</Title>
-            <Table dataSource={activeAlerts.value} size="small" rowKey={(_, index) => index?.toString() || 'alert'}
+            <Title level={4}><AlertOutlined /> Threat Intelligence & Entity Details</Title>
+            <Paragraph type="secondary">
+              Expand a row to view technical identifiers such as Source IPs, compromised accounts, and host details.
+            </Paragraph>
+            <Table 
+              dataSource={activeAlerts.value} 
+              size="small" 
+              rowKey={(record: any) => record.id || Math.random().toString()}
               columns={[
-                { title: 'Alert Display Name', dataIndex: ['properties', 'alertDisplayName'], render: (t) => <Text strong>{t}</Text> },
-                { title: 'Severity', dataIndex: ['properties', 'severity'], render: (s) => <Tag color={s === 'High' ? 'red' : 'orange'}>{s}</Tag> },
-                { title: 'Time Detected', dataIndex: ['properties', 'timeGenerated'], render: (t) => dayjs(t).fromNow() }
+                { 
+                  title: 'Alert Name', 
+                  render: (record: any) => (
+                    <Space direction="vertical" size={0}>
+                      <Text strong>{record.properties?.alertDisplayName}</Text>
+                      <Text type="secondary" style={{ fontSize: '11px' }}>Intent: {record.properties?.intent || 'Unknown'}</Text>
+                    </Space>
+                  ) 
+                },
+                { 
+                  title: 'Severity', 
+                  dataIndex: ['properties', 'severity'], 
+                  render: (s) => <Tag color={s === 'High' ? 'red' : 'orange'}>{s}</Tag> 
+                },
+                { 
+                  title: 'Status', 
+                  dataIndex: ['properties', 'status'], 
+                  render: (st) => <Badge status={st === 'Active' ? 'error' : 'default'} text={st} /> 
+                }
               ]}
+              expandable={{
+                expandedRowRender: (record: any) => {
+                  // Extract entities like IPs and Account names
+                  const entities = record.properties?.entities || [];
+                  const ipEntities = entities.filter((e: any) => e.type === 'ip');
+                  const accountEntities = entities.filter((e: any) => e.type === 'account');
+                  const hostEntities = entities.filter((e: any) => e.type === 'host');
+
+                  return (
+                    <div style={{ padding: '16px', background: '#f9f9f9', borderLeft: '4px solid #1890ff' }}>
+                      <Row gutter={[24, 16]}>
+                        {/* 1. Description Section */}
+                        <Col span={24}>
+                          <Text strong><InfoCircleOutlined /> Description</Text>
+                          <Paragraph style={{ marginTop: 8, fontSize: '13px' }}>
+                            {record.properties?.description}
+                          </Paragraph>
+                        </Col>
+
+                        {/* 2. Source/Entity Section - THIS IS WHAT YOU ASKED FOR */}
+                        <Col span={12}>
+                          <Text strong><SecurityScanOutlined /> Source / Entity Info</Text>
+                          <div style={{ marginTop: 8 }}>
+                            {ipEntities.length > 0 && (
+                              <div style={{ marginBottom: 4 }}>
+                                <Text type="secondary">IP Addresses: </Text>
+                                {ipEntities.map((ip: any, i: number) => (
+                                  <Tag key={i} color="volcano">{ip.address}</Tag>
+                                ))}
+                              </div>
+                            )}
+                            {accountEntities.length > 0 && (
+                              <div style={{ marginBottom: 4 }}>
+                                <Text type="secondary">Accounts: </Text>
+                                {accountEntities.map((acc: any, i: number) => (
+                                  <Tag key={i} color="blue">{acc.name || acc.accountName}</Tag>
+                                ))}
+                              </div>
+                            )}
+                            {hostEntities.length > 0 && (
+                              <div>
+                                <Text type="secondary">Host: </Text>
+                                <Tag color="green">{hostEntities[0].hostname}</Tag>
+                              </div>
+                            )}
+                           {entities.length === 0 && (
+      <Text type="secondary"> {/* FIXED: Changed "disabled" to "secondary" */}
+        No specific entity identifiers found in metadata.
+      </Text>
+    )}
+                          </div>
+                        </Col>
+
+                        {/* 3. Remediation Section */}
+                        <Col span={12}>
+                          <Text strong><BulbOutlined /> Remediation Steps</Text>
+                          <div style={{ marginTop: 8 }}>
+                            <Paragraph style={{ fontSize: '12px' }}>
+                              {record.properties?.remediationSteps?.[0] || "Manual investigation required in Azure Portal."}
+                            </Paragraph>
+                          </div>
+                        </Col>
+                      </Row>
+                    </div>
+                  );
+                },
+              }}
             />
           </>
         );
@@ -275,7 +363,6 @@ export const SecurityTile = ({
               <Col span={8}><Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #52c41a' }}><Statistic title="Passed" value={standardStats.passed} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} /></Card></Col>
               <Col span={8}><Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #faad14' }}><Statistic title="Skipped" value={standardStats.skipped} valueStyle={{ color: '#faad14' }} prefix={<InfoCircleOutlined />} /></Card></Col>
             </Row>
-            {/* FIXED TS2322: Correct casting for Divider orientation */}
             <Divider orientation={"left" as any} style={{ borderTopColor: '#f0f0f0' }}>Policy Violations List</Divider>
             <Table dataSource={failedControlsData} size="small" rowKey={(r) => r.id || r.name}
               columns={[
@@ -346,6 +433,24 @@ export const SecurityTile = ({
           </Col>
         </Row>
       </Card>
+       <Row gutter={[16, 16]}>
+        {tiles.map((tile) => (
+          <Col xs={24} md={tile.id === "governance" ? 8 : 4} key={tile.id}>
+            <Card hoverable loading={loading} onClick={() => { if(onCategoryChange) onCategoryChange(null); setActiveDrawer(tile.id); }} style={{ borderRadius: 12, borderTop: `4px solid ${tile.color}`, height: '100%' }}>
+              {tile.isProgress ? (
+                <div style={{ textAlign: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: 11 }}>{tile.title}</Text><br /><Progress type="circle" percent={Number(tile.value)} width={80} strokeColor={tile.color} /><br /><Text strong style={{ fontSize: 10 }}>{tile.extra}</Text>
+                </div>
+              ) : (
+                <div>
+                  <Statistic title={<Text type="secondary" style={{ fontSize: 11 }}>{tile.title}</Text>} value={tile.value} prefix={tile.prefix} valueStyle={{ color: tile.color }} />
+                  <Text type="secondary" style={{ fontSize: 10 }}>{tile.extra}</Text>
+                </div>
+              )}
+            </Card>
+          </Col>
+        ))}
+      </Row>
 
       <Card 
         title={<><PushpinOutlined style={{ color: '#1890ff' }} /> Monitoring & Alerts Overview</>} 
@@ -366,25 +471,49 @@ export const SecurityTile = ({
         />
       </Card>
 
-      <Row gutter={[16, 16]}>
-        {tiles.map((tile) => (
-          <Col xs={24} md={tile.id === "governance" ? 8 : 4} key={tile.id}>
-            <Card hoverable loading={loading} onClick={() => { if(onCategoryChange) onCategoryChange(null); setActiveDrawer(tile.id); }} style={{ borderRadius: 12, borderTop: `4px solid ${tile.color}`, height: '100%' }}>
-              {tile.isProgress ? (
-                <div style={{ textAlign: 'center' }}>
-                  <Text type="secondary" style={{ fontSize: 11 }}>{tile.title}</Text><br /><Progress type="circle" percent={Number(tile.value)} width={80} strokeColor={tile.color} /><br /><Text strong style={{ fontSize: 10 }}>{tile.extra}</Text>
-                </div>
-              ) : (
-                <div>
-                  <Statistic title={<Text type="secondary" style={{ fontSize: 11 }}>{tile.title}</Text>} value={tile.value} prefix={tile.prefix} valueStyle={{ color: tile.color }} />
-                  <Text type="secondary" style={{ fontSize: 10 }}>{tile.extra}</Text>
-                </div>
-              )}
-            </Card>
-          </Col>
-        ))}
-      </Row>
-
+     {/* Important Security Alerts Table - Now Interactive */}
+      <Card 
+        title={<><AlertOutlined style={{ color: '#ff4d4f' }} /> Important Security Alerts</>} 
+        style={{ borderRadius: 12, marginBottom: 16 }} 
+        size="small"
+      >
+        <Table 
+          dataSource={activeAlerts.value?.slice(0, 5)} 
+          pagination={false} 
+          size="small"
+          rowKey={(record: any) => record.id || Math.random()}
+          onRow={() => ({
+            onClick: () => setActiveDrawer('alerts'),
+            style: { cursor: 'pointer' }
+          })}
+          columns={[
+            { title: 'Alert Name', dataIndex: ['properties', 'alertDisplayName'], render: (t) => <Text strong>{t}</Text> },
+            { title: 'Severity', dataIndex: ['properties', 'severity'], render: (s) => <Tag color={s === 'High' ? 'red' : 'orange'}>{s}</Tag> },
+            { title: 'Resource', dataIndex: ['properties', 'resourceDetails', 0, 'name'], render: (r) => <Tag color="blue">{r || 'N/A'}</Tag> },
+            { title: 'Detected', dataIndex: ['properties', 'timeGenerated'], render: (t) => dayjs(t).fromNow() }
+          ]}
+          footer={() => (
+            <div style={{ textAlign: 'center' }}>
+              <span 
+                onClick={(e) => {
+                  e.stopPropagation(); // Prevent double triggers
+                  setActiveDrawer('alerts');
+                }} 
+                style={{ 
+                  fontSize: '12px', 
+                  fontWeight: 'bold', 
+                  color: '#1890ff', 
+                  cursor: 'pointer',
+                  textDecoration: 'underline' 
+                }}
+              >
+                View All {activeAlerts.value?.length || 0} Alerts
+              </span>
+            </div>
+          )}
+        />
+      </Card>
+     
       <Drawer title={`${activeDrawer?.toUpperCase()} Details`} width={950} open={!!activeDrawer} onClose={() => { setActiveDrawer(null); setSelectedFramework("all"); if(onCategoryChange) onCategoryChange(null); }} destroyOnClose>
         {renderDrawerContent()}
       </Drawer>
