@@ -108,6 +108,7 @@ function Dashboard() {
     isSecurityReportLoading,
     complianceStandards,
     resourceInventory,
+    activeAlerts,
     refetchData,
   } = useDashboardData({
     selectedTenant,
@@ -336,6 +337,7 @@ function Dashboard() {
                           resourceInventory={resourceInventory}
                           subscriptionId={selectedSubscription}
                           activeInventoryCategory={activeInventoryCategory} 
+                          activeAlerts={activeAlerts}
                           onCategoryChange={handleCategoryChange}
                         />
                       )}

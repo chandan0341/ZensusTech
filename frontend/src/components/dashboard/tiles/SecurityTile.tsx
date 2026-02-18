@@ -8,7 +8,8 @@ import {
   UserOutlined, BulbOutlined, AuditOutlined, InfoCircleOutlined,
   FileProtectOutlined, CheckCircleOutlined, PieChartOutlined,
   AppstoreOutlined, CloudServerOutlined, GlobalOutlined,
-  SecurityScanOutlined, DatabaseOutlined, AlertOutlined
+  SecurityScanOutlined, DatabaseOutlined, AlertOutlined,
+  CheckSquareFilled, PushpinOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -34,7 +35,6 @@ interface SecurityTileProps {
   complianceStandards?: any[];
   resourceInventory?: any[];
   activeAlerts?: any;
-  // New props for filtering
   activeInventoryCategory?: string | null;
   onCategoryChange?: (category: string | null) => void;
 }
@@ -51,13 +51,12 @@ export const SecurityTile = ({
   complianceStandards = [],
   resourceInventory = [],
   activeAlerts = { value: [] },
-  activeInventoryCategory, // Received from Dashboard
-  onCategoryChange          // Received from Dashboard
+  activeInventoryCategory,
+  onCategoryChange
 }: SecurityTileProps) => {
   const [activeDrawer, setActiveDrawer] = useState<string | null>(null);
   const [selectedFramework, setSelectedFramework] = useState<string>("all");
 
-  // Local handler to manage both the drawer state and the filter state
   const handleInventoryTileClick = (category: string) => {
     if (onCategoryChange) {
       onCategoryChange(category);
@@ -65,13 +64,30 @@ export const SecurityTile = ({
     setActiveDrawer('inventory_summary');
   };
 
-  // ... (Math Logic and useMemos for riskTier, standardStats, etc. remain the same)
   const currentPoints = secureScoreRaw?.current || 0;
   const maxPoints = secureScoreRaw?.max || 0;
   const industryStandard = 80;
+  
+  // FIXED: Logic restored and variable used below
   const gapToStandard = Math.max(0, industryStandard - overallScore);
   const targetPoints = Math.ceil(maxPoints * (industryStandard / 100));
   const pointsNeeded = Math.max(0, targetPoints - currentPoints);
+
+  const dynamicMonitoringData = useMemo(() => {
+    const alerts = activeAlerts?.value || [];
+    const hasAlert = (searchStr: string) => 
+      alerts.some((a: any) => 
+        a.properties?.alertDisplayName?.toLowerCase().includes(searchStr.toLowerCase())
+      );
+
+    return [
+      { key: '1', type: 'Activity Log Alerts', configured: alerts.length > 0 ? 'Yes' : 'No', scope: 'VM Operations' },
+      { key: '2', type: 'Metric Alerts', configured: hasAlert('metric') ? 'Yes' : 'No', scope: 'CPU, Disk, Memory' },
+      { key: '3', type: 'Backup Alerts Rule', configured: hasAlert('backup') ? 'Yes' : 'No', scope: 'Backup Notifications' },
+      { key: '4', type: 'Defender Integration', configured: 'Enabled', scope: 'VM Protection' },
+      { key: '5', type: 'Log Analytics', configured: subscriptionId ? 'Enabled' : 'Disabled', scope: 'Monitoring & Logs' },
+    ];
+  }, [activeAlerts, subscriptionId]);
 
   const processedInventory = useMemo(() => {
     const data = {
@@ -199,7 +215,6 @@ export const SecurityTile = ({
 
   const renderDrawerContent = () => {
     if (!activeDrawer) return null;
-
     switch (activeDrawer) {
       case "inventory_summary":
         return (
@@ -209,22 +224,12 @@ export const SecurityTile = ({
               {activeInventoryCategory ? ` ${activeInventoryCategory.charAt(0).toUpperCase() + activeInventoryCategory.slice(1)} Resources` : " Infrastructure Coverage Report"}
             </Title>
             <Divider />
-            {/* Logic: Only render the specific category if activeInventoryCategory is set, else show all */}
-            {(!activeInventoryCategory || activeInventoryCategory === 'compute') && 
-              renderInventoryTable(processedInventory.compute, "Compute Resources", <CloudServerOutlined />)}
-            
-            {(!activeInventoryCategory || activeInventoryCategory === 'network') && 
-              renderInventoryTable(processedInventory.network, "Networking Resources", <GlobalOutlined />)}
-            
-            {(!activeInventoryCategory || activeInventoryCategory === 'security') && 
-              renderInventoryTable(processedInventory.security, "Security & Monitoring", <SecurityScanOutlined />)}
-            
-            {(!activeInventoryCategory || activeInventoryCategory === 'backup') && 
-              renderInventoryTable(processedInventory.backup, "Backup & Recovery", <DatabaseOutlined />)}
+            {(!activeInventoryCategory || activeInventoryCategory === 'compute') && renderInventoryTable(processedInventory.compute, "Compute Resources", <CloudServerOutlined />)}
+            {(!activeInventoryCategory || activeInventoryCategory === 'network') && renderInventoryTable(processedInventory.network, "Networking Resources", <GlobalOutlined />)}
+            {(!activeInventoryCategory || activeInventoryCategory === 'security') && renderInventoryTable(processedInventory.security, "Security & Monitoring", <SecurityScanOutlined />)}
+            {(!activeInventoryCategory || activeInventoryCategory === 'backup') && renderInventoryTable(processedInventory.backup, "Backup & Recovery", <DatabaseOutlined />)}
           </div>
         );
-      
-      // ... (Other cases: alerts, compliance, governance, inventory, actions, identity remain unchanged)
       case "alerts":
         return (
           <>
@@ -245,277 +250,72 @@ export const SecurityTile = ({
               <Title level={4} style={{ margin: 0 }}><PieChartOutlined /> Framework Compliance Status</Title>
               <Space>
                 <Text type="secondary">Filter Framework:</Text>
-                <Select
-                  defaultValue="all"
-                  style={{ width: 200 }}
-                  onChange={(value) => setSelectedFramework(value)}
-                >
+                <Select defaultValue="all" style={{ width: 200 }} onChange={(value) => setSelectedFramework(value)}>
                   <Option value="all">All Frameworks</Option>
-                  {complianceStandards.map(std => (
-                    <Option key={std.name} value={std.name}>{std.name}</Option>
-                  ))}
+                  {complianceStandards.map(std => (<Option key={std.name} value={std.name}>{std.name}</Option>))}
                 </Select>
               </Space>
             </div>
-
             <Card style={{ background: '#fcfcfc', border: '1px solid #f0f0f0', borderRadius: '8px', marginBottom: 24 }}>
               <Row gutter={48} align="middle">
                 <Col span={10} style={{ textAlign: 'center' }}>
-                  <Progress
-                    type="dashboard"
-                    percent={Math.round((standardStats.passed / standardStats.total) * 100)}
-                    strokeColor={standardStats.passed / standardStats.total > 0.7 ? '#52c41a' : '#faad14'}
-                    width={180}
-                  />
-                  <div style={{ marginTop: 8 }}>
-                    <Text strong>{selectedFramework === 'all' ? 'Global Average' : selectedFramework}</Text>
-                  </div>
+                  <Progress type="dashboard" percent={Math.round((standardStats.passed / standardStats.total) * 100)} strokeColor={standardStats.passed / standardStats.total > 0.7 ? '#52c41a' : '#faad14'} width={180} />
+                  <div style={{ marginTop: 8 }}><Text strong>{selectedFramework === 'all' ? 'Global Average' : selectedFramework}</Text></div>
                 </Col>
                 <Col span={14}>
                   <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text strong>Passed Controls</Text><Text>{standardStats.passed}</Text></div>
-                      <Progress percent={(standardStats.passed / standardStats.total) * 100} showInfo={false} strokeColor="#52c41a" />
-                    </div>
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text strong>Failed Controls</Text><Text>{standardStats.failed}</Text></div>
-                      <Progress percent={(standardStats.failed / standardStats.total) * 100} showInfo={false} strokeColor="#ff4d4f" />
-                    </div>
+                    <div><div style={{ display: 'flex', justifyContent: 'space-between' }}><Text strong>Passed Controls</Text><Text>{standardStats.passed}</Text></div><Progress percent={(standardStats.passed / standardStats.total) * 100} showInfo={false} strokeColor="#52c41a" /></div>
+                    <div><div style={{ display: 'flex', justifyContent: 'space-between' }}><Text strong>Failed Controls</Text><Text>{standardStats.failed}</Text></div><Progress percent={(standardStats.failed / standardStats.total) * 100} showInfo={false} strokeColor="#ff4d4f" /></div>
                   </Space>
                 </Col>
               </Row>
             </Card>
-
             <Row gutter={16} style={{ marginBottom: 20 }}>
-              <Col span={8}>
-                <Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #ff4d4f' }}>
-                  <Statistic title="Failed" value={standardStats.failed} valueStyle={{ color: '#ff4d4f' }} prefix={<WarningOutlined />} />
-                </Card>
-              </Col>
-              <Col span={8}>
-                <Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #52c41a' }}>
-                  <Statistic title="Passed" value={standardStats.passed} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} />
-                </Card>
-              </Col>
-              <Col span={8}>
-                <Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #faad14' }}>
-                  <Statistic title="Skipped" value={standardStats.skipped} valueStyle={{ color: '#faad14' }} prefix={<InfoCircleOutlined />} />
-                </Card>
-              </Col>
+              <Col span={8}><Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #ff4d4f' }}><Statistic title="Failed" value={standardStats.failed} valueStyle={{ color: '#ff4d4f' }} prefix={<WarningOutlined />} /></Card></Col>
+              <Col span={8}><Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #52c41a' }}><Statistic title="Passed" value={standardStats.passed} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} /></Card></Col>
+              <Col span={8}><Card size="small" style={{ textAlign: 'center', borderBottom: '3px solid #faad14' }}><Statistic title="Skipped" value={standardStats.skipped} valueStyle={{ color: '#faad14' }} prefix={<InfoCircleOutlined />} /></Card></Col>
             </Row>
-
+            {/* FIXED TS2322: Correct casting for Divider orientation */}
             <Divider orientation={"left" as any} style={{ borderTopColor: '#f0f0f0' }}>Policy Violations List</Divider>
-
-            <Table
-              dataSource={failedControlsData}
-              size="small"
-              rowKey={(r) => r.id || r.name}
+            <Table dataSource={failedControlsData} size="small" rowKey={(r) => r.id || r.name}
               columns={[
-                {
-                  title: 'Control Information',
-                  render: (record) => (
-                    <Space direction="vertical" size={0}>
-                      <Text strong><FileProtectOutlined /> {record.name}</Text>
-                      <Text type="secondary" style={{ fontSize: '11px' }}>Category: {record.properties?.metadata?.category || "Security"}</Text>
-                    </Space>
-                  )
-                },
-                {
-                  title: 'Compliance Status',
-                  render: (record) => {
-                    const state = (record.properties?.state || "Failed").toLowerCase();
-                    let color = "volcano";
-                    let label = "FAILED";
-                    if (state === "passed") { color = "success"; label = "PASSED"; }
-                    else if (state === "skipped") { color = "orange"; label = "SKIPPED"; }
-                    return <Tag color={color}>{label}</Tag>;
-                  }
-                }
+                { title: 'Control Information', render: (record) => (<Space direction="vertical" size={0}><Text strong><FileProtectOutlined /> {record.name}</Text><Text type="secondary" style={{ fontSize: '11px' }}>Category: {record.properties?.metadata?.category || "Security"}</Text></Space>) },
+                { title: 'Compliance Status', render: (record) => {
+                  const state = (record.properties?.state || "Failed").toLowerCase();
+                  let color = "volcano"; let label = "FAILED";
+                  if (state === "passed") { color = "success"; label = "PASSED"; }
+                  else if (state === "skipped") { color = "orange"; label = "SKIPPED"; }
+                  return <Tag color={color}>{label}</Tag>;
+                }}
               ]}
-              expandable={{
-                expandedRowRender: (record) => (
-                  <Card size="small" style={{ background: '#f9f9f9', borderLeft: '4px solid #fa541c' }}>
-                    <Title level={5} style={{ fontSize: '14px' }}>Policy Description</Title>
-                    <Paragraph style={{ fontSize: '13px' }}>{record.properties?.description || "Policy baseline monitoring."}</Paragraph>
-                    <Space>
-                      <Tag>Type: {record.properties?.policyType || "BuiltIn"}</Tag>
-                      <Tag color="blue">Effect: {record.properties?.policyRule?.then?.effect || "Audit"}</Tag>
-                    </Space>
-                  </Card>
-                )
-              }}
+              expandable={{ expandedRowRender: (record) => (<Card size="small" style={{ background: '#f9f9f9', borderLeft: '4px solid #fa541c' }}><Title level={5} style={{ fontSize: '14px' }}>Policy Description</Title><Paragraph style={{ fontSize: '13px' }}>{record.properties?.description || "Policy baseline monitoring."}</Paragraph><Space><Tag>Type: {record.properties?.policyType || "BuiltIn"}</Tag><Tag color="blue">Effect: {record.properties?.policyRule?.then?.effect || "Audit"}</Tag></Space></Card>) }}
             />
           </>
         );
-
       case "governance":
-        return (
-          <Table
-            dataSource={scoreControls}
-            size="small"
-            rowKey="id"
-            pagination={{ pageSize: 6 }}
-            columns={[
-              {
-                title: 'Security Control', render: (record) => (
-                  <Space direction="vertical" size={0}>
-                    <Text strong>{record.properties?.displayName}</Text>
-                    <Text type="secondary" style={{ fontSize: '11px' }}>Weight: {record.properties?.weight}</Text>
-                  </Space>
-                )
-              },
-              {
-                title: 'Resource Health', render: (record) => (
-                  <Space size="middle">
-                    <Tooltip title="Healthy"><Tag color="success">{record.properties?.healthyResourceCount || 0}</Tag></Tooltip>
-                    <Tooltip title="Unhealthy"><Tag color="error">{record.properties?.unhealthyResourceCount || 0}</Tag></Tooltip>
-                  </Space>
-                )
-              },
-              {
-                title: 'Score Impact', render: (record) => {
-                  const percent = Math.round((record.properties?.score?.percentage || 0) * 100);
-                  return (
-                    <div style={{ width: '150px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <Text type="secondary" style={{ fontSize: '12px' }}>{record.properties?.score?.current} / {record.properties?.score?.max} pts</Text>
-                        <Text strong style={{ fontSize: '12px' }}>{percent}%</Text>
-                      </div>
-                      <Progress percent={percent} size="small" strokeColor={percent === 100 ? '#52c41a' : '#1890ff'} showInfo={false} />
-                    </div>
-                  );
-                }
-              }
-            ]}
-          />
-        );
-
+        return (<Table dataSource={scoreControls} size="small" rowKey="id" pagination={{ pageSize: 6 }} columns={[{ title: 'Security Control', render: (record) => (<Space direction="vertical" size={0}><Text strong>{record.properties?.displayName}</Text><Text type="secondary" style={{ fontSize: '11px' }}>Weight: {record.properties?.weight}</Text></Space>) }, { title: 'Resource Health', render: (record) => (<Space size="middle"><Tooltip title="Healthy"><Tag color="success">{record.properties?.healthyResourceCount || 0}</Tag></Tooltip><Tooltip title="Unhealthy"><Tag color="error">{record.properties?.unhealthyResourceCount || 0}</Tag></Tooltip></Space>) }, { title: 'Score Impact', render: (record) => { const percent = Math.round((record.properties?.score?.percentage || 0) * 100); return (<div style={{ width: '150px' }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}><Text type="secondary" style={{ fontSize: '12px' }}>{record.properties?.score?.current} / {record.properties?.score?.max} pts</Text><Text strong style={{ fontSize: '12px' }}>{percent}%</Text></div><Progress percent={percent} size="small" strokeColor={percent === 100 ? '#52c41a' : '#1890ff'} showInfo={false} /></div>); } }]} />);
       case "inventory":
-        return (
-          <Table
-            dataSource={criticalFindings}
-            size="small"
-            rowKey="id"
-            columns={[
-              {
-                title: 'High Severity Finding', render: (f) => (
-                  <Space direction="vertical" size={0}>
-                    <Text strong style={{ color: '#ff4d4f' }}>{f.cveId}</Text>
-                    <Text type="secondary" style={{ fontSize: '11px' }}>{f.software}</Text>
-                  </Space>
-                )
-              },
-              { title: 'Resource', dataIndex: 'resource', render: (text) => <Tag color="blue">{text?.toUpperCase()}</Tag> },
-              { title: 'Status', render: () => <Tag color="error">UNHEALTHY</Tag> }
-            ]}
-            expandable={{
-              expandedRowRender: (f) => (
-                <Card size="small" style={{ background: '#f9f9f9', borderLeft: '4px solid #ff4d4f' }}>
-                  <Row gutter={[24, 12]}>
-                    <Col span={12}>
-                      <Title level={5} style={{ fontSize: '14px' }}><BulbOutlined /> Remediation</Title>
-                      <Paragraph style={{ fontSize: '13px' }}>{f.remediation}</Paragraph>
-                    </Col>
-                    <Col span={12}>
-                      <Title level={5} style={{ fontSize: '14px' }}><InfoCircleOutlined /> Risk Impact</Title>
-                      <Paragraph style={{ fontSize: '13px' }}>{f.impact}</Paragraph>
-                    </Col>
-                  </Row>
-                </Card>
-              ),
-            }}
-          />
-        );
-
+        return (<Table dataSource={criticalFindings} size="small" rowKey="id" columns={[{ title: 'High Severity Finding', render: (f) => (<Space direction="vertical" size={0}><Text strong style={{ color: '#ff4d4f' }}>{f.cveId}</Text><Text type="secondary" style={{ fontSize: '11px' }}>{f.software}</Text></Space>) }, { title: 'Resource', dataIndex: 'resource', render: (text) => <Tag color="blue">{text?.toUpperCase()}</Tag> }, { title: 'Status', render: () => <Tag color="error">UNHEALTHY</Tag> }]} expandable={{ expandedRowRender: (f) => (<Card size="small" style={{ background: '#f9f9f9', borderLeft: '4px solid #ff4d4f' }}><Row gutter={[24, 12]}><Col span={12}><Title level={5} style={{ fontSize: '14px' }}><BulbOutlined /> Remediation</Title><Paragraph style={{ fontSize: '13px' }}>{f.remediation}</Paragraph></Col><Col span={12}><Title level={5} style={{ fontSize: '14px' }}><InfoCircleOutlined /> Risk Impact</Title><Paragraph style={{ fontSize: '13px' }}>{f.impact}</Paragraph></Col></Row></Card>), }} />);
       case "actions":
-        const openActionsData = (allAssessments || [])
-          .filter((asm: any) =>
-            asm.properties?.status?.code === 'Unhealthy' &&
-            asm.properties?.metadata?.severity !== 'High'
-          )
-          .map((asm: any) => ({
-            id: asm.id,
-            displayName: asm.properties?.displayName,
-            resourceName: asm.properties?.resourceDetails?.ResourceName,
-            severity: asm.properties?.metadata?.severity,
-            softwareName: asm.properties?.additionalData?.SoftwareName,
-            fixedVersion: asm.properties?.additionalData?.FixedVersion,
-            description: asm.properties?.description,
-            remediation: asm.properties?.remediationSteps
-          }));
-
-        return (
-          <Table
-            dataSource={openActionsData}
-            size="small"
-            rowKey="id"
-            columns={[
-              {
-                title: 'Recommendation', render: (record) => (
-                  <Space>
-                    <div style={{ width: 20, height: 20, border: '1px solid #d9d9d9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1890ff', fontSize: '12px' }}>+</div>
-                    <Text strong>{record.displayName}</Text>
-                  </Space>
-                )
-              },
-              { title: 'Resource', render: (record) => <Tag color="blue">{record.resourceName?.toUpperCase()}</Tag> },
-              { title: 'Severity', render: (record) => <Tag color="orange" style={{ fontWeight: 'bold' }}>{record.severity?.toUpperCase() || 'MEDIUM'}</Tag> }
-            ]}
-            expandable={{
-              expandedRowRender: (record) => (
-                <div style={{ padding: '16px', background: '#f9f9f9', borderLeft: '5px solid #722ed1' }}>
-                  <Title level={5} style={{ fontSize: '14px', color: '#722ed1' }}><BulbOutlined /> WHAT NEEDS TO BE DONE:</Title>
-                  <Paragraph style={{ fontSize: '13px' }}>
-                    The software <strong>{record.softwareName}</strong> is out of date.
-                    Install version <strong>{record.fixedVersion || 'latest patch'}</strong> to resolve this failure.
-                  </Paragraph>
-                  <Title level={5} style={{ fontSize: '14px', color: '#1890ff' }}><InfoCircleOutlined /> WHY IT FAILED:</Title>
-                  <Paragraph style={{ fontSize: '13px', marginBottom: 0 }}>{record.description || "This resource is currently unhealthy."}</Paragraph>
-                </div>
-              ),
-            }}
-          />
-        );
-
+        const openActionsData = (allAssessments || []).filter((asm: any) => asm.properties?.status?.code === 'Unhealthy' && asm.properties?.metadata?.severity !== 'High').map((asm: any) => ({ id: asm.id, displayName: asm.properties?.displayName, resourceName: asm.properties?.resourceDetails?.ResourceName, severity: asm.properties?.metadata?.severity, softwareName: asm.properties?.additionalData?.SoftwareName, fixedVersion: asm.properties?.additionalData?.FixedVersion, description: asm.properties?.description, remediation: asm.properties?.remediationSteps }));
+        return (<Table dataSource={openActionsData} size="small" rowKey="id" columns={[{ title: 'Recommendation', render: (record) => (<Space><div style={{ width: 20, height: 20, border: '1px solid #d9d9d9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1890ff', fontSize: '12px' }}>+</div><Text strong>{record.displayName}</Text></Space>) }, { title: 'Resource', render: (record) => <Tag color="blue">{record.resourceName?.toUpperCase()}</Tag> }, { title: 'Severity', render: (record) => <Tag color="orange" style={{ fontWeight: 'bold' }}>{record.severity?.toUpperCase() || 'MEDIUM'}</Tag> }]} expandable={{ expandedRowRender: (record) => (<div style={{ padding: '16px', background: '#f9f9f9', borderLeft: '5px solid #722ed1' }}><Title level={5} style={{ fontSize: '14px', color: '#722ed1' }}><BulbOutlined /> WHAT NEEDS TO BE DONE:</Title><Paragraph style={{ fontSize: '13px' }}>The software <strong>{record.softwareName}</strong> is out of date. Install version <strong>{record.fixedVersion || 'latest patch'}</strong> to resolve this failure.</Paragraph><Title level={5} style={{ fontSize: '14px', color: '#1890ff' }}><InfoCircleOutlined /> WHY IT FAILED:</Title><Paragraph style={{ fontSize: '13px', marginBottom: 0 }}>{record.description || "This resource is currently unhealthy."}</Paragraph></div>), }} />);
       case "identity":
-        return (
-          <Table
-            dataSource={adminRolesData}
-            size="small"
-            rowKey={(_, index) => index ?? 0}
-            columns={[
-              {
-                title: 'Assigned Role', dataIndex: 'role', render: (role: string) => (
-                  <Space size={[0, 4]} wrap>
-                    {role.split(',').map((r) => <Tag color="blue" key={r.trim()}>{r.trim()}</Tag>)}
-                  </Space>
-                )
-              },
-              { title: 'Users', dataIndex: 'assignedUsers', align: 'center', render: (count) => <Badge count={count} style={{ backgroundColor: '#108ee9' }} /> },
-              { title: 'MFA Status', dataIndex: 'mfaEnabled', align: 'center', render: (mfa) => mfa === "✅" ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : <WarningOutlined style={{ color: '#ff4d4f' }} /> }
-            ]}
-          />
-        );
-      default:
-        return <Text>No details available.</Text>;
+        return (<Table dataSource={adminRolesData} size="small" rowKey={(_, index) => index ?? 0} columns={[{ title: 'Assigned Role', dataIndex: 'role', render: (role: string) => (<Space size={[0, 4]} wrap>{role.split(',').map((r) => <Tag color="blue" key={r.trim()}>{r.trim()}</Tag>)}</Space>) }, { title: 'Users', dataIndex: 'assignedUsers', align: 'center', render: (count) => <Badge count={count} style={{ backgroundColor: '#108ee9' }} /> }, { title: 'MFA Status', dataIndex: 'mfaEnabled', align: 'center', render: (mfa) => mfa === "✅" ? <CheckCircleOutlined style={{ color: '#52c41a' }} /> : <WarningOutlined style={{ color: '#ff4d4f' }} /> }]} />);
+      default: return <Text>No details available.</Text>;
     }
   };
 
   return (
     <div style={{ marginTop: 24 }}>
-      {/* ... (Security Maturity Benchmark card remains the same) */}
       <Card style={{ borderRadius: 12, marginBottom: 16, borderLeft: `6px solid ${riskTier.hex}` }}>
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Space>
-            <Title level={4} style={{ margin: 0 }}><SafetyCertificateOutlined /> Security Maturity Benchmark</Title>
-            <Tag color={riskTier.color} style={{ fontWeight: 'bold' }}>{riskTier.label}</Tag>
-          </Space>
+          <Space><Title level={4} style={{ margin: 0 }}><SafetyCertificateOutlined /> Security Maturity Benchmark</Title><Tag color={riskTier.color} style={{ fontWeight: 'bold' }}>{riskTier.label}</Tag></Space>
           <Text style={{ fontSize: 16 }}>Secure Score: <strong>{overallScore}%</strong></Text>
           <Paragraph style={{ marginBottom: 0 }}>
-            Status: <Text strong style={{ color: riskTier.hex }}>{overallScore < 45 ? 'CRITICAL GAP' : 'MODERATE'}</Text>.
+            Status: <Text strong style={{ color: riskTier.hex }}>{overallScore < 45 ? 'CRITICAL GAP' : 'MODERATE'}</Text>. 
             Current Score: <Text strong>{currentPoints}/{maxPoints} pts</Text>.
             You are <Text strong type="danger">{gapToStandard}%</Text> below the industry standard.
-            Need <Text strong>{pointsNeeded} more points</Text> to hit the 80% target.
+            Need <Text strong>{pointsNeeded} more points</Text> to hit the {industryStandard}% target.
           </Paragraph>
         </Space>
       </Card>
@@ -523,59 +323,56 @@ export const SecurityTile = ({
       <Card title={<><AppstoreOutlined /> Environment Overview: Pacific Medicals2</>} style={{ borderRadius: 12, marginBottom: 16, background: '#fafafa' }} size="small">
         <Row gutter={[24, 24]} align="middle">
           <Col xs={24} lg={6} style={{ textAlign: 'center' }}>
-            <Progress
-  type="circle"
-  percent={100} // Set to 100 to fill the whole circle
-  strokeColor="#1890ff" // This gives the circle its color (Blue)
-  format={() => (
-    <div style={{ textAlign: 'center' }}>
-      <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#000' }}>28</div>
-      <div style={{ fontSize: '12px', color: 'rgba(0,0,0,0.45)' }}>TOTAL ASSETS</div>
-    </div>
-  )}
-/>
+            <Progress type="circle" percent={100} strokeColor="#1890ff" format={() => (
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#000' }}>{processedInventory.total}</div>
+                  <div style={{ fontSize: '12px', color: 'rgba(0,0,0,0.45)' }}>TOTAL ASSETS</div>
+                </div>
+              )}
+            />
           </Col>
           <Col xs={24} lg={18}>
             <Row gutter={[16, 16]}>
-              {/* UPDATED ONCLICK HANDLERS */}
               <Col span={6}><Card size="small" hoverable onClick={() => handleInventoryTileClick('compute')} style={{ background: '#e6f7ff' }}><Statistic title="Compute" value={processedInventory.compute.length} prefix={<CloudServerOutlined />} /></Card></Col>
               <Col span={6}><Card size="small" hoverable onClick={() => handleInventoryTileClick('network')} style={{ background: '#f6ffed' }}><Statistic title="Network" value={processedInventory.network.length} prefix={<GlobalOutlined />} /></Card></Col>
               <Col span={6}><Card size="small" hoverable onClick={() => handleInventoryTileClick('backup')} style={{ background: '#fff7e6' }}><Statistic title="Backup" value={processedInventory.backup.length} prefix={<DatabaseOutlined />} /></Card></Col>
               <Col span={6}><Card size="small" hoverable onClick={() => handleInventoryTileClick('security')} style={{ background: '#fff0f6' }}><Statistic title="Security" value={processedInventory.security.length} prefix={<SecurityScanOutlined />} /></Card></Col>
             </Row>
-            {/* ... (Rest of card content) */}
             <Divider style={{ margin: '16px 0' }} />
             <Row gutter={24}>
-              <Col span={12}>
-                <Text type="secondary" style={{ fontSize: 12 }}>SUBSCRIPTION ID</Text><br />
-                <Text copyable strong style={{ fontSize: 13 }}>{subscriptionId || '4194435b-724d-4ef3-b561-9f69cf78a61b'}</Text>
-              </Col>
-              <Col span={12}>
-                <Text type="secondary" style={{ fontSize: 12 }}>PRIMARY REGION</Text><br />
-                <Tag color="geekblue" style={{ marginTop: 4, textTransform: 'capitalize' }}>
-                  {processedInventory.primaryRegion.replace(/([a-z])([A-Z])/g, '$1 $2')}
-                </Tag>
-              </Col>
+              <Col span={12}><Text type="secondary" style={{ fontSize: 12 }}>SUBSCRIPTION ID</Text><br /><Text copyable strong style={{ fontSize: 13 }}>{subscriptionId || '4194435b-724d-4ef3-b561-9f69cf78a61b'}</Text></Col>
+              <Col span={12}><Text type="secondary" style={{ fontSize: 12 }}>PRIMARY REGION</Text><br /><Tag color="geekblue" style={{ marginTop: 4, textTransform: 'capitalize' }}>{processedInventory.primaryRegion.replace(/([a-z])([A-Z])/g, '$1 $2')}</Tag></Col>
             </Row>
           </Col>
         </Row>
       </Card>
 
-      {/* ... (Bottom tiles loop) */}
+      <Card 
+        title={<><PushpinOutlined style={{ color: '#1890ff' }} /> Monitoring & Alerts Overview</>} 
+        style={{ borderRadius: 12, marginBottom: 16 }} 
+        size="small"
+      >
+        <Table 
+          dataSource={dynamicMonitoringData} 
+          pagination={false} 
+          size="small"
+          columns={[
+            { title: 'Alert Type', dataIndex: 'type', render: (t) => <Text strong>{t}</Text> },
+            { title: 'Configured', dataIndex: 'configured', render: (v) => (
+              <Space><CheckSquareFilled style={{ color: (v === 'No' || v === 'Disabled') ? '#d9d9d9' : '#52c41a' }} /><Text>{v}</Text></Space>
+            )},
+            { title: 'Scope', dataIndex: 'scope' }
+          ]}
+        />
+      </Card>
+
       <Row gutter={[16, 16]}>
         {tiles.map((tile) => (
           <Col xs={24} md={tile.id === "governance" ? 8 : 4} key={tile.id}>
-            <Card hoverable loading={loading} 
-              onClick={() => {
-                if(onCategoryChange) onCategoryChange(null); // Reset filter when clicking main tiles
-                setActiveDrawer(tile.id);
-              }} 
-              style={{ borderRadius: 12, borderTop: `4px solid ${tile.color}`, height: '100%' }}>
+            <Card hoverable loading={loading} onClick={() => { if(onCategoryChange) onCategoryChange(null); setActiveDrawer(tile.id); }} style={{ borderRadius: 12, borderTop: `4px solid ${tile.color}`, height: '100%' }}>
               {tile.isProgress ? (
                 <div style={{ textAlign: 'center' }}>
-                  <Text type="secondary" style={{ fontSize: 11 }}>{tile.title}</Text><br />
-                  <Progress type="circle" percent={Number(tile.value)} width={80} strokeColor={tile.color} /><br />
-                  <Text strong style={{ fontSize: 10 }}>{tile.extra}</Text>
+                  <Text type="secondary" style={{ fontSize: 11 }}>{tile.title}</Text><br /><Progress type="circle" percent={Number(tile.value)} width={80} strokeColor={tile.color} /><br /><Text strong style={{ fontSize: 10 }}>{tile.extra}</Text>
                 </div>
               ) : (
                 <div>
@@ -588,17 +385,7 @@ export const SecurityTile = ({
         ))}
       </Row>
 
-      <Drawer
-        title={`${activeDrawer?.toUpperCase()} Details`}
-        width={950}
-        open={!!activeDrawer}
-        onClose={() => {
-          setActiveDrawer(null);
-          setSelectedFramework("all");
-          if(onCategoryChange) onCategoryChange(null); // Reset filter state on close
-        }}
-        destroyOnClose
-      >
+      <Drawer title={`${activeDrawer?.toUpperCase()} Details`} width={950} open={!!activeDrawer} onClose={() => { setActiveDrawer(null); setSelectedFramework("all"); if(onCategoryChange) onCategoryChange(null); }} destroyOnClose>
         {renderDrawerContent()}
       </Drawer>
     </div>
