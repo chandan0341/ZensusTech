@@ -523,9 +523,17 @@ export const SecurityTile = ({
       <Card title={<><AppstoreOutlined /> Environment Overview: Pacific Medicals2</>} style={{ borderRadius: 12, marginBottom: 16, background: '#fafafa' }} size="small">
         <Row gutter={[24, 24]} align="middle">
           <Col xs={24} lg={6} style={{ textAlign: 'center' }}>
-            <Progress type="circle" percent={100} width={130} strokeColor="#f0f0f0" format={() => (
-              <div><Text strong style={{ fontSize: 24 }}>{processedInventory.total}</Text><br /><Text type="secondary" style={{ fontSize: 10 }}>TOTAL ASSETS</Text></div>
-            )} />
+            <Progress
+  type="circle"
+  percent={100} // Set to 100 to fill the whole circle
+  strokeColor="#1890ff" // This gives the circle its color (Blue)
+  format={() => (
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#000' }}>28</div>
+      <div style={{ fontSize: '12px', color: 'rgba(0,0,0,0.45)' }}>TOTAL ASSETS</div>
+    </div>
+  )}
+/>
           </Col>
           <Col xs={24} lg={18}>
             <Row gutter={[16, 16]}>
