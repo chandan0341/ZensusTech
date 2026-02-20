@@ -155,7 +155,14 @@ class UserService:
                     )
 
                     roles = sorted(list(grouped[pid]["roles"]))
-                    risk = "Low" if mfa_enabled else "High"
+                    # risk = "Low" if mfa_enabled else "High"
+                     # --- REPORT ASSEMBLY ---
+                    account_enabled = is_active
+
+                    # Risk Logic
+                    risk = "Low"
+                    if not mfa_enabled:
+                        risk = "High" if not account_enabled else "Medium"
 
                     final_users.append({
                         "user": u_body.get("displayName", "Unknown"),
