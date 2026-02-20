@@ -669,7 +669,6 @@ class GraphService:
 
                 logger.info("Azure API URL: %s", url)
                 logger.info("Status Code: %s", response.status_code)
-                logger.info("Response Body: %s", response.text)
 
                 response.raise_for_status()
 
@@ -692,14 +691,24 @@ class GraphService:
     async def get_azure_secure_score(self, subscription_id: str, mgmt_token: str):
         """API 1: Get Secure Score (Current vs Max)"""
         url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/secureScores?api-version=2020-01-01"
-        data = await self._get_mgmt_data(url, mgmt_token)
-        # Return the object itself for raw data access
-        return data
+        try:
+            return await self._get_mgmt_data(url, mgmt_token)
+        except httpx.HTTPStatusError as e:
+        # Log the error but return an empty list or default value 
+        # so the "Security Maturity Benchmark" can still render
+            logger.error(f"Failed to fetch regulatory standards: {e}")
+            return []
 
     async def get_security_assessments(self, subscription_id: str, mgmt_token: str):
         """API 2: List Security Recommendations"""
         url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/assessments?$top=10&api-version=2021-06-01"
-        return await self._get_mgmt_data(url, mgmt_token)
+        try:
+            return await self._get_mgmt_data(url, mgmt_token)
+        except httpx.HTTPStatusError as e:
+        # Log the error but return an empty list or default value 
+        # so the "Security Maturity Benchmark" can still render
+            logger.error(f"Failed to fetch regulatory standards: {e}")
+            return []
 
     async def get_secure_score_controls(self, subscription_id: str, mgmt_token: str):
         """API 3: Secure Score Controls Summary"""
@@ -709,7 +718,13 @@ class GraphService:
     async def get_regulatory_standards(self, subscription_id: str, mgmt_token: str):
         """API 4: Regulatory Compliance Standards"""
         url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/regulatoryComplianceStandards?api-version=2019-01-01"
-        return await self._get_mgmt_data(url, mgmt_token)
+        try:
+            return await self._get_mgmt_data(url, mgmt_token)
+        except httpx.HTTPStatusError as e:
+        # Log the error but return an empty list or default value 
+        # so the "Security Maturity Benchmark" can still render
+            logger.error(f"Failed to fetch regulatory standards: {e}")
+            return []
 
     async def get_failed_regulatory_controls(self, subscription_id: str, mgmt_token: str):
         """API 5: Failed Controls (Microsoft Cloud Security Benchmark)"""
@@ -718,7 +733,13 @@ class GraphService:
             f"regulatoryComplianceStandards/Microsoft-cloud-security-benchmark/regulatoryComplianceControls"
             f"?$filter=properties/state eq 'Failed'&api-version=2019-01-01-preview"
         )
-        return await self._get_mgmt_data(url, mgmt_token)
+        try:
+            return await self._get_mgmt_data(url, mgmt_token)
+        except httpx.HTTPStatusError as e:
+        # Log the error but return an empty list or default value 
+        # so the "Security Maturity Benchmark" can still render
+            logger.error(f"Failed to fetch regulatory standards: {e}")
+            return []
 
     # --- IDENTITY BATCH (GRAPH) ---
 
@@ -764,11 +785,23 @@ class GraphService:
     async def get_resource_count(self, subscription_id, mgmt_token: str):
         url = f"https://management.azure.com/subscriptions/{subscription_id}/resources?api-version=2021-04-01"
         # Implementation using your preferred async client (e.g., httpx.get)
-        return await self._get_mgmt_data(url, mgmt_token)
+        try:
+            return await self._get_mgmt_data(url, mgmt_token)
+        except httpx.HTTPStatusError as e:
+        # Log the error but return an empty list or default value 
+        # so the "Security Maturity Benchmark" can still render
+            logger.error(f"Failed to fetch regulatory standards: {e}")
+            return []
 
     async def get_security_alerts(self, subscription_id, mgmt_token: str):
         url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Security/alerts?api-version=2022-01-01"
-        return await self._get_mgmt_data(url, mgmt_token)
+        try:
+            return await self._get_mgmt_data(url, mgmt_token)
+        except httpx.HTTPStatusError as e:
+        # Log the error but return an empty list or default value 
+        # so the "Security Maturity Benchmark" can still render
+            logger.error(f"Failed to fetch regulatory standards: {e}")
+            return []
 
 
 
