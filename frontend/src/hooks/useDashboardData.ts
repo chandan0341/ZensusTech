@@ -188,6 +188,7 @@ export const useDashboardData = ({
     complianceStandards:report.complianceStandards?.value||[],
     resourceInventory:report.resourceInventory?.value||[],
     activeAlerts:report.activeAlerts,
+    monitoringRules:report.monitoringRules?.value||[],
 
     // Meta/Loading states
     securityAuditReport,

@@ -109,6 +109,7 @@ function Dashboard() {
     complianceStandards,
     resourceInventory,
     activeAlerts,
+    monitoringRules,
     refetchData,
   } = useDashboardData({
     selectedTenant,
@@ -338,6 +339,7 @@ function Dashboard() {
                           subscriptionId={selectedSubscription}
                           activeInventoryCategory={activeInventoryCategory} 
                           activeAlerts={activeAlerts}
+                          monitoringRules={monitoringRules}
                           onCategoryChange={handleCategoryChange}
                         />
                       )}

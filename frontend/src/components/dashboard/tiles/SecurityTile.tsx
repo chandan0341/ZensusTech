@@ -37,6 +37,7 @@ interface SecurityTileProps {
   complianceStandards?: any[];
   resourceInventory?: any[];
   activeAlerts?: any;
+  monitoringRules?:any[];
   activeInventoryCategory?: string | null;
   onCategoryChange?: (category: string | null) => void;
 }
@@ -53,6 +54,7 @@ export const SecurityTile = ({
   complianceStandards = [],
   resourceInventory = [],
   activeAlerts = { value: [] },
+  monitoringRules=[],
   activeInventoryCategory,
   onCategoryChange
 }: SecurityTileProps) => {
@@ -103,19 +105,58 @@ export const SecurityTile = ({
 
   const dynamicMonitoringData = useMemo(() => {
     const alerts = activeAlerts?.value || [];
-    const hasAlert = (searchStr: string) => 
-      alerts.some((a: any) => 
-        a.properties?.alertDisplayName?.toLowerCase().includes(searchStr.toLowerCase())
-      );
+    const rules = monitoringRules || []; // Your new rules from the API
+
+    // Helper to check if a rule exists by name or category
+    const hasRule = (searchStr: string) => 
+    rules.some((r: any) => 
+      r.name?.toLowerCase().includes(searchStr.toLowerCase()) ||
+      r.properties?.displayName?.toLowerCase().includes(searchStr.toLowerCase()) ||
+      // Standard Azure field for the type of alert
+      r.properties?.targetResourceType?.toLowerCase().includes(searchStr.toLowerCase())
+    );
+
+    // Helper to check for specific security providers in active alerts
+    const hasProvider = (provider: string) => 
+      alerts.some((a: any) => a.properties?.productName?.includes(provider));
 
     return [
-      { key: '1', type: 'Activity Log Alerts', configured: alerts.length > 0 ? 'Yes' : 'No', scope: 'VM Operations' },
-      { key: '2', type: 'Metric Alerts', configured: hasAlert('metric') ? 'Yes' : 'No', scope: 'CPU, Disk, Memory' },
-      { key: '3', type: 'Backup Alerts Rule', configured: hasAlert('backup') ? 'Yes' : 'No', scope: 'Backup Notifications' },
-      { key: '4', type: 'Defender Integration', configured: 'Enabled', scope: 'VM Protection' },
-      { key: '5', type: 'Log Analytics', configured: subscriptionId ? 'Enabled' : 'Disabled', scope: 'Monitoring & Logs' },
+      { 
+        key: '1', 
+        type: 'Activity Log Alerts', 
+        // Now checks the RULES API, not the threats
+        configured: hasRule('activity') ? 'Yes' : 'No', 
+        scope: 'VM Operations' 
+      },
+      { 
+        key: '2', 
+        type: 'Metric Alerts', 
+        // This will now say "Yes" if the rule exists, even if no alert is firing!
+        configured: hasRule('metric') ? 'Yes' : 'No', 
+        scope: 'CPU, Disk, Memory' 
+      },
+      { 
+        key: '3', 
+        type: 'Backup Alerts', 
+        configured: hasRule('backup') ? 'Yes' : 'No', 
+        scope: 'Backup Notifications' 
+      },
+      { 
+        key: '4', 
+        type: 'Defender Integration', 
+        // Proven by your JSON data showing "Microsoft Defender ATP"
+        configured: hasProvider('Defender') ? 'Enabled' : 'Disabled', 
+        scope: 'VM Protection' 
+      },
+      { 
+        key: '5', 
+        type: 'Log Analytics', 
+        // Proven if the rules or alerts are tied to a Workspace
+        configured: rules.length > 0 ? 'Enabled' : 'Disabled', 
+        scope: 'Monitoring & Logs' 
+      },
     ];
-  }, [activeAlerts, subscriptionId]);
+  }, [activeAlerts, monitoringRules]);
 
   const processedInventory = useMemo(() => {
     const data = {

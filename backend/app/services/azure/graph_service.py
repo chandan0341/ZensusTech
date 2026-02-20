@@ -802,6 +802,15 @@ class GraphService:
         # so the "Security Maturity Benchmark" can still render
             logger.error(f"Failed to fetch regulatory standards: {e}")
             return []
+        
+    async def get_monitoring_rules(self, subscription_id: str, mgmt_token: str):
+        # This API checks for ACTUAL configured rules (Metric, Activity Log, etc.)
+        url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.Insights/scheduledQueryRules?api-version=2023-03-15-preview"
+        try:
+            return await self._get_mgmt_data(url, mgmt_token)
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Failed to fetch monitoring rules: {e}")
+            return {"value": []}    
 
 
 
@@ -819,7 +828,8 @@ class GraphService:
             self.get_regulatory_standards(subscription_id, mgmt_token),         # 3
             self.get_failed_regulatory_controls(subscription_id, mgmt_token),   # 4
             self.get_resource_count(subscription_id, mgmt_token),               # 5 (New)
-            self.get_security_alerts(subscription_id, mgmt_token),              # 6 (New)
+            self.get_security_alerts(subscription_id, mgmt_token),    
+            self.get_monitoring_rules(subscription_id, mgmt_token)# 6 (New)
         ]
 
         # 2. Execute tasks concurrently
@@ -840,6 +850,7 @@ class GraphService:
         failed_controls_raw = results[4] or {"value": []}
         resources_raw       = results[5] or {"value": []}
         alerts_raw          = results[6] or {"value": []}
+        monitoring_rules = results[7] or {"value": []}
 
         # Extract the first item from the list-based Secure Score response
         secure_score_obj = {}
@@ -856,6 +867,7 @@ class GraphService:
             "failedControls": failed_controls_raw,
             "resourceInventory": resources_raw,
             "activeAlerts": alerts_raw,
+            "monitoringRules":monitoring_rules,
             "postureKPI": {
                 "currentScore": secure_score_obj.get("properties", {}).get("score", {}).get("current", 0),
                 "maxScore": secure_score_obj.get("properties", {}).get("score", {}).get("max", 0),
