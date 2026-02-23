@@ -75,6 +75,22 @@ export const SecurityTile = ({
   const gapToStandard = Math.max(0, industryStandard - overallScore);
   const targetPoints = Math.ceil(maxPoints * (industryStandard / 100));
   const pointsNeeded = Math.max(0, targetPoints - currentPoints);
+ const getAlertResourceName = (alert: any) => {
+  const identifiers = alert?.properties?.resourceIdentifiers;
+
+  if (Array.isArray(identifiers)) {
+    const azureResource = identifiers.find(
+      (r: any) => r.azureResourceId  // note lowercase 'azureResourceId'
+    );
+    if (azureResource?.azureResourceId) {
+      const parts = azureResource.azureResourceId.split("/");
+      return parts[parts.length - 1] || "N/A";
+    }
+  }
+
+  // fallback to compromisedEntity
+  return alert?.properties?.compromisedEntity || "N/A";
+};
 
   const groupedAlerts = useMemo(() => {
   const groups = new Map();
@@ -159,37 +175,111 @@ export const SecurityTile = ({
   }, [activeAlerts, monitoringRules]);
 
   const processedInventory = useMemo(() => {
-    const data = {
-      compute: [] as any[],
-      network: [] as any[],
-      security: [] as any[],
-      backup: [] as any[],
-      total: resourceInventory?.length || 0,
-      primaryRegion: resourceInventory?.[0]?.location || "Global"
+  if (!resourceInventory || resourceInventory.length === 0) {
+    return {
+      compute: [],
+      network: [],
+      security: [],
+      backup: [],
+      total: 0,
+      subscriptionId: "N/A",
+      resourceGroups: [],
+      primaryResourceGroup: "N/A",
+      primaryRegion: "Global",
+      isProduction: false
+    };
+  }
+
+  // -------------------------------
+  // 1️⃣ Extract Subscription ID
+  // -------------------------------
+  const firstId = resourceInventory[0]?.id || "";
+  const subMatch = firstId.match(/subscriptions\/([^\/]+)/i);
+  const subscriptionId = subMatch ? subMatch[1] : "N/A";
+
+  // -------------------------------
+  // 2️⃣ Count Resource Groups
+  // -------------------------------
+  const rgCount: Record<string, number> = {};
+
+  resourceInventory.forEach(res => {
+    const match = res.id?.match(/resourceGroups\/([^\/]+)/i);
+    if (match) {
+      const rg = match[1];
+      rgCount[rg] = (rgCount[rg] || 0) + 1;
+    }
+  });
+
+  const resourceGroups = Object.keys(rgCount);
+
+  const primaryResourceGroup =
+    resourceGroups.sort((a, b) => rgCount[b] - rgCount[a])[0] || "N/A";
+
+  // -------------------------------
+  // 3️⃣ Determine Primary Region
+  // -------------------------------
+  const regionCount: Record<string, number> = {};
+
+  resourceInventory.forEach(res => {
+    const region = res.location || "global";
+    regionCount[region] = (regionCount[region] || 0) + 1;
+  });
+
+  const primaryRegionRaw =
+    Object.keys(regionCount).sort((a, b) => regionCount[b] - regionCount[a])[0] || "global";
+
+  const primaryRegion =
+    primaryRegionRaw.toLowerCase() === "centralindia"
+      ? "Central India"
+      : primaryRegionRaw;
+
+  // -------------------------------
+  // 4️⃣ Prepare Categorized Data
+  // -------------------------------
+  const data = {
+    compute: [] as any[],
+    network: [] as any[],
+    security: [] as any[],
+    backup: [] as any[],
+    total: resourceInventory.length,
+    subscriptionId,
+    resourceGroups,
+    primaryResourceGroup,
+    primaryRegion,
+    isProduction: resourceInventory.some(res =>
+      res.tags?.Environment === "Prod" ||
+      res.id?.toLowerCase().includes("-prod-")
+    )
+  };
+
+  resourceInventory.forEach(res => {
+    const type = res.type?.toLowerCase() || "";
+    const resEnv = res.tags?.Environment || "Uncategorized";
+
+    const normalizedRes = {
+      id: res.id,
+      name: res.name,
+      type: res.type?.split("/").pop() || res.type,
+      location:
+        res.location?.toLowerCase() === "centralindia"
+          ? "Central India"
+          : res.location,
+      purpose: `${resEnv} | ${res.sku?.name || res.kind || "Resource"}`
     };
 
-    resourceInventory?.forEach(res => {
-      const type = res.type?.toLowerCase() || "";
-      const normalizedRes = {
-        id: res.id,
-        name: res.name,
-        type: res.type?.split('/').pop() || res.type,
-        location: res.location === "global" ? "Global" : "Central India",
-        purpose: res.plan?.product || res.sku?.name || (type.includes('alert') ? 'Security Alert' : 'Active Resource')
-      };
+    if (type.includes("compute") || type.includes("sqlvirtualmachine") || type.includes("disks")) {
+      data.compute.push(normalizedRes);
+    } else if (type.includes("network") || type.includes("bastion") || type.includes("privatednszones")) {
+      data.network.push(normalizedRes);
+    } else if (type.includes("recovery") || type.includes("restorepoint") || type.includes("backup")) {
+      data.backup.push(normalizedRes);
+    } else if (type.includes("security") || type.includes("insights") || type.includes("operationalinsights")) {
+      data.security.push(normalizedRes);
+    }
+  });
 
-      if (type.includes('compute') || type.includes('sqlvirtualmachine') || type.includes('disks')) {
-        data.compute.push(normalizedRes);
-      } else if (type.includes('network') || type.includes('bastion')) {
-        data.network.push(normalizedRes);
-      } else if (type.includes('recovery') || type.includes('restorepoint') || type.includes('backup')) {
-        data.backup.push(normalizedRes);
-      } else if (type.includes('security') || type.includes('insights') || type.includes('operationalinsights') || type.includes('operationsmanagement')) {
-        data.security.push(normalizedRes);
-      }
-    });
-    return data;
-  }, [resourceInventory]);
+  return data;
+}, [resourceInventory]);
 
   const riskTier = useMemo(() => {
     if (overallScore >= 75) return { label: "LOW RISK", color: "green", hex: "#52c41a" };
@@ -335,6 +425,14 @@ export const SecurityTile = ({
             </Space>
           ) 
         },
+        { 
+      title: 'Resource',
+      render: (record) => (
+        <Tag color="blue">
+          {getAlertResourceName(record)}
+        </Tag>
+      )
+    },
         { 
           title: 'Intent', 
           dataIndex: ['properties', 'intent'],
@@ -550,7 +648,7 @@ export const SecurityTile = ({
         </Space>
       </Card>
 
-      <Card title={<><AppstoreOutlined /> Environment Overview: Pacific Medicals2</>} style={{ borderRadius: 12, marginBottom: 16, background: '#fafafa' }} size="small">
+      <Card title={<><AppstoreOutlined /> Environment Overview: {processedInventory.primaryResourceGroup}</>} style={{ borderRadius: 12, marginBottom: 16, background: '#fafafa' }} size="small">
         <Row gutter={[24, 24]} align="middle">
           <Col xs={24} lg={6} style={{ textAlign: 'center' }}>
             <Progress type="circle" percent={100} strokeColor="#1890ff" format={() => (
@@ -655,9 +753,12 @@ export const SecurityTile = ({
       render: (s) => <Tag color={s === 'High' ? 'red' : 'orange'}>{s}</Tag> 
     },
     { 
-      title: 'Resource', 
-      dataIndex: ['properties', 'resourceDetails', 0, 'name'], 
-      render: (r) => <Tag color="blue">{r || 'N/A'}</Tag> 
+      title: 'Resource',
+      render: (record) => (
+        <Tag color="blue">
+          {getAlertResourceName(record)}
+        </Tag>
+      )
     },
     { 
       title: 'Detected', 
