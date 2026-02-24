@@ -1,9 +1,7 @@
 import { useState, useMemo } from "react";
 import {
   Card, Row, Col, Statistic, Typography, Tag, Drawer, Table,
-  Progress, Space, Badge, Tooltip, Divider, Select,// Add these two:
-  Descriptions, 
-  Button
+  Progress, Space, Badge, Tooltip, Divider, Select,Button,Descriptions,Alert
 } from "antd";
 import {
   RocketOutlined, WarningOutlined, SafetyCertificateOutlined,
@@ -11,7 +9,7 @@ import {
   FileProtectOutlined, CheckCircleOutlined, PieChartOutlined,
   AppstoreOutlined, CloudServerOutlined, GlobalOutlined,
   SecurityScanOutlined, DatabaseOutlined, AlertOutlined,
-  CheckSquareFilled, PushpinOutlined,ExportOutlined
+  CheckSquareFilled, PushpinOutlined, ExportOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -95,23 +93,21 @@ export const SecurityTile = ({
   const groupedAlerts = useMemo(() => {
   const groups = new Map();
 
-  // FIX: Explicitly type 'alert' as 'any' to stop the red error
   (activeAlerts.value || []).forEach((alert: any) => {
     const alertName = alert.properties?.alertDisplayName || "Unknown Alert";
     const intent = alert.properties?.intent || "N/A";
-    
-    // Create a key based on the Alert Name and the Intent
     const key = `${alertName}-${intent}`;
     
     if (groups.has(key)) {
       const existing = groups.get(key);
       existing.count += 1;
+      existing.allAlerts.push(alert); // Keep the full history
     } else {
       groups.set(key, {
         ...alert,
         count: 1,
-        // Ensure a unique key for the Ant Design Table
-        key: alert.id || Math.random().toString() 
+        allAlerts: [alert], // Start history
+        key: alert.id 
       });
     }
   });
@@ -407,120 +403,168 @@ export const SecurityTile = ({
           </div>
         );
       case "alerts":
-        return (
-          <>
-            <Title level={4}><AlertOutlined /> Threat Intelligence & Entity Details</Title>
-            <Paragraph type="secondary">
-              Expand a row to view technical identifiers such as Source IPs, compromised accounts, and host details.
-            </Paragraph>
-            <Table 
-      dataSource={groupedAlerts} // Use the grouped data here
-      columns={[
-        { 
-          title: 'Alert Name', 
-          render: (record) => (
-            <Space>
-              <Text strong>{record.properties?.alertDisplayName}</Text>
-              {record.count > 1 && <Badge count={record.count} style={{ backgroundColor: '#52c41a' }} />}
-            </Space>
-          ) 
-        },
-        { 
-      title: 'Resource',
-      render: (record) => (
-        <Tag color="blue">
-          {getAlertResourceName(record)}
-        </Tag>
-      )
-    },
-        { 
-          title: 'Intent', 
-          dataIndex: ['properties', 'intent'],
-          render: (intent) => <Tag color="purple">{intent}</Tag>
-        },
-        { 
-          title: 'Severity', 
-          dataIndex: ['properties', 'severity'], 
-          render: (s) => <Tag color={s === 'High' ? 'red' : 'orange'}>{s}</Tag> 
+  return (
+    <>
+      <Title level={4}><AlertOutlined /> Threat Intelligence & Entity Details</Title>
+      <Paragraph type="secondary">
+        Review active security threats. Expand rows to see <strong>Source IPs</strong>, <strong>Geographic Origins</strong>, and <strong>Remediation Steps</strong>.
+      </Paragraph>
+      <Table 
+        dataSource={groupedAlerts} 
+        columns={[
+          { 
+            title: 'Alert Name', 
+            render: (record) => (
+              <Space direction="vertical" size={0}>
+                <Space>
+                  <Text strong>{record.properties?.alertDisplayName}</Text>
+                  {record.count > 1 && <Badge count={record.count} style={{ backgroundColor: '#ff4d4f' }} />}
+                </Space>
+                <Text type="secondary" style={{ fontSize: '11px' }}>{record.properties?.productName}</Text>
+              </Space>
+            ) 
+          },
+          { 
+            title: 'Target Resource',
+            render: (record) => <Tag color="blue">{getAlertResourceName(record)}</Tag>
+          },
+          { 
+            title: 'Severity', 
+            dataIndex: ['properties', 'severity'], 
+            render: (s) => <Tag color={s === 'High' ? 'red' : 'orange'} icon={<WarningOutlined />}>{s?.toUpperCase()}</Tag> 
+          }
+        ]}
+        expandable={{
+       expandedRowRender: (record: any) => {
+  const allIps = new Map();
+  const allAccounts = new Set<string>();
+  const allHosts = new Set<string>();
+  const processes = new Set<string>();
+
+  // 1. DATA AGGREGATION
+  record.allAlerts?.forEach((a: any) => {
+    const p = a.properties || {};
+    const entities = p.entities || [];
+    const ext = p.extendedProperties || {};
+
+    entities.forEach((ent: any) => {
+      // Capture IPs & Locations (France logic)
+      if (ent.type === 'ip') {
+        const ip = ent.address || ext['Client IP'] || ext['IP Address'];
+        if (ip) {
+          const country = ent.location?.countryName || ext.Country || "";
+          const city = ent.location?.city || ext.City || "";
+          const org = ent.location?.organization || "N/A";
+          const locStr = (city || country) ? `${city}${city && country ? ', ' : ''}${country}`.trim() : "Unknown";
+          
+          if (!allIps.has(ip)) {
+            allIps.set(ip, { ip, loc: locStr, org, hits: ext['Number of failed sign-ins'] || 1 });
+          }
         }
-      ]}
-             expandable={{
-  expandedRowRender: (record: any) => {
-    const props = record.properties || {};
-    const ext = props.extendedProperties || {};
-    
-    // Extract technical details from your JSON
-    const processName = ext.ProcessName || "N/A";
-    const pid = ext.ProcessId || ext.ParentPid || "N/A";
-    const commandLine = ext.CommandLine || "No command line captured";
-    const m365Link = ext.MicrosoftDefenderforEndpointlink ? JSON.parse(ext.MicrosoftDefenderforEndpointlink).value : null;
+      }
+      // Capture Fileless evidence
+      if (ent.type === 'account') allAccounts.add(ent.name || "System");
+      if (ent.type === 'host') allHosts.add(ent.hostname || "N/A");
+      if (ent.type === 'process') processes.add(ent.name || "N/A");
+    });
+  });
 
-    return (
-      <div style={{ padding: '20px', background: '#fafafa', borderLeft: '5px solid #1890ff' }}>
-        <Row gutter={[32, 24]}>
-          {/* Section 1: Alert Overview */}
-          <Col span={24}>
-            <Title level={5}><InfoCircleOutlined /> Description</Title>
-            <Paragraph>{props.description}</Paragraph>
-          </Col>
+  const attackerData = Array.from(allIps.values());
 
-          {/* Section 2: Technical Evidence (New!) */}
-          <Col span={16}>
-            <Card size="small" title="Technical Evidence" headStyle={{ background: '#f0f5ff' }}>
-              <Descriptions column={2} size="small">
-                <Descriptions.Item label="Process">{processName}</Descriptions.Item>
-                <Descriptions.Item label="PID">{pid}</Descriptions.Item>
-                <Descriptions.Item label="Domain">{ext.DomainName || "WORKGROUP"}</Descriptions.Item>
-                <Descriptions.Item label="User">{ext.UserName || "N/A"}</Descriptions.Item>
-              </Descriptions>
-              <div style={{ marginTop: 12 }}>
-                <Text type="secondary" strong>Command Line:</Text>
-                <pre style={{ 
-                  background: '#001529', 
-                  color: '#d4d4d4', 
-                  padding: '10px', 
-                  borderRadius: '4px',
-                  overflowX: 'auto',
-                  fontSize: '11px',
-                  marginTop: '5px'
-                }}>
-                  {commandLine}
-                </pre>
+  return (
+    <div style={{ padding: '24px', background: '#fff', border: '1px solid #f0f0f0', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+      <Row gutter={[24, 24]}>
+        {/* HEADER: TIMELINE */}
+        <Col span={24}>
+          <Space split={<Divider type="vertical" />}>
+            <Text type="secondary">First Detected: <Text strong>{new Date(record.properties.startTimeUtc).toLocaleString()}</Text></Text>
+            <Text type="secondary">Last Update: <Text strong>{new Date(record.properties.endTimeUtc).toLocaleString()}</Text></Text>
+            <Tag color="magenta">{record.properties.intent}</Tag>
+          </Space>
+        </Col>
+
+        {/* LEFT: SOURCE ANALYSIS */}
+        <Col span={14}>
+          <Card size="small" title={<Space><GlobalOutlined /> {attackerData.length > 0 ? "Attack Origins" : "Internal Execution Context"}</Space>} bordered={false} headStyle={{ background: '#f6ffed' }}>
+            {attackerData.length > 0 ? (
+              <Table 
+                dataSource={attackerData} 
+                pagination={false} size="small"
+                columns={[
+                  { title: 'IP', dataIndex: 'ip', render: (t) => <Text code copyable>{t}</Text> },
+                  { title: 'Location', dataIndex: 'loc', render: (l) => <Tag color={l.includes('France') ? 'blue' : 'default'}>{l}</Tag> },
+                  { title: 'ISP/Org', dataIndex: 'org', render: (o) => <Text type="secondary" style={{fontSize: '11px'}}>{o}</Text> },
+                  { title: 'Hits', dataIndex: 'hits', render: (h) => <Badge count={h} color="#f5222d" /> }
+                ]}
+              />
+            ) : (
+              <div style={{ padding: '10px' }}>
+                <Alert message="Fileless/Internal Activity" description="No external IP detected. Threat is localized to internal process execution." type="warning" showIcon />
+                <div style={{ marginTop: '10px' }}>
+                  <Text strong>Detected Processes:</Text>
+                  {Array.from(processes).map(p => <Tag key={p} style={{ marginLeft: '8px' }}>{p}</Tag>)}
+                </div>
               </div>
-            </Card>
-          </Col>
+            )}
+          </Card>
+        </Col>
 
-          {/* Section 3: Remediation & Links */}
-          <Col span={8}>
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Text strong><BulbOutlined /> Remediation Steps</Text>
-              <ul style={{ paddingLeft: '20px', fontSize: '12px' }}>
-                {props.remediationSteps?.map((step: string, i: number) => (
-                  <li key={i}>{step}</li>
-                ))}
-              </ul>
-              <Divider style={{ margin: '12px 0' }} />
-              {/* Add the External Link from the JSON */}
-              <Button 
-                type="primary" 
-                icon={<ExportOutlined />} 
-                href={m365Link || props.alertUri} 
-                target="_blank" 
-                block
-              >
-                Investigate in Azure Portal
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </div>
-    );
-  }
-}}
-            />
-          </>
-        );
-      case "compliance":
+        {/* RIGHT: EVIDENCE & REMEDIATION */}
+        <Col span={10}>
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Card size="small" title="Technical Evidence" bordered={false} headStyle={{ background: '#f5f5f5' }}>
+              <Descriptions column={1} size="small">
+                <Descriptions.Item label="Hosts">{Array.from(allHosts).join(', ')}</Descriptions.Item>
+                <Descriptions.Item label="Accounts">{Array.from(allAccounts).join(', ')}</Descriptions.Item>
+              </Descriptions>
+            </Card>
+            
+            <Card 
+  size="small" 
+  title={<Space><SafetyCertificateOutlined /> Full Remediation Steps</Space>} 
+  bordered={false} 
+  headStyle={{ background: '#fff7e6' }}
+  style={{ height: '100%' }}
+>
+  <div style={{ 
+    maxHeight: '200px', 
+    overflowY: 'auto', 
+    fontSize: '11px', 
+    color: '#595959',
+    paddingRight: '5px' 
+  }}>
+    <ul style={{ paddingLeft: '15px', margin: 0 }}>
+      {record.properties.remediationSteps?.map((step: string, i: number) => (
+        <li key={i} style={{ marginBottom: '8px' }}>
+          {step}
+        </li>
+      ))}
+    </ul>
+  </div>
+  <Divider style={{ margin: '12px 0' }} />
+  <Button 
+    type="primary" 
+    danger 
+    size="small" 
+    block 
+    icon={<ExportOutlined />} 
+    href={record.properties.alertUri} 
+    target="_blank"
+  >
+    Execute Isolation & View Full Chain
+  </Button>
+</Card>
+          </Space>
+        </Col>
+      </Row>
+    </div>
+  );
+}
+        }}
+      />
+    </>
+  );
+        case "compliance":
         return (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
