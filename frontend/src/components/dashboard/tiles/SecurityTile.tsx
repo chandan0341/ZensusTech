@@ -425,6 +425,15 @@ export const SecurityTile = ({
             ) 
           },
           { 
+    title: 'Intent', 
+    dataIndex: ['properties', 'intent'],
+    render: (intent: string) => (
+      <Tag color="magenta" style={{ textTransform: 'uppercase', fontSize: '10px', fontWeight: 'bold' }}>
+        {intent || 'N/A'}
+      </Tag>
+    )
+  },
+          { 
             title: 'Target Resource',
             render: (record) => <Tag color="blue">{getAlertResourceName(record)}</Tag>
           },
